@@ -53,6 +53,3 @@ next-env.d.ts
 
 # claude
 .claude/
-
-# personal notes
-tweet-drafts.txt
