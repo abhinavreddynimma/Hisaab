@@ -15,9 +15,10 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 interface ExchangeRateChartProps {
   data: { month: string; rate: number }[];
   liveRate: number | null;
+  currency?: string;
 }
 
-export function ExchangeRateChart({ data, liveRate }: ExchangeRateChartProps) {
+export function ExchangeRateChart({ data, liveRate, currency = "EUR" }: ExchangeRateChartProps) {
   const withRates = data.filter((d) => d.rate > 0);
 
   // Append live rate as "Now" point
@@ -37,7 +38,7 @@ export function ExchangeRateChart({ data, liveRate }: ExchangeRateChartProps) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-base">EUR to INR Rate</CardTitle>
+        <CardTitle className="text-base">{currency} to INR Rate</CardTitle>
         {liveRate && (
           <p className="text-sm tabular-nums text-muted-foreground">
             Live: <span className="font-semibold text-foreground">₹{liveRate.toFixed(2)}</span>
@@ -60,7 +61,7 @@ export function ExchangeRateChart({ data, liveRate }: ExchangeRateChartProps) {
               <Tooltip
                 formatter={(value: number | undefined) => [
                   `₹${(value ?? 0).toFixed(2)}`,
-                  "EUR/INR",
+                  `${currency}/INR`,
                 ]}
                 contentStyle={{ borderRadius: 8, border: "1px solid #e5e7eb", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
               />

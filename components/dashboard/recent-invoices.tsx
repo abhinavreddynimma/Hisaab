@@ -10,7 +10,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { INVOICE_STATUSES } from "@/lib/constants";
-import { formatEuro, formatDate } from "@/lib/utils";
+import { formatForeignCurrency, formatDate } from "@/lib/utils";
 import type { InvoiceStatus } from "@/lib/constants";
 
 interface RecentInvoicesProps {
@@ -19,6 +19,7 @@ interface RecentInvoicesProps {
     invoiceNumber: string;
     clientName: string;
     total: number;
+    currency: string;
     status: string;
     issueDate: string;
   }[];
@@ -71,7 +72,7 @@ export function RecentInvoices({ invoices }: RecentInvoicesProps) {
                     </Link>
                   </TableCell>
                   <TableCell>{invoice.clientName}</TableCell>
-                  <TableCell>{formatEuro(invoice.total)}</TableCell>
+                  <TableCell>{formatForeignCurrency(invoice.total, invoice.currency)}</TableCell>
                   <TableCell>
                     {statusConfig ? (
                       <Badge variant={statusConfig.variant}>

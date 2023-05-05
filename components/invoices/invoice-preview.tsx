@@ -7,7 +7,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
-import { formatEuro, formatDate, numberToWords } from "@/lib/utils";
+import { formatForeignCurrency, formatDate, numberToWords } from "@/lib/utils";
 import type { Invoice, InvoiceLineItem } from "@/lib/types";
 
 interface InvoicePreviewProps {
@@ -131,10 +131,10 @@ export function InvoicePreview({ invoice, lineItems }: InvoicePreviewProps) {
               </TableCell>
               <TableCell className="text-right">{item.quantity}</TableCell>
               <TableCell className="text-right">
-                {formatEuro(item.unitPrice)}
+                {formatForeignCurrency(item.unitPrice, invoice.currency)}
               </TableCell>
               <TableCell className="text-right font-medium">
-                {formatEuro(item.amount)}
+                {formatForeignCurrency(item.amount, invoice.currency)}
               </TableCell>
             </TableRow>
           ))}
@@ -146,16 +146,16 @@ export function InvoicePreview({ invoice, lineItems }: InvoicePreviewProps) {
         <div className="w-72 space-y-2 text-sm">
           <div className="flex justify-between">
             <span className="text-gray-600">Subtotal</span>
-            <span>{formatEuro(invoice.subtotal)}</span>
+            <span>{formatForeignCurrency(invoice.subtotal, invoice.currency)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-600">IGST (0%)</span>
-            <span>{formatEuro(0)}</span>
+            <span>{formatForeignCurrency(0, invoice.currency)}</span>
           </div>
           <Separator />
           <div className="flex justify-between text-base font-bold">
             <span>Total</span>
-            <span>{formatEuro(invoice.total)}</span>
+            <span>{formatForeignCurrency(invoice.total, invoice.currency)}</span>
           </div>
         </div>
       </div>
@@ -166,7 +166,7 @@ export function InvoicePreview({ invoice, lineItems }: InvoicePreviewProps) {
           Amount in Words
         </p>
         <p className="mt-1 text-sm font-medium text-gray-800">
-          {numberToWords(invoice.total)}
+          {numberToWords(invoice.total, invoice.currency)}
         </p>
       </div>
 
