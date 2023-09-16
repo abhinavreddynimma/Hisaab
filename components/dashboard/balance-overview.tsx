@@ -50,8 +50,8 @@ function BalanceCard({
   return (
     <Card>
       <CardContent className="p-4">
-        <p className="text-sm font-medium text-muted-foreground">{label}</p>
-        <p className={cn("text-3xl font-bold tabular-nums mt-1", colorClass)}>
+        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
+        <p className={cn("text-2xl font-semibold tabular-nums mt-1.5", colorClass)}>
           {value >= 0 ? `+${value}` : value}
         </p>
         {details && details.length > 0 && (
@@ -91,7 +91,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
   ].filter((r) => r.value > 0);
 
   return (
-    <div className="rounded-lg border bg-white px-3 py-2 shadow-md">
+    <div className="rounded-xl border border-black/[0.06] bg-white px-3 py-2.5 shadow-lg shadow-black/[0.08]">
       <p className="mb-1.5 text-sm font-semibold text-gray-900">{label}</p>
       {rows.map((r) => (
         <div key={r.label} className="flex items-center gap-2 text-xs">
