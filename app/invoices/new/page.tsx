@@ -20,7 +20,7 @@ export default async function NewInvoicePage() {
             <span className="sr-only">Back to invoices</span>
           </Link>
         </Button>
-        <h1 className="text-2xl font-bold tracking-tight">New Invoice</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">New Invoice</h1>
       </div>
       <InvoiceForm clients={clients} projects={projects} />
     </div>
