@@ -4,8 +4,11 @@ import { Button } from "@/components/ui/button";
 import { InvoiceForm } from "@/components/invoices/invoice-form";
 import { getClients } from "@/actions/clients";
 import { getActiveProjects } from "@/actions/projects";
+import { requirePageAccess } from "@/lib/auth";
 
 export default async function NewInvoicePage() {
+  await requirePageAccess();
+
   const [clients, projects] = await Promise.all([
     getClients(),
     getActiveProjects(),
