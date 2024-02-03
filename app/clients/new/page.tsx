@@ -9,11 +9,8 @@ import {
 } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft } from "lucide-react"
-import { requirePageAccess } from "@/lib/auth"
 
-export default async function NewClientPage() {
-  await requirePageAccess()
-
+export default function NewClientPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -23,7 +20,7 @@ export default async function NewClientPage() {
             <span className="sr-only">Back to clients</span>
           </Link>
         </Button>
-        <h1 className="text-2xl font-bold tracking-tight">New Client</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">New Client</h1>
       </div>
 
       <Card>

@@ -5,15 +5,12 @@ import { getProjectsByClient } from "@/actions/projects"
 import { ClientDetails } from "@/components/clients/client-details"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft } from "lucide-react"
-import { requirePageAccess } from "@/lib/auth"
 
 interface ClientPageProps {
   params: Promise<{ clientId: string }>
 }
 
 export default async function ClientPage({ params }: ClientPageProps) {
-  await requirePageAccess()
-
   const { clientId } = await params
   const id = parseInt(clientId, 10)
 
@@ -38,7 +35,7 @@ export default async function ClientPage({ params }: ClientPageProps) {
             <span className="sr-only">Back to clients</span>
           </Link>
         </Button>
-        <h1 className="text-2xl font-bold tracking-tight">{client.name}</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">{client.name}</h1>
       </div>
 
       <ClientDetails client={client} projects={projects} />
