@@ -4,11 +4,8 @@ import { Button } from "@/components/ui/button";
 import { InvoiceForm } from "@/components/invoices/invoice-form";
 import { getClients } from "@/actions/clients";
 import { getActiveProjects } from "@/actions/projects";
-import { requirePageAccess } from "@/lib/auth";
 
 export default async function NewInvoicePage() {
-  await requirePageAccess();
-
   const [clients, projects] = await Promise.all([
     getClients(),
     getActiveProjects(),
@@ -23,7 +20,7 @@ export default async function NewInvoicePage() {
             <span className="sr-only">Back to invoices</span>
           </Link>
         </Button>
-        <h1 className="text-2xl font-bold tracking-tight">New Invoice</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">New Invoice</h1>
       </div>
       <InvoiceForm clients={clients} projects={projects} />
     </div>
