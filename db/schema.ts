@@ -5,6 +5,28 @@ export const settings = sqliteTable("settings", {
   value: text("value").notNull(), // JSON stringified
 });
 
+export const users = sqliteTable("users", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  passwordHash: text("password_hash").notNull(),
+  role: text("role", { enum: ["admin", "viewer"] }).notNull().default("viewer"),
+  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+}, (table) => [
+  uniqueIndex("users_email_idx").on(table.email),
+]);
+
+export const sessions = sqliteTable("sessions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id").notNull().references(() => users.id),
+  tokenHash: text("token_hash").notNull(),
+  expiresAt: text("expires_at").notNull(),
+  createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+}, (table) => [
+  uniqueIndex("sessions_token_hash_idx").on(table.tokenHash),
+]);
+
 export const clients = sqliteTable("clients", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),

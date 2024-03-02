@@ -15,6 +15,7 @@ const sqlite = new Database(dbPath);
 // Enable WAL mode for better performance
 sqlite.pragma("journal_mode = WAL");
 sqlite.pragma("foreign_keys = ON");
+sqlite.pragma("busy_timeout = 5000");
 
 // Create tables if they don't exist
 sqlite.exec(`
@@ -22,6 +23,26 @@ sqlite.exec(`
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'viewer',
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    token_hash TEXT NOT NULL UNIQUE,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS users_email_idx ON users(email);
+  CREATE UNIQUE INDEX IF NOT EXISTS sessions_token_hash_idx ON sessions(token_hash);
 
   CREATE TABLE IF NOT EXISTS clients (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,6 +57,7 @@ sqlite.exec(`
     email TEXT,
     phone TEXT,
     country TEXT,
+    currency TEXT NOT NULL DEFAULT 'EUR',
     is_active INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
@@ -45,6 +67,7 @@ sqlite.exec(`
     client_id INTEGER NOT NULL REFERENCES clients(id),
     name TEXT NOT NULL,
     default_daily_rate REAL NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'EUR',
     is_active INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
@@ -111,6 +134,7 @@ sqlite.exec(`
     igst_rate REAL DEFAULT 0,
     igst_amount REAL DEFAULT 0,
     total REAL NOT NULL DEFAULT 0,
+    currency TEXT NOT NULL DEFAULT 'EUR',
     status TEXT NOT NULL DEFAULT 'draft',
     notes TEXT,
     paid_date TEXT,
@@ -157,6 +181,9 @@ sqlite.exec(`
 // Migrate: add new columns to existing tables
 const newColumns = [
   { name: "country", sql: "ALTER TABLE clients ADD COLUMN country TEXT" },
+  { name: "currency", sql: "ALTER TABLE clients ADD COLUMN currency TEXT NOT NULL DEFAULT 'EUR'" },
+  { name: "currency", sql: "ALTER TABLE projects ADD COLUMN currency TEXT NOT NULL DEFAULT 'EUR'" },
+  { name: "currency", sql: "ALTER TABLE invoices ADD COLUMN currency TEXT NOT NULL DEFAULT 'EUR'" },
   { name: "from_bank_iban", sql: "ALTER TABLE invoices ADD COLUMN from_bank_iban TEXT" },
   { name: "from_bank_bic", sql: "ALTER TABLE invoices ADD COLUMN from_bank_bic TEXT" },
   { name: "eur_to_inr_rate", sql: "ALTER TABLE invoices ADD COLUMN eur_to_inr_rate REAL" },

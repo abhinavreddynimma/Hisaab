@@ -1,16 +1,47 @@
 "use server";
 
 import { db } from "@/db";
-import { invoices, dayEntries, clients, projects } from "@/db/schema";
-import { eq, desc, sql, and, gte, lte, like } from "drizzle-orm";
+import { invoices, dayEntries, clients, projects, projectRates } from "@/db/schema";
+import { eq, desc, sql, and, like } from "drizzle-orm";
 import { getLeavePolicy, getDefaultProjectId } from "./settings";
-import { getAllDayEntries, getDayEntriesForMonth } from "./day-entries";
 import { calculateLeaveBalance, calculateMonthSummary, withImplicitWorkingDays } from "@/lib/calculations";
-import { getEffectiveRate } from "./projects";
 import { getFrenchHolidays } from "@/lib/constants";
 import type { DashboardStats, DayEntry } from "@/lib/types";
+import { assertAdminAccess, assertAuthenticatedAccess } from "@/lib/auth";
+
+function getAllDayEntriesInternal(): DayEntry[] {
+  return db.select().from(dayEntries).orderBy(dayEntries.date).all() as DayEntry[];
+}
+
+function getDayEntriesForMonthInternal(year: number, month: number): DayEntry[] {
+  const monthKey = `${year}-${String(month).padStart(2, "0")}`;
+  return db
+    .select()
+    .from(dayEntries)
+    .where(like(dayEntries.date, `${monthKey}%`))
+    .orderBy(dayEntries.date)
+    .all() as DayEntry[];
+}
+
+function getEffectiveRateInternal(projectId: number, monthKey: string): number {
+  const override = db
+    .select({ dailyRate: projectRates.dailyRate })
+    .from(projectRates)
+    .where(and(eq(projectRates.projectId, projectId), eq(projectRates.monthKey, monthKey)))
+    .get();
+  if (override?.dailyRate != null) return override.dailyRate;
+
+  const project = db
+    .select({ defaultDailyRate: projects.defaultDailyRate })
+    .from(projects)
+    .where(eq(projects.id, projectId))
+    .get();
+  return project?.defaultDailyRate ?? 0;
+}
 
 export async function getDashboardStats(): Promise<DashboardStats> {
+  await assertAuthenticatedAccess();
+
   // Total earnings from paid invoices (in INR)
   const paidInvoices = db
     .select({ netInrAmount: invoices.netInrAmount })
@@ -31,7 +62,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 
   // Leave balance
   const policy = await getLeavePolicy();
-  const allEntries = await getAllDayEntries();
+  const allEntries = getAllDayEntriesInternal();
   const leaveBalance = calculateLeaveBalance(policy, allEntries as DayEntry[]);
 
   // Open invoices (draft + sent)
@@ -102,20 +133,23 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       // (invoice for current month gets paid next month)
       const currentYear = now.getFullYear();
       const currentMonth = now.getMonth() + 1;
-      const currentMonthEntries = await getDayEntriesForMonth(currentYear, currentMonth);
+      const currentMonthEntries = getDayEntriesForMonthInternal(currentYear, currentMonth);
       const currentHolidays = getFrenchHolidays(currentYear);
       const augmented = withImplicitWorkingDays(currentMonthEntries as DayEntry[], currentYear, currentMonth, currentHolidays);
       const summary = calculateMonthSummary(augmented);
 
       const defaultProjectId = await getDefaultProjectId();
       const currentMonthKey = `${currentYear}-${String(currentMonth).padStart(2, "0")}`;
-      const dailyRate = defaultProjectId ? await getEffectiveRate(defaultProjectId, currentMonthKey) : 0;
+      const dailyRate = defaultProjectId ? getEffectiveRateInternal(defaultProjectId, currentMonthKey) : 0;
 
       // Get the default project's currency
       let projectCurrency = "EUR";
       if (defaultProjectId) {
-        const { getProject } = await import("./projects");
-        const proj = await getProject(defaultProjectId);
+        const proj = db
+          .select({ currency: projects.currency })
+          .from(projects)
+          .where(eq(projects.id, defaultProjectId))
+          .get();
         if (proj?.currency) projectCurrency = proj.currency;
       }
 
@@ -146,6 +180,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 export async function getMonthlyEarningsData(months: number = 12): Promise<
   { month: string; earnings: number }[]
 > {
+  await assertAdminAccess();
   const result: { month: string; earnings: number }[] = [];
   const now = new Date();
 
@@ -170,6 +205,7 @@ export async function getMonthlyEarningsData(months: number = 12): Promise<
 export async function getClientEarningsData(): Promise<
   { name: string; value: number }[]
 > {
+  await assertAdminAccess();
   const allInvoices = db
     .select({
       clientName: clients.name,
@@ -192,6 +228,7 @@ export async function getClientEarningsData(): Promise<
 export async function getMonthlyBreakdownData(months: number = 6): Promise<
   { month: string; working: number; leaves: number; extraWorking: number; halfDays: number }[]
 > {
+  await assertAdminAccess();
   const result: { month: string; working: number; leaves: number; extraWorking: number; halfDays: number }[] = [];
   const now = new Date();
 
@@ -231,8 +268,9 @@ export async function getBalanceData(): Promise<{
   leavesAllowed: number;
   leavesTaken: number;
 }> {
+  await assertAdminAccess();
   const policy = await getLeavePolicy();
-  const allEntries = await getAllDayEntries() as DayEntry[];
+  const allEntries = getAllDayEntriesInternal();
 
   const leaveBalance = calculateLeaveBalance(policy, allEntries);
   const totalExtraWorking = allEntries.filter((e) => e.dayType === "extra_working").length;
@@ -257,6 +295,7 @@ export async function getBalanceData(): Promise<{
 }
 
 export async function getPrimaryCurrency(): Promise<string> {
+  await assertAdminAccess();
   // Determine the most-used currency across paid invoices, fallback to default project
   const currencies = db
     .select({ currency: invoices.currency, count: sql<number>`count(*)` })
@@ -272,8 +311,11 @@ export async function getPrimaryCurrency(): Promise<string> {
   // Fallback: default project currency
   const defaultProjectId = await getDefaultProjectId();
   if (defaultProjectId) {
-    const { getProject } = await import("./projects");
-    const proj = await getProject(defaultProjectId);
+    const proj = db
+      .select({ currency: projects.currency })
+      .from(projects)
+      .where(eq(projects.id, defaultProjectId))
+      .get();
     if (proj?.currency) return proj.currency;
   }
   return "EUR";
@@ -282,6 +324,7 @@ export async function getPrimaryCurrency(): Promise<string> {
 export async function getMonthlyExchangeRateData(months: number = 12): Promise<
   { month: string; rate: number }[]
 > {
+  await assertAdminAccess();
   const result: { month: string; rate: number }[] = [];
   const now = new Date();
 
@@ -312,7 +355,8 @@ export async function getCalendarOverviewData(): Promise<{
   entries: DayEntry[];
   holidays: [string, string][];
 }> {
-  const entries = await getAllDayEntries() as DayEntry[];
+  await assertAdminAccess();
+  const entries = getAllDayEntriesInternal();
   const now = new Date();
   const holidays = new Map<string, string>();
   for (const year of [now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1]) {
@@ -323,6 +367,7 @@ export async function getCalendarOverviewData(): Promise<{
 }
 
 export async function getLiveRate(currency: string = "EUR"): Promise<number | null> {
+  await assertAdminAccess();
   try {
     const res = await fetch(`https://open.er-api.com/v6/latest/${currency}`, { next: { revalidate: 3600 } });
     if (!res.ok) return null;
@@ -336,6 +381,7 @@ export async function getLiveRate(currency: string = "EUR"): Promise<number | nu
 export async function getRecentInvoices(limit: number = 5): Promise<
   { id: number; invoiceNumber: string; clientName: string; total: number; currency: string; status: string; issueDate: string }[]
 > {
+  await assertAuthenticatedAccess();
   return db
     .select({
       id: invoices.id,
