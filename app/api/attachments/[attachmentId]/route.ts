@@ -6,7 +6,6 @@ import { db } from "@/db";
 import { invoiceAttachments } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { deleteInvoiceAttachment } from "@/actions/invoices";
-import { assertAdminAccess, assertAuthenticatedAccess } from "@/lib/auth";
 
 const ATTACHMENTS_DIR = path.join(process.cwd(), "data", "attachments");
 
@@ -14,12 +13,6 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ attachmentId: string }> }
 ) {
-  try {
-    await assertAuthenticatedAccess();
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const { attachmentId } = await params;
   const id = parseInt(attachmentId);
   if (isNaN(id)) {
@@ -54,12 +47,6 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ attachmentId: string }> }
 ) {
-  try {
-    await assertAdminAccess();
-  } catch {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
   const { attachmentId } = await params;
   const id = parseInt(attachmentId);
   if (isNaN(id)) {
