@@ -12,6 +12,7 @@ import { calculateMonthSummary, withImplicitWorkingDays } from "@/lib/calculatio
 import { getFrenchHolidays } from "@/lib/constants";
 import { getProject } from "./projects";
 import { getDefaultProjectId } from "./settings";
+import { assertAdminAccess, assertAuthenticatedAccess } from "@/lib/auth";
 
 const invoiceSelectFields = {
   id: invoices.id,
@@ -72,6 +73,7 @@ const invoiceSelectFields = {
 };
 
 export async function getInvoices(statusFilter?: InvoiceStatus): Promise<(Invoice & { clientName: string })[]> {
+  await assertAuthenticatedAccess();
   let query;
   if (statusFilter) {
     query = db
@@ -94,6 +96,7 @@ export async function getInvoices(statusFilter?: InvoiceStatus): Promise<(Invoic
 }
 
 export async function getInvoice(id: number): Promise<(Invoice & { clientName: string }) | null> {
+  await assertAuthenticatedAccess();
   const result = db
     .select(invoiceSelectFields)
     .from(invoices)
@@ -105,6 +108,7 @@ export async function getInvoice(id: number): Promise<(Invoice & { clientName: s
 }
 
 export async function getInvoiceLineItems(invoiceId: number): Promise<InvoiceLineItem[]> {
+  await assertAuthenticatedAccess();
   return db
     .select()
     .from(invoiceLineItems)
@@ -113,6 +117,7 @@ export async function getInvoiceLineItems(invoiceId: number): Promise<InvoiceLin
 }
 
 export async function generateInvoiceNumber(): Promise<string> {
+  await assertAdminAccess();
   const settings = await getInvoiceSettings();
   const number = String(settings.nextNumber).padStart(4, "0");
   return `${settings.prefix}-${number}`;
@@ -123,6 +128,7 @@ export async function getAutoPopulatedLineItems(
   startDate: string,
   endDate: string
 ): Promise<{ description: string; hsnSac: string; quantity: number; unitPrice: number; amount: number }[]> {
+  await assertAdminAccess();
   const [startYear, startMonth] = startDate.split("-").map(Number);
   const rawEntries = await getDayEntriesForRange(startDate, endDate);
   const holidays = getFrenchHolidays(startYear);
@@ -180,6 +186,7 @@ export async function createInvoice(data: {
     amount: number;
   }[];
 }): Promise<{ success: boolean; id?: number }> {
+  await assertAdminAccess();
   const invoiceNumber = await generateInvoiceNumber();
   const profile = await getUserProfile();
   const client = await getClient(data.clientId);
@@ -290,6 +297,7 @@ export async function updateInvoiceStatus(
     netInrAmount: number;
   }
 ): Promise<{ success: boolean }> {
+  await assertAdminAccess();
   if (status === "paid" && paymentData) {
     db.update(invoices)
       .set({
@@ -318,6 +326,7 @@ export async function updatePaymentDetails(
     netInrAmount: number;
   }
 ): Promise<{ success: boolean }> {
+  await assertAdminAccess();
   db.update(invoices)
     .set({
       paidDate: data.paidDate,
@@ -332,6 +341,7 @@ export async function updatePaymentDetails(
 }
 
 export async function resetInvoiceCounter(nextNumber: number = 1): Promise<{ success: boolean }> {
+  await assertAdminAccess();
   const settings = await getInvoiceSettings();
   const { saveInvoiceSettings } = await import("./settings");
   await saveInvoiceSettings({ ...settings, nextNumber });
@@ -339,6 +349,7 @@ export async function resetInvoiceCounter(nextNumber: number = 1): Promise<{ suc
 }
 
 export async function deleteInvoice(id: number): Promise<{ success: boolean }> {
+  await assertAdminAccess();
   // Soft-delete: mark as cancelled to preserve invoice number audit trail
   db.update(invoices).set({ status: "cancelled" }).where(eq(invoices.id, id)).run();
   return { success: true };
@@ -347,6 +358,7 @@ export async function deleteInvoice(id: number): Promise<{ success: boolean }> {
 // --- Attachments ---
 
 export async function getInvoiceAttachments(invoiceId: number): Promise<InvoiceAttachment[]> {
+  await assertAuthenticatedAccess();
   return db
     .select()
     .from(invoiceAttachments)
@@ -363,6 +375,7 @@ export async function addInvoiceAttachment(data: {
   fileSize: number;
   label?: string;
 }): Promise<{ success: boolean; id?: number }> {
+  await assertAdminAccess();
   const result = db
     .insert(invoiceAttachments)
     .values({
@@ -379,6 +392,7 @@ export async function addInvoiceAttachment(data: {
 }
 
 export async function deleteInvoiceAttachment(id: number): Promise<{ success: boolean; fileName?: string }> {
+  await assertAdminAccess();
   const attachment = db
     .select()
     .from(invoiceAttachments)
