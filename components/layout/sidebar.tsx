@@ -18,9 +18,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
-import type { AuthRole } from "@/lib/types"
 
-const fullNavItems = [
+const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Calendar", href: "/calendar", icon: Calendar },
   { label: "Clients", href: "/clients", icon: Users },
@@ -33,22 +32,10 @@ interface SidebarProps {
   collapsed?: boolean
   onToggle?: () => void
   mobile?: boolean
-  sessionsEnabled?: boolean
-  role?: AuthRole
 }
 
-function SidebarNav({
-  sessionsEnabled,
-  role,
-}: {
-  sessionsEnabled: boolean
-  role?: AuthRole
-}) {
+function SidebarNav() {
   const pathname = usePathname()
-  const navItems =
-    sessionsEnabled && role === "viewer"
-      ? fullNavItems.filter((item) => item.href === "/dashboard" || item.href === "/invoices")
-      : fullNavItems
 
   return (
     <nav className="flex flex-col gap-1 px-3">
@@ -97,13 +84,7 @@ function SidebarBrand() {
   )
 }
 
-export function Sidebar({
-  collapsed = false,
-  onToggle,
-  mobile = false,
-  sessionsEnabled = false,
-  role,
-}: SidebarProps) {
+export function Sidebar({ collapsed = false, onToggle, mobile = false }: SidebarProps) {
   if (mobile) {
     return (
       <Sheet open={collapsed} onOpenChange={onToggle}>
@@ -113,7 +94,7 @@ export function Sidebar({
           </SheetHeader>
           <SidebarBrand />
           <div className="mt-4">
-            <SidebarNav sessionsEnabled={sessionsEnabled} role={role} />
+            <SidebarNav />
           </div>
         </SheetContent>
       </Sheet>
@@ -124,7 +105,7 @@ export function Sidebar({
     <aside className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 bg-sidebar border-r border-sidebar-border">
       <SidebarBrand />
       <div className="mt-4 flex-1 overflow-y-auto">
-        <SidebarNav sessionsEnabled={sessionsEnabled} role={role} />
+        <SidebarNav />
       </div>
     </aside>
   )
