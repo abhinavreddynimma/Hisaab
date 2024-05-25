@@ -6,7 +6,6 @@ import { InvoiceAttachments } from "@/components/invoices/invoice-attachments";
 import { Badge } from "@/components/ui/badge";
 import { INVOICE_STATUSES } from "@/lib/constants";
 import { InvoiceDetailActions } from "./invoice-detail-actions";
-import { requirePageAccess } from "@/lib/auth";
 
 interface InvoiceDetailPageProps {
   params: Promise<{ invoiceId: string }>;
@@ -15,9 +14,6 @@ interface InvoiceDetailPageProps {
 export default async function InvoiceDetailPage({
   params,
 }: InvoiceDetailPageProps) {
-  const access = await requirePageAccess({ allowViewer: true });
-  const canEdit = !access.sessionsEnabled || access.user?.role === "admin";
-
   const { invoiceId } = await params;
   const id = parseInt(invoiceId);
 
@@ -51,12 +47,8 @@ export default async function InvoiceDetailPage({
       <InvoicePreview invoice={invoice} lineItems={lineItems} />
       {invoice.status === "paid" && (
         <>
-          <PaymentDetails invoice={invoice} canEdit={canEdit} />
-          <InvoiceAttachments
-            invoiceId={invoice.id}
-            attachments={attachments}
-            canEdit={canEdit}
-          />
+          <PaymentDetails invoice={invoice} />
+          <InvoiceAttachments invoiceId={invoice.id} attachments={attachments} />
         </>
       )}
     </div>
