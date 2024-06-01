@@ -17,8 +17,27 @@ import { BalanceOverview } from "@/components/dashboard/balance-overview";
 import { RecentInvoices } from "@/components/dashboard/recent-invoices";
 import { ExchangeRateChart } from "@/components/dashboard/exchange-rate-chart";
 import { CalendarOverview } from "@/components/dashboard/calendar-overview";
+import { requirePageAccess } from "@/lib/auth";
 
 export default async function DashboardPage() {
+  const access = await requirePageAccess({ allowViewer: true });
+  const isViewer = access.sessionsEnabled && access.user?.role === "viewer";
+
+  if (isViewer) {
+    const [stats, recentInvoices] = await Promise.all([
+      getDashboardStats(),
+      getRecentInvoices(),
+    ]);
+
+    return (
+      <div className="space-y-6">
+        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+        <StatsCards stats={stats} />
+        <RecentInvoices invoices={recentInvoices} />
+      </div>
+    );
+  }
+
   const primaryCurrency = await getPrimaryCurrency();
   const [stats, monthlyEarnings, clientEarnings, monthlyBreakdown, balanceData, recentInvoices, exchangeRates, calendarData, liveRate] =
     await Promise.all([
