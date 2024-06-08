@@ -8,7 +8,7 @@ import puppeteer from "puppeteer";
 import path from "path";
 import fs from "fs";
 
-const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
+const BASE_URL = process.env.BASE_URL || "http://localhost:3000/hisaab";
 const OUTPUT_DIR = path.join(__dirname, "../docs/screenshots");
 
 const pages = [

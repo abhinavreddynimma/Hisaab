@@ -40,6 +40,7 @@ db.exec(`
     name TEXT NOT NULL, company TEXT, gstin TEXT,
     address_line_1 TEXT, address_line_2 TEXT, city TEXT,
     state TEXT, pincode TEXT, email TEXT, phone TEXT, country TEXT,
+    currency TEXT NOT NULL DEFAULT 'EUR',
     is_active INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
@@ -47,6 +48,7 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     client_id INTEGER NOT NULL REFERENCES clients(id),
     name TEXT NOT NULL, default_daily_rate REAL NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'EUR',
     is_active INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
@@ -83,6 +85,7 @@ db.exec(`
     sgst_rate REAL DEFAULT 0, sgst_amount REAL DEFAULT 0,
     igst_rate REAL DEFAULT 0, igst_amount REAL DEFAULT 0,
     total REAL NOT NULL DEFAULT 0,
+    currency TEXT NOT NULL DEFAULT 'EUR',
     status TEXT NOT NULL DEFAULT 'draft', notes TEXT,
     paid_date TEXT, eur_to_inr_rate REAL,
     platform_charges REAL, bank_charges REAL, net_inr_amount REAL,
