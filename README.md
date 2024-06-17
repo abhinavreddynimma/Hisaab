@@ -13,71 +13,124 @@ A freelancer payroll management app for tracking income, clients, work days, inv
 - Invoice Attachments - Upload and manage proof documents like FIRA and bank statements after payment
 - Tax Tracking - Advance-tax computation, quarterly payments, and projection tab
 - Settings - Profile, domestic bank details, SEPA/SWIFT transfer details, leave policy, and invoice settings
+- Access Control - Admin setup, viewer accounts with tags, and session-based authentication
 
 ## Screenshots
 
+### Login
+Your data stays yours. One-click sign-in keeps freelancers in and strangers out.
+
+![Login](docs/screenshots/login.png)
+
 ### Dashboard
+Everything you earned this year, last month, and today — in one glance. No spreadsheet gymnastics required.
+
 ![Dashboard](docs/screenshots/dashboard.png)
 
 ### Dashboard Charts
+Watch your income trend upward and exchange rates in real time. The graphs your accountant wishes you had.
+
 ![Dashboard Charts](docs/screenshots/dashboard-charts.png)
 
 ### Calendar
+Color-coded work days, leaves, holidays, and overtime — your entire month mapped out like a visual timesheet.
+
 ![Calendar](docs/screenshots/calendar.png)
 
 ### Calendar Day Entry
+Click any day to log work, mark leave, or add notes. Time tracking that takes 2 seconds, not 20 minutes.
+
 ![Calendar Day Entry](docs/screenshots/calendar-day-entry.png)
 
 ### Calendar Snapshot
+One-click monthly summary: working days, leaves, overtime, and balance. Perfect for client reports.
+
 ![Calendar Snapshot](docs/screenshots/calendar-snapshot.png)
 
 ### Client Management
+All your clients at a glance — active, inactive, multi-currency. Manage a global roster from one place.
+
 ![Client Management](docs/screenshots/clients.png)
 
 ### Client Detail
+Deep-dive into any client: projects, rates, invoices, and contact info. Everything your next invoice needs.
+
 ![Client Detail](docs/screenshots/client-detail.png)
 
 ### Add Project
+Spin up a new project with a daily rate in seconds. Because freelancers juggle more than one gig at a time.
+
 ![Add Project](docs/screenshots/client-add-project.png)
 
 ### New Client Form
+Onboard a client in under a minute — name, company, address, currency. Ready to invoice on day one.
+
 ![New Client Form](docs/screenshots/client-new.png)
 
 ### Invoices
+Paid, sent, cancelled — every invoice across every client, filterable and sorted. Never chase a payment blind.
+
 ![Invoices](docs/screenshots/invoices.png)
 
+### Mark as Paid
+Record FX rate, platform fees, and bank charges when marking paid. Know exactly how much hit your account.
+
+![Mark as Paid](docs/screenshots/invoice-mark-paid.png)
+
 ### Invoice Detail
+A print-ready invoice with line items, tax breakdown, and SEPA/SWIFT payment details baked in.
+
 ![Invoice Detail](docs/screenshots/invoice-detail.png)
 
 ### Invoice Payment Details
+FX conversion, platform charges, bank fees — see the full money trail from client payment to your bank.
+
 ![Invoice Payment Details](docs/screenshots/invoice-payment.png)
 
-### Invoice Attachments (FIRA / Bank Statement)
-![Invoice Attachments (FIRA / Bank Statement)](docs/screenshots/invoice-attachments.png)
+### Invoice Attachments
+Attach FIRA certificates, bank statements, or any proof doc right on the invoice. Audit-ready in one click.
+
+![Invoice Attachments](docs/screenshots/invoice-attachments.png)
 
 ### Invoice Create Form
+Auto-populated from your calendar — just pick the month and client. Your invoice writes itself.
+
 ![Invoice Create Form](docs/screenshots/invoice-create.png)
 
 ### Tax Overview
+Advance tax paid, quarterly breakdown, and remaining liability. File day stops being a surprise.
+
 ![Tax Overview](docs/screenshots/tax.png)
 
 ### Tax Projection
+See what you'll owe before the quarter ends. Plan ahead so tax season is a non-event.
+
 ![Tax Projection](docs/screenshots/tax-projection.png)
 
 ### Tax Payment
+Log each challan with amount, date, and reference number. Your tax paper trail, digitized.
+
 ![Tax Payment](docs/screenshots/tax-payment.png)
 
-### Settings Overview
-![Settings Overview](docs/screenshots/settings.png)
+### Settings
+Your profile, GSTIN, PAN, and domestic bank details — the foundation every invoice is built on.
 
-### Settings - Bank Details
-![Settings - Bank Details](docs/screenshots/settings-bank.png)
+![Settings](docs/screenshots/settings.png)
 
 ### Settings - Leave Policy
+Set leaves per month and tracking start date. The app does the math — you just take the day off.
+
 ![Settings - Leave Policy](docs/screenshots/settings-leave-policy.png)
 
 ### Settings - Invoice Settings
+Invoice prefix, auto-numbering, default HSN/SAC, and tax type. Configure once, invoice forever.
+
 ![Settings - Invoice Settings](docs/screenshots/settings-invoice.png)
+
+### Settings - Access Control
+Add your accountant, CA, or lawyer as read-only viewers with tags. Share access without sharing your password.
+
+![Settings - Access Control](docs/screenshots/settings-access.png)
 
 ## Demo Flow
 
