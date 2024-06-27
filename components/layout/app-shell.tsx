@@ -18,8 +18,7 @@ export function AppShell({ children, authState }: AppShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const pathname = usePathname()
   const normalizedPath = pathname?.replace(/^\/hisaab/, "") ?? ""
-  const isAuthPage =
-    normalizedPath === "/login" || normalizedPath.startsWith("/setup/")
+  const isAuthPage = normalizedPath === "/login"
 
   if (isAuthPage) {
     return <main className="min-h-screen p-4 lg:p-6">{children}</main>
