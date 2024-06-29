@@ -8,7 +8,7 @@ import path from "path";
 import crypto from "crypto";
 import Database from "better-sqlite3";
 
-const DB_PATH = path.join(__dirname, "../data/payroll.db");
+const DB_PATH = path.join(__dirname, "../data/demo.db");
 
 // Ensure data directory
 const dataDir = path.dirname(DB_PATH);
