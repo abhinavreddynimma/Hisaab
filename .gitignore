@@ -60,5 +60,7 @@ tweet-drafts.txt
 # private strategy docs
 /private-research/
 
-# promotion docs
-/docs/
+# promotion docs (keep screenshots and demo script tracked)
+/docs/*
+!/docs/screenshots/
+!/docs/DEMO_SCRIPT.md
