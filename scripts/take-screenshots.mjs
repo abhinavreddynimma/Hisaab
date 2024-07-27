@@ -7,7 +7,7 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.join(__dirname, "..");
 const SCREENSHOTS_DIR = path.join(ROOT_DIR, "docs", "screenshots");
-const DB_PATH = path.join(ROOT_DIR, "data", "demo.db");
+const DB_PATH = path.join(ROOT_DIR, "data", "payroll.db");
 const BASE_URL = (process.env.APP_URL || "http://localhost:3003/hisaab").replace(/\/$/, "");
 
 function getRecordIds() {
@@ -16,7 +16,6 @@ function getRecordIds() {
     invoiceId: 1,
     paidInvoiceId: 1,
     attachmentInvoiceId: 1,
-    sessionsEnabled: false,
   };
 
   if (!existsSync(DB_PATH)) {
@@ -44,16 +43,6 @@ function getRecordIds() {
       `)
       .get();
 
-    // Check if sessions are enabled
-    let sessionsEnabled = false;
-    const accessRow = db.prepare("SELECT value FROM settings WHERE key = 'access_control'").get();
-    if (accessRow) {
-      try {
-        const config = JSON.parse(accessRow.value);
-        sessionsEnabled = config.sessionsEnabled === true;
-      } catch {}
-    }
-
     db.close();
 
     return {
@@ -62,7 +51,6 @@ function getRecordIds() {
       paidInvoiceId: paid?.id ?? invoice?.id ?? defaults.paidInvoiceId,
       unpaidInvoiceId: unpaid?.id ?? invoice?.id ?? defaults.invoiceId,
       attachmentInvoiceId: withAttachments?.id ?? paid?.id ?? invoice?.id ?? defaults.attachmentInvoiceId,
-      sessionsEnabled,
     };
   } catch {
     return defaults;
@@ -75,7 +63,7 @@ async function takeScreenshots() {
   }
   mkdirSync(SCREENSHOTS_DIR, { recursive: true });
 
-  const { clientId, invoiceId, paidInvoiceId, unpaidInvoiceId, attachmentInvoiceId, sessionsEnabled } = getRecordIds();
+  const { clientId, invoiceId, paidInvoiceId, unpaidInvoiceId, attachmentInvoiceId } = getRecordIds();
 
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({
@@ -113,64 +101,22 @@ async function takeScreenshots() {
     return false;
   };
 
-  let step = 1;
-  const totalSteps = 22;
-  const log = (label) => console.log(`${step++}/${totalSteps} ${label}`);
-
   console.log("Taking screenshots...\n");
 
-  // ── Login ──
-
-  if (sessionsEnabled) {
-    log("Login Page");
-    await goto("/login");
-    await screenshot("login");
-
-    // Authenticate
-    console.log("  Logging in as admin...");
-    await page.fill('input[type="email"]', "rahul@hisaab.dev");
-    await page.fill('input[type="password"]', "demo1234");
-    await page.getByRole("button", { name: /sign in/i }).click();
-    await page.waitForURL("**/dashboard", { timeout: 10000 }).catch(() => {});
-    await page.waitForTimeout(500);
-  } else {
-    step++; // skip login step
-  }
-
-  // ── Dashboard ──
-
-  log("Dashboard");
+  console.log("1/22 Dashboard");
   await goto("/dashboard");
   await screenshot("dashboard");
 
-  log("Dashboard Charts");
+  console.log("2/22 Dashboard Charts");
   await page.evaluate(() => window.scrollTo(0, 900));
   await page.waitForTimeout(400);
   await screenshot("dashboard-charts");
 
-  // ── Calendar (navigate to Aug 2025 for showcase) ──
-
-  log("Calendar");
+  console.log("3/22 Calendar");
   await goto("/calendar");
-  // Navigate to August 2025 — the showcase month with 2 leaves, 1 holiday, 1 extra
-  const prevBtn = page.getByRole("button", { name: /previous|chevron.*left|←/i }).or(
-    page.locator("button:has(svg.lucide-chevron-left)")
-  );
-  // Navigate backwards from current month to Aug 2025
-  for (let i = 0; i < 20; i++) {
-    const heading = await page.locator("h2, h3, [role='heading']").first().textContent().catch(() => "");
-    if (heading && heading.includes("August") && heading.includes("2025")) break;
-    if (await prevBtn.count()) {
-      await prevBtn.first().click();
-      await page.waitForTimeout(300);
-    } else {
-      break;
-    }
-  }
-  await page.waitForTimeout(300);
   await screenshot("calendar");
 
-  log("Calendar Day Entry");
+  console.log("4/22 Calendar Day Entry");
   const dayCell = page.locator("div.grid.grid-cols-7 > button").first();
   if (await dayCell.count()) {
     await dayCell.click();
@@ -179,7 +125,8 @@ async function takeScreenshots() {
   await screenshot("calendar-day-entry");
   await page.keyboard.press("Escape").catch(() => {});
 
-  log("Calendar Snapshot");
+  console.log("5/22 Calendar Snapshot");
+  await goto("/calendar");
   const snapshotBtn = page.getByRole("button", { name: "Snapshot" });
   if (await snapshotBtn.count()) {
     await snapshotBtn.click();
@@ -189,17 +136,15 @@ async function takeScreenshots() {
   await screenshot("calendar-snapshot");
   await page.keyboard.press("Escape").catch(() => {});
 
-  // ── Clients ──
-
-  log("Clients");
+  console.log("6/22 Clients");
   await goto("/clients");
   await screenshot("clients");
 
-  log("Client Detail");
+  console.log("7/22 Client Detail");
   await goto(`/clients/${clientId}`);
   await screenshot("client-detail");
 
-  log("Add Project");
+  console.log("8/22 Add Project");
   const addProjectBtn = page.getByRole("button", { name: "Add Project" });
   if (await addProjectBtn.count()) {
     await addProjectBtn.click();
@@ -209,17 +154,15 @@ async function takeScreenshots() {
   await screenshot("client-add-project");
   await page.keyboard.press("Escape").catch(() => {});
 
-  log("New Client Form");
+  console.log("9/22 New Client Form");
   await goto("/clients/new");
   await screenshot("client-new");
 
-  // ── Invoices ──
-
-  log("Invoices");
+  console.log("10/22 Invoices");
   await goto("/invoices");
   await screenshot("invoices");
 
-  log("Mark as Paid");
+  console.log("11/22 Mark as Paid");
   await goto("/invoices");
   let capturedMarkPaid = false;
   const menuBtns = page.locator("table button[aria-haspopup='menu']");
@@ -244,11 +187,12 @@ async function takeScreenshots() {
     console.log("  Skipped: No unpaid invoices found for Mark as Paid dialog");
   }
 
-  log("Invoice Detail");
+  console.log("12/22 Invoice Detail");
+
   await goto(`/invoices/${paidInvoiceId || invoiceId}`);
   await screenshot("invoice-detail");
 
-  log("Invoice Payment Details");
+  console.log("13/22 Invoice Payment Details");
   const paymentSection = page.locator("text=Payment Details").first();
   if (await paymentSection.count()) {
     await paymentSection.scrollIntoViewIfNeeded();
@@ -259,7 +203,7 @@ async function takeScreenshots() {
   }
   await screenshot("invoice-payment");
 
-  log("Invoice Attachments");
+  console.log("14/22 Invoice Attachments");
   await goto(`/invoices/${attachmentInvoiceId || paidInvoiceId || invoiceId}`);
   const attachmentsSection = page.locator("text=Attachments").first();
   if (await attachmentsSection.count()) {
@@ -271,21 +215,19 @@ async function takeScreenshots() {
   }
   await screenshot("invoice-attachments");
 
-  log("Invoice Create Form");
+  console.log("15/22 Invoice Create Form");
   await goto("/invoices/new");
   await screenshot("invoice-create");
 
-  // ── Tax ──
-
-  log("Tax Overview");
+  console.log("16/22 Tax Overview");
   await goto("/tax");
   await screenshot("tax");
 
-  log("Tax Projection");
+  console.log("17/22 Tax Projection");
   await clickTab("Projection");
   await screenshot("tax-projection");
 
-  log("Tax Payment");
+  console.log("18/22 Tax Payment");
   await goto("/tax");
   const addPaymentBtn = page.getByRole("button", { name: "Add Payment" });
   if (await addPaymentBtn.count()) {
@@ -296,24 +238,25 @@ async function takeScreenshots() {
   await screenshot("tax-payment");
   await page.keyboard.press("Escape").catch(() => {});
 
-  // ── Settings ──
-
-  log("Settings Overview");
+  console.log("19/22 Settings Overview");
   await goto("/settings");
   await screenshot("settings");
 
-  log("Settings Leave Policy");
+  console.log("20/22 Settings Bank");
+  const sepaHeading = page.locator("text=SEPA Transfer Details").first();
+  if (await sepaHeading.count()) {
+    await sepaHeading.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(300);
+  }
+  await screenshot("settings-bank");
+
+  console.log("21/22 Settings Leave Policy");
   await clickTab("Leave Policy");
   await screenshot("settings-leave-policy");
 
-  log("Settings Invoice");
+  console.log("22/22 Settings Invoice");
   await clickTab("Invoice Settings");
   await screenshot("settings-invoice");
-
-  log("Settings Access (User Management)");
-  await clickTab("Access");
-  await page.waitForTimeout(500);
-  await screenshot("settings-access");
 
   await browser.close();
   console.log("\nDone! All screenshots saved to docs/screenshots/");
