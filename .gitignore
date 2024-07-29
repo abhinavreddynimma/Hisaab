@@ -34,9 +34,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# database (keep demo.db tracked)
+# database
 /data/*.db
-!/data/demo.db
 /data/*.db-journal
 /data/*.db-shm
 /data/*.db-wal
@@ -60,7 +59,5 @@ tweet-drafts.txt
 # private strategy docs
 /private-research/
 
-# promotion docs (keep screenshots and demo script tracked)
-/docs/*
-!/docs/screenshots/
-!/docs/DEMO_SCRIPT.md
+# promotion docs
+/docs/
