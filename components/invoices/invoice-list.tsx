@@ -194,7 +194,7 @@ export function InvoiceList({ invoices, canEdit = true }: InvoiceListProps) {
                   {invoice.paidDate ? formatDate(invoice.paidDate) : "—"}
                 </TableCell>
                 <TableCell>
-                  <Badge variant={statusConfig.variant} className={statusConfig.className}>
+                  <Badge variant={statusConfig.variant}>
                     {statusConfig.label}
                   </Badge>
                 </TableCell>
