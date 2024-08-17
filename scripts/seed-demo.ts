@@ -705,6 +705,55 @@ const seedInvoices = db.transaction(() => {
 
 seedInvoices();
 
+// ── Seed Invoice Attachments ──
+
+console.log("Seeding invoice attachments...");
+
+const ATTACHMENTS_DIR = path.join(__dirname, "../data/attachments");
+if (fs.existsSync(ATTACHMENTS_DIR)) {
+  fs.rmSync(ATTACHMENTS_DIR, { recursive: true });
+}
+fs.mkdirSync(ATTACHMENTS_DIR, { recursive: true });
+
+// Minimal valid PDF content
+function createDummyPdf(title: string): Buffer {
+  const content = `%PDF-1.4
+1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj
+2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj
+3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R/Resources<</Font<</F1 4 0 R>>>>>>endobj
+4 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj
+xref
+0 5
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+0000000236 00000 n
+trailer<</Size 5/Root 1 0 R>>
+startxref
+307
+%%EOF`;
+  return Buffer.from(content);
+}
+
+const attachments = [
+  { invoiceId: 14, fileName: "fira-jan-2026.pdf", originalName: "FIRA_Jan2026_Pierre_Martin.pdf", label: "FIRA", mimeType: "application/pdf" },
+  { invoiceId: 14, fileName: "bank-statement-jan-2026.pdf", originalName: "BankStatement_Jan2026_BNP.pdf", label: "Bank Statement", mimeType: "application/pdf" },
+];
+
+const insertAttachment = db.prepare(`
+  INSERT INTO invoice_attachments (invoice_id, file_name, original_name, mime_type, file_size, label, created_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?)
+`);
+
+for (const att of attachments) {
+  const pdf = createDummyPdf(att.label);
+  const filePath = path.join(ATTACHMENTS_DIR, att.fileName);
+  fs.writeFileSync(filePath, pdf);
+  insertAttachment.run(att.invoiceId, att.fileName, att.originalName, att.mimeType, pdf.length, att.label, new Date().toISOString());
+  console.log(`  ${att.originalName} (${att.label}) → Invoice #${att.invoiceId}`);
+}
+
 // ── Seed Tax Payments ──
 
 console.log("Seeding tax payments...");
