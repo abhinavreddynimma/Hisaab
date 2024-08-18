@@ -25,10 +25,10 @@ export function getCurrentFinancialYear(): string {
 }
 
 export const INVOICE_STATUSES = {
-  draft: { label: "Draft", variant: "secondary" as const },
-  sent: { label: "Sent", variant: "default" as const },
-  paid: { label: "Paid", variant: "outline" as const },
-  cancelled: { label: "Cancelled", variant: "destructive" as const },
+  draft: { label: "Draft", variant: "outline" as const, className: "bg-stone-50 text-stone-500 border-stone-200 dark:bg-stone-900 dark:text-stone-400 dark:border-stone-700" },
+  sent: { label: "Sent", variant: "outline" as const, className: "bg-sky-50 text-sky-600 border-sky-200 dark:bg-sky-950 dark:text-sky-400 dark:border-sky-800" },
+  paid: { label: "Paid", variant: "outline" as const, className: "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800" },
+  cancelled: { label: "Cancelled", variant: "outline" as const, className: "bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-950 dark:text-rose-400 dark:border-rose-800" },
 } as const;
 
 export type InvoiceStatus = keyof typeof INVOICE_STATUSES;
