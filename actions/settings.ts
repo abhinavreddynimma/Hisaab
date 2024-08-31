@@ -67,11 +67,13 @@ export async function saveUserProfile(profile: UserProfile): Promise<{ success: 
 export async function getLeavePolicy(): Promise<LeavePolicy> {
   await assertAuthenticatedAccess();
   const policy = await getSetting<LeavePolicy>("leave_policy");
-  return policy ?? {
+  const defaults: LeavePolicy = {
     leavesPerMonth: 1,
     standardWorkingDays: 22,
     trackingStartDate: "2025-05",
+    annualDaysOffTarget: 20,
   };
+  return { ...defaults, ...(policy ?? {}) };
 }
 
 export async function saveLeavePolicy(policy: LeavePolicy): Promise<{ success: boolean }> {
