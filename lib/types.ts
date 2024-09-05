@@ -52,6 +52,7 @@ export interface LeavePolicy {
   leavesPerMonth: number;
   standardWorkingDays: number;
   trackingStartDate: string; // "YYYY-MM"
+  annualDaysOffTarget: number;
 }
 
 export interface InvoiceSettings {
