@@ -1,15 +1,17 @@
 "use server";
 
 import { db } from "@/db";
-import { taxPayments, invoices } from "@/db/schema";
+import { taxPayments, taxPaymentAttachments, invoices } from "@/db/schema";
 import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
-import type { TaxPayment, TaxQuarter, DayEntry } from "@/lib/types";
+import type { TaxPayment, TaxPaymentAttachment, TaxQuarter, DayEntry } from "@/lib/types";
 import { getDayEntriesForMonth } from "./day-entries";
 import { getDefaultProjectId } from "./settings";
 import { getEffectiveRate } from "./projects";
 import { calculateMonthSummary, withImplicitWorkingDays } from "@/lib/calculations";
 import { getFrenchHolidays } from "@/lib/constants";
-import { assertAdminAccess } from "@/lib/auth";
+import { assertAdminAccess, assertAuthenticatedAccess } from "@/lib/auth";
+import { unlink } from "fs/promises";
+import path from "path";
 
 export async function getTaxPayments(financialYear?: string): Promise<TaxPayment[]> {
   await assertAdminAccess();
@@ -89,6 +91,20 @@ export async function updateTaxPayment(
 
 export async function deleteTaxPayment(id: number): Promise<{ success: boolean }> {
   await assertAdminAccess();
+
+  // Cascade-delete attachments from disk and DB
+  const attachments = db
+    .select()
+    .from(taxPaymentAttachments)
+    .where(eq(taxPaymentAttachments.taxPaymentId, id))
+    .all();
+
+  for (const att of attachments) {
+    const filePath = path.join(process.cwd(), "data", "attachments", att.fileName);
+    try { await unlink(filePath); } catch { /* file may be gone */ }
+  }
+  db.delete(taxPaymentAttachments).where(eq(taxPaymentAttachments.taxPaymentId, id)).run();
+
   db.delete(taxPayments).where(eq(taxPayments.id, id)).run();
   return { success: true };
 }
@@ -219,6 +235,7 @@ export async function getTaxProjection(financialYear: string): Promise<{
     .select({
       netInrAmount: invoices.netInrAmount,
       paidDate: invoices.paidDate,
+      billingPeriodStart: invoices.billingPeriodStart,
       total: invoices.total,
       eurToInrRate: invoices.eurToInrRate,
       platformCharges: invoices.platformCharges,
@@ -234,13 +251,15 @@ export async function getTaxProjection(financialYear: string): Promise<{
     )
     .all();
 
-  // Group actual income by month (Apr=0 .. Mar=11)
+  // Group actual income by paid date month (Apr=0 .. Mar=11)
+  // Earnings in month M = payment received in M for work done in M-1
   const monthlyActual: number[] = Array(12).fill(0);
   const MONTH_LABELS = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
 
   for (const inv of paidInvoices) {
     if (!inv.paidDate) continue;
-    const [y, m] = inv.paidDate.split("-").map(Number);
+    const dateStr = inv.paidDate;
+    const [y, m] = dateStr.split("-").map(Number);
     let idx: number;
     if (y === startYear) {
       idx = m - 4;
@@ -357,4 +376,53 @@ export async function getTaxSummaryForFY(financialYear: string): Promise<{
     total += p.amount;
   }
   return { byQuarter, total };
+}
+
+// --- Tax Payment Attachments ---
+
+export async function getTaxPaymentAttachments(taxPaymentId: number): Promise<TaxPaymentAttachment[]> {
+  await assertAuthenticatedAccess();
+  return db
+    .select()
+    .from(taxPaymentAttachments)
+    .where(eq(taxPaymentAttachments.taxPaymentId, taxPaymentId))
+    .orderBy(desc(taxPaymentAttachments.createdAt))
+    .all() as TaxPaymentAttachment[];
+}
+
+export async function addTaxPaymentAttachment(data: {
+  taxPaymentId: number;
+  fileName: string;
+  originalName: string;
+  mimeType: string;
+  fileSize: number;
+  label?: string;
+}): Promise<{ success: boolean; id?: number }> {
+  await assertAdminAccess();
+  const result = db
+    .insert(taxPaymentAttachments)
+    .values({
+      taxPaymentId: data.taxPaymentId,
+      fileName: data.fileName,
+      originalName: data.originalName,
+      mimeType: data.mimeType,
+      fileSize: data.fileSize,
+      label: data.label || null,
+    })
+    .run();
+  return { success: true, id: Number(result.lastInsertRowid) };
+}
+
+export async function deleteTaxPaymentAttachment(id: number): Promise<{ success: boolean; fileName?: string }> {
+  await assertAdminAccess();
+  const attachment = db
+    .select()
+    .from(taxPaymentAttachments)
+    .where(eq(taxPaymentAttachments.id, id))
+    .get() as TaxPaymentAttachment | undefined;
+
+  if (!attachment) return { success: false };
+
+  db.delete(taxPaymentAttachments).where(eq(taxPaymentAttachments.id, id)).run();
+  return { success: true, fileName: attachment.fileName };
 }
