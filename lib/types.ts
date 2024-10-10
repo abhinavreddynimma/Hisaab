@@ -209,6 +209,17 @@ export interface TaxPayment {
   createdAt: string;
 }
 
+export interface TaxPaymentAttachment {
+  id: number;
+  taxPaymentId: number;
+  fileName: string;
+  originalName: string;
+  mimeType: string;
+  fileSize: number;
+  label: string | null;
+  createdAt: string;
+}
+
 export interface DashboardStats {
   totalEarnings: number;
   thisMonthEarnings: number;
