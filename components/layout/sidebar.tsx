@@ -9,6 +9,7 @@ import {
   FileText,
   Settings,
   IndianRupee,
+  Wallet,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
@@ -25,6 +26,7 @@ const fullNavItems = [
   { label: "Clients", href: "/clients", icon: Users },
   { label: "Invoices", href: "/invoices", icon: FileText },
   { label: "Tax", href: "/tax", icon: IndianRupee },
+  { label: "Expenses", href: "/expenses", icon: Wallet },
   { label: "Settings", href: "/settings", icon: Settings },
 ]
 
