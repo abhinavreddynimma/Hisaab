@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Trash2, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Plus } from "lucide-react";
+import { Trash2, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Plus, Link2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -99,14 +99,22 @@ export function TransactionList({ transactions, totalIncome, totalExpenses, onEd
                   return (
                     <TableRow
                       key={txn.id}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => onEdit(txn)}
+                      className={`hover:bg-muted/50 ${txn.source === "invoice" ? "opacity-80" : "cursor-pointer"}`}
+                      onClick={() => txn.source !== "invoice" && onEdit(txn)}
                     >
                       <TableCell className="text-sm tabular-nums">{formatDate(txn.date)}</TableCell>
                       <TableCell>
-                        <div className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${config.bg} ${config.color}`}>
-                          <Icon className="h-3 w-3" />
-                          {config.label}
+                        <div className="flex items-center gap-1.5">
+                          <div className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${config.bg} ${config.color}`}>
+                            <Icon className="h-3 w-3" />
+                            {config.label}
+                          </div>
+                          {txn.source === "invoice" && (
+                            <div className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${txn.status === "estimated" ? "bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-400" : "bg-sky-50 text-sky-600 dark:bg-sky-950 dark:text-sky-400"}`}>
+                              <Link2 className="h-2.5 w-2.5" />
+                              {txn.status === "estimated" ? "Est." : "Inv."}
+                            </div>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -131,30 +139,34 @@ export function TransactionList({ transactions, totalIncome, totalExpenses, onEd
                         {txn.note || "—"}
                       </TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive">
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Delete Transaction</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Delete this {txn.type} of {formatCurrency(txn.amount)}?
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => handleDelete(txn.id)}
-                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                              >
-                                Delete
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                        {txn.source === "invoice" ? (
+                          <span className="text-[10px] text-muted-foreground">auto</span>
+                        ) : (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive">
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete Transaction</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Delete this {txn.type} of {formatCurrency(txn.amount)}?
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDelete(txn.id)}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
                       </TableCell>
                     </TableRow>
                   );
