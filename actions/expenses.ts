@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/db";
-import { expenseAccounts, expenseTransactions, expenseBudgets, expenseBudgetCategories, expenseTargets } from "@/db/schema";
+import { expenseAccounts, expenseTransactions, expenseBudgets, expenseBudgetCategories, expenseTargets, expenseTargetAccounts } from "@/db/schema";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { assertAdminAccess } from "@/lib/auth";
 import { DEFAULT_EXPENSE_CATEGORIES, getFYDateRange, getMonthDateRange } from "@/lib/constants";
@@ -538,14 +538,20 @@ export async function deleteExpenseBudget(id: number): Promise<{ success: boolea
 // TARGETS
 // ============================================================
 
-export async function getExpenseTargets(financialYear: string): Promise<ExpenseTarget[]> {
+export async function getExpenseTargets(financialYear: string): Promise<(ExpenseTarget & {
+  accountIds: number[];
+  accountNames: string[];
+  thisMonthActual: number;
+  fyAverage: number;
+})[]> {
   await assertAdminAccess();
 
   const targets = db.select().from(expenseTargets)
     .where(eq(expenseTargets.financialYear, financialYear))
-    .orderBy(expenseTargets.createdAt)
+    .orderBy(expenseTargets.name)
     .all() as ExpenseTarget[];
 
+  const allLinks = db.select().from(expenseTargetAccounts).all();
   const allAccounts = db.select().from(expenseAccounts).all();
   const accountMap = new Map(allAccounts.map(a => [a.id, a]));
 
@@ -579,21 +585,32 @@ export async function getExpenseTargets(financialYear: string): Promise<ExpenseT
   monthsElapsed = Math.max(1, Math.min(12, monthsElapsed));
 
   return targets.map(target => {
-    const account = accountMap.get(target.accountId);
+    const links = allLinks.filter(l => l.targetId === target.id);
+    const accountIds = links.map(l => l.accountId);
+    const accountNames = accountIds.map(id => accountMap.get(id)?.name ?? "Unknown");
+
+    // Include child accounts for matching
+    const allAccountIds = new Set(accountIds);
+    for (const acc of allAccounts) {
+      if (acc.parentId && allAccountIds.has(acc.parentId)) {
+        allAccountIds.add(acc.id);
+      }
+    }
+
     const thisMonthActual = monthTransfers
-      .filter(t => t.toAccountId === target.accountId)
+      .filter(t => t.toAccountId && allAccountIds.has(t.toAccountId))
       .reduce((sum, t) => sum + t.amount, 0);
 
     const fyTotal = fyTransfers
-      .filter(t => t.toAccountId === target.accountId)
+      .filter(t => t.toAccountId && allAccountIds.has(t.toAccountId))
       .reduce((sum, t) => sum + t.amount, 0);
 
     const fyAverage = fyTotal / monthsElapsed;
 
     return {
       ...target,
-      accountName: account?.name ?? "Unknown",
-      accountType: account?.type as ExpenseAccountType | undefined,
+      accountIds,
+      accountNames,
       thisMonthActual,
       fyAverage: Math.round(fyAverage),
     };
@@ -601,31 +618,48 @@ export async function getExpenseTargets(financialYear: string): Promise<ExpenseT
 }
 
 export async function createExpenseTarget(data: {
-  accountId: number;
+  name: string;
   monthlyAmount: number;
   financialYear: string;
+  accountIds: number[];
 }): Promise<{ success: boolean; id?: number }> {
   await assertAdminAccess();
   const result = db.insert(expenseTargets).values({
-    accountId: data.accountId,
+    name: data.name,
     monthlyAmount: data.monthlyAmount,
     financialYear: data.financialYear,
   }).run();
-  return { success: true, id: Number(result.lastInsertRowid) };
+
+  const targetId = Number(result.lastInsertRowid);
+  for (const accountId of data.accountIds) {
+    db.insert(expenseTargetAccounts).values({ targetId, accountId }).run();
+  }
+
+  return { success: true, id: targetId };
 }
 
 export async function updateExpenseTarget(id: number, data: {
+  name: string;
   monthlyAmount: number;
+  accountIds: number[];
 }): Promise<{ success: boolean }> {
   await assertAdminAccess();
   db.update(expenseTargets).set({
+    name: data.name,
     monthlyAmount: data.monthlyAmount,
   }).where(eq(expenseTargets.id, id)).run();
+
+  db.delete(expenseTargetAccounts).where(eq(expenseTargetAccounts.targetId, id)).run();
+  for (const accountId of data.accountIds) {
+    db.insert(expenseTargetAccounts).values({ targetId: id, accountId }).run();
+  }
+
   return { success: true };
 }
 
 export async function deleteExpenseTarget(id: number): Promise<{ success: boolean }> {
   await assertAdminAccess();
+  db.delete(expenseTargetAccounts).where(eq(expenseTargetAccounts.targetId, id)).run();
   db.delete(expenseTargets).where(eq(expenseTargets.id, id)).run();
   return { success: true };
 }
