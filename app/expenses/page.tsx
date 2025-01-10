@@ -9,11 +9,13 @@ import {
   getExpenseTargets,
   getExpenseFYOverview,
   seedDefaultAccounts,
+  resetExpenseData,
 } from "@/actions/expenses";
 import { getFYDateRange } from "@/lib/constants";
 import { ExpensesPageClient } from "@/components/expenses/expenses-page-client";
 import { syncAllInvoicesToExpenses } from "@/actions/invoice-expense-sync";
 import { syncRecurringForMonth, getRecurringExpenses } from "@/actions/recurring-expenses";
+import { syncAllTaxPaymentsToExpenses } from "@/actions/tax-expense-sync";
 
 interface ExpensesPageProps {
   searchParams: Promise<{ fy?: string; month?: string; year?: string; tab?: string }>;
@@ -25,11 +27,20 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
   const params = await searchParams;
   const fy = params.fy || getCurrentFinancialYear();
 
+  // One-time migration: check if we need to reset to new account structure
+  const existingAccounts = await getExpenseAccounts();
+  const hasOldStructure = existingAccounts.some(a => a.name === "Freelance" && a.type === "income");
+  const hasNewStructure = existingAccounts.some(a => a.name === "Freelance Income" && a.type === "income");
+  if (hasOldStructure && !hasNewStructure) {
+    await resetExpenseData();
+  }
+
   // Auto-seed defaults on first visit
   await seedDefaultAccounts();
 
-  // Sync all invoices to expense transactions (idempotent — safe to call every load)
+  // Sync invoices and tax payments to expense transactions (idempotent)
   await syncAllInvoicesToExpenses();
+  await syncAllTaxPaymentsToExpenses();
 
   const now = new Date();
   const currentMonth = params.month ? parseInt(params.month) : now.getMonth() + 1;
