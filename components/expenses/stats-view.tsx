@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
 import { CategoryPieChart } from "./category-pie-chart";
+import { IncomeExpenseBarChart } from "./income-expense-bar-chart";
 
 interface StatsData {
   totalIncome: number;
@@ -181,6 +182,18 @@ export function StatsView({ stats, fyStats, fyOverview, currentMonth, currentYea
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* FY monthly bar chart (only in FY view) */}
+      {period === "fy" && (
+        <IncomeExpenseBarChart
+          data={fyOverview.months.map(m => ({
+            label: `${m.month} ${String(m.year).slice(2)}`,
+            income: m.income,
+            expense: m.expense,
+          }))}
+          title={`Monthly Income vs Expenses — FY ${financialYear}`}
+        />
       )}
 
       {/* Pie chart */}
