@@ -220,14 +220,14 @@ upsert.run("user_profile", JSON.stringify({
 
 upsert.run("invoice_settings", JSON.stringify({
   prefix: "HSB",
-  nextNumber: 13,
+  nextNumber: 11,
   defaultHsnSac: "998314",
   defaultTaxRate: 18,
   taxType: "igst",
 }));
 
 upsert.run("leave_policy", JSON.stringify({
-  leavesPerMonth: 2,
+  leavesPerMonth: 1.5,
   standardWorkingDays: 22,
   trackingStartDate: "2025-04",
 }));
@@ -262,7 +262,7 @@ console.log("Seeding project...");
 
 db.prepare(`
   INSERT INTO projects (client_id, name, default_daily_rate, is_active, created_at)
-  VALUES (1, ?, 250, 1, ?)
+  VALUES (1, ?, 130, 1, ?)
 `).run("Frontend Development", "2025-04-01T10:00:00.000Z");
 
 // ── Seed Day Entries ──
@@ -273,38 +273,39 @@ const insertDay = db.prepare(
   "INSERT OR REPLACE INTO day_entries (date, day_type, project_id, notes) VALUES (?, ?, ?, ?)"
 );
 
-// Define leaves per month (spread across the month for realism)
+// Leave days distribution (17 full leaves across Apr 2025 – Feb 2026)
+// With 1.5 leaves/month × 11 months = 16.5 gained
+// 17 full + 4 half×0.5 = 19 consumed → balance = 16.5 - 19 = -2.5
 const leaveDays: Record<string, number[]> = {
-  "2025-04": [10, 11],      // Thu-Fri
-  "2025-05": [19],           // Mon
-  "2025-06": [6, 23],        // Fri, Mon
-  "2025-07": [7, 8, 9, 10, 11, 14, 15, 16, 17, 18, 21, 22, 23, 24, 25, 28, 29, 30, 31], // Summer leave
-  "2025-08": [1, 18, 19],    // Fri, Mon-Tue
-  "2025-09": [12, 26],       // Fri, Fri
-  "2025-10": [3, 17],        // Fri, Fri
-  "2025-11": [14],           // Fri
-  "2025-12": [22, 23, 24, 26, 29, 30, 31], // Christmas break
-  "2026-01": [2, 3],         // Thu-Fri (new year)
-  "2026-02": [14, 28],       // Fri, Fri (Valentine's + end of month)
-  "2026-03": [13, 27],       // Fri, Fri
+  "2025-04": [10, 11],     // Thu, Fri
+  "2025-05": [19],          // Mon
+  "2025-06": [20],          // Fri
+  "2025-07": [7, 21, 28],   // Mon, Mon, Mon (summer)
+  "2025-08": [18, 22],      // Mon, Fri
+  "2025-09": [12],          // Fri
+  "2025-10": [3],           // Fri
+  "2025-11": [14],          // Fri
+  "2025-12": [22, 23, 26],  // Mon, Tue, Fri (Christmas break)
+  "2026-01": [2],           // Fri (after New Year)
+  "2026-02": [6],           // Fri
 };
 
-// Half days
+// Half days (4 total)
 const halfDays: Record<string, number[]> = {
-  "2025-05": [30],   // Fri before long weekend
-  "2025-08": [29],   // Fri
-  "2025-10": [31],   // Halloween
-  "2025-12": [19],   // Fri before Christmas break
-  "2026-02": [20],   // Fri
-  "2026-03": [20],   // Fri before spring break
+  "2025-07": [11, 25],  // Fri, Fri (summer half days)
+  "2025-10": [31],       // Fri (Halloween)
+  "2025-12": [19],       // Fri (before Christmas break)
 };
 
-// Extra working days (Saturdays)
+// Extra working Saturdays (7 total)
 const extraWorkingDays: Record<string, number[]> = {
-  "2025-06": [14],   // Sat
-  "2025-09": [6],    // Sat
-  "2025-11": [8],    // Sat
-  "2026-03": [7],    // Sat
+  "2025-06": [14],  // Sat
+  "2025-08": [9],   // Sat
+  "2025-09": [6],   // Sat
+  "2025-10": [18],  // Sat
+  "2025-11": [8],   // Sat
+  "2026-01": [10],  // Sat
+  "2026-02": [7],   // Sat
 };
 
 // Full financial year: April 2025 through March 2026
@@ -365,7 +366,7 @@ seedDays();
 
 console.log("Seeding invoices...");
 
-const DAILY_RATE = 250;
+const DAILY_RATE = 130;
 const IGST_RATE = 18;
 
 const fromProfile = {
@@ -392,32 +393,42 @@ const toClient = {
   email: "pierre.martin@techvision.fr",
 };
 
-// EUR-INR exchange rates that vary realistically
+// Actual historical EUR-INR monthly average rates
 const exchangeRates: Record<string, number> = {
-  "2025-04": 91.25, "2025-05": 91.80, "2025-06": 92.10,
-  "2025-07": 91.50, "2025-08": 92.45, "2025-09": 92.80,
-  "2025-10": 93.10, "2025-11": 92.60, "2025-12": 93.40,
-  "2026-01": 93.75, "2026-02": 94.10, "2026-03": 93.90,
+  "2025-04": 96.05,
+  "2025-05": 96.07,
+  "2025-06": 98.97,
+  "2025-07": 100.68,
+  "2025-08": 101.93,
+  "2025-09": 103.56,
+  "2025-10": 102.94,
+  "2025-11": 102.79,
+  "2025-12": 105.40,
+  "2026-01": 105.01,
 };
+
+// Platform charges (EUR) and bank charges (INR) per invoice
+const platformChargesArr = [3.50, 4.00, 3.75, 4.25, 3.80, 3.60, 4.10, 3.90, 4.00, 3.70];
+const bankChargesArr = [250, 300, 275, 350, 225, 280, 320, 260, 310, 240];
 
 interface InvoiceConfig {
   monthKey: string;
   status: "paid" | "sent" | "draft";
+  paidDate: string;
 }
 
+// 10 invoices, all paid (Apr 2025 – Jan 2026)
 const invoiceConfigs: InvoiceConfig[] = [
-  { monthKey: "2025-04", status: "paid" },
-  { monthKey: "2025-05", status: "paid" },
-  { monthKey: "2025-06", status: "paid" },
-  { monthKey: "2025-07", status: "paid" },
-  { monthKey: "2025-08", status: "paid" },
-  { monthKey: "2025-09", status: "paid" },
-  { monthKey: "2025-10", status: "paid" },
-  { monthKey: "2025-11", status: "paid" },
-  { monthKey: "2025-12", status: "paid" },
-  { monthKey: "2026-01", status: "paid" },
-  { monthKey: "2026-02", status: "sent" },
-  { monthKey: "2026-03", status: "draft" },
+  { monthKey: "2025-04", status: "paid", paidDate: "2025-05-19" },
+  { monthKey: "2025-05", status: "paid", paidDate: "2025-06-17" },
+  { monthKey: "2025-06", status: "paid", paidDate: "2025-07-18" },
+  { monthKey: "2025-07", status: "paid", paidDate: "2025-08-18" },
+  { monthKey: "2025-08", status: "paid", paidDate: "2025-09-18" },
+  { monthKey: "2025-09", status: "paid", paidDate: "2025-10-17" },
+  { monthKey: "2025-10", status: "paid", paidDate: "2025-11-17" },
+  { monthKey: "2025-11", status: "paid", paidDate: "2025-12-18" },
+  { monthKey: "2025-12", status: "paid", paidDate: "2026-01-16" },
+  { monthKey: "2026-01", status: "paid", paidDate: "2026-02-09" },
 ];
 
 const insertInvoice = db.prepare(`
@@ -459,46 +470,30 @@ const seedInvoices = db.transaction(() => {
     const month = parseInt(monthStr);
     const dim = daysInMonth(year, month);
 
-    const invoiceNumber = `HSB-${pad(i + 1)}`;  // HSB-01 to HSB-10
+    const invoiceNumber = `HSB-${pad(i + 1)}`;
     const periodStart = `${cfg.monthKey}-01`;
     const periodEnd = `${cfg.monthKey}-${pad(dim)}`;
-    const issueDate = dateStr(year, month === 12 ? month : month + 1, 1); // 1st of next month
-    const dueDate = dateStr(year, month === 12 ? month : month + 1, 15);
 
-    // Fix year rollover for Jan issue dates
-    const issueDateFixed = month === 12
-      ? dateStr(year + 1, 1, 1)
-      : issueDate;
-    const dueDateFixed = month === 12
-      ? dateStr(year + 1, 1, 15)
-      : dueDate;
+    // Issue date: 1st of next month
+    let issueYear = year;
+    let issueMonth = month + 1;
+    if (issueMonth > 12) { issueMonth = 1; issueYear++; }
+    const issueDate = dateStr(issueYear, issueMonth, 1);
+    const dueDate = dateStr(issueYear, issueMonth, 15);
 
     const workDays = workingDaysPerMonth[cfg.monthKey] ?? 20;
     const subtotal = workDays * DAILY_RATE;
     const igstAmount = +(subtotal * IGST_RATE / 100).toFixed(2);
     const total = +(subtotal + igstAmount).toFixed(2);
 
-    const rate = exchangeRates[cfg.monthKey] ?? 92;
-    let paidDate: string | null = null;
-    let eurToInrRate: number | null = null;
-    let platformCharges: number | null = null;
-    let bankCharges: number | null = null;
-    let netInrAmount: number | null = null;
-
-    if (cfg.status === "paid") {
-      // Paid ~15-20 days after issue
-      const issueD = new Date(issueDateFixed);
-      const paidD = addDays(issueD, 15 + Math.floor(Math.random() * 6));
-      paidDate = fmtDate(paidD);
-      eurToInrRate = rate + (Math.random() * 0.5 - 0.25); // slight variation
-      platformCharges = +(3 + Math.random() * 2).toFixed(2);  // €3-5
-      bankCharges = +(200 + Math.random() * 300).toFixed(0);   // ₹200-500
-      const grossInr = total * eurToInrRate;
-      netInrAmount = +(grossInr - (platformCharges * eurToInrRate) - bankCharges).toFixed(2);
-    }
+    const rate = exchangeRates[cfg.monthKey] ?? 100;
+    const platformCharges = platformChargesArr[i];
+    const bankCharges = bankChargesArr[i];
+    const grossInr = total * rate;
+    const netInrAmount = +(grossInr - (platformCharges * rate) - bankCharges).toFixed(2);
 
     insertInvoice.run(
-      invoiceNumber, periodStart, periodEnd, issueDateFixed, dueDateFixed,
+      invoiceNumber, periodStart, periodEnd, issueDate, dueDate,
       fromProfile.name, "", fromProfile.address, fromProfile.gstin, fromProfile.pan,
       fromProfile.email, fromProfile.phone,
       fromProfile.bankName, fromProfile.bankAccount, fromProfile.bankIfsc, fromProfile.bankBranch,
@@ -506,14 +501,12 @@ const seedInvoices = db.transaction(() => {
       "Current", "42 Koramangala, Bangalore 560034, India",
       toClient.name, toClient.company, toClient.address, null, toClient.email,
       subtotal, IGST_RATE, igstAmount, total,
-      cfg.status, paidDate, eurToInrRate, platformCharges, bankCharges, netInrAmount,
+      cfg.status, cfg.paidDate, rate, platformCharges, bankCharges, netInrAmount,
       new Date().toISOString(),
     );
 
-    // Get the inserted invoice ID
     const invoiceId = i + 1;
 
-    // Insert line item
     insertLineItem.run(
       invoiceId,
       `${workDays} working days - Frontend Development @ €${DAILY_RATE}/day`,
@@ -523,7 +516,7 @@ const seedInvoices = db.transaction(() => {
       subtotal,
     );
 
-    console.log(`  ${invoiceNumber}: ${workDays} days, €${total.toFixed(2)}, status=${cfg.status}`);
+    console.log(`  ${invoiceNumber}: ${workDays} days, €${total.toFixed(2)}, ₹${netInrAmount.toLocaleString()}, status=${cfg.status}`);
   }
 });
 
@@ -538,14 +531,13 @@ const insertTax = db.prepare(`
   VALUES (?, ?, ?, ?, ?, ?, ?)
 `);
 
-const taxPayments = [
-  { fy: "2025-26", q: "Q1", amount: 75000, date: "2025-06-15", challan: "CRN2025061500123", notes: "Advance tax Q1" },
-  { fy: "2025-26", q: "Q2", amount: 80000, date: "2025-09-15", challan: "CRN2025091500456", notes: "Advance tax Q2" },
-  { fy: "2025-26", q: "Q3", amount: 85000, date: "2025-12-15", challan: "CRN2025121500789", notes: "Advance tax Q3" },
-  { fy: "2025-26", q: "Q4", amount: 90000, date: "2026-03-15", challan: "CRN2026031500321", notes: "Advance tax Q4" },
+const taxPaymentsData = [
+  { fy: "2025-26", q: "Q1", amount: 25000, date: "2025-06-15", challan: "CRN2025061500123", notes: "Advance tax Q1" },
+  { fy: "2025-26", q: "Q2", amount: 25000, date: "2025-09-15", challan: "CRN2025091500456", notes: "Advance tax Q2" },
+  { fy: "2025-26", q: "Q3", amount: 30000, date: "2025-12-15", challan: "CRN2025121500789", notes: "Advance tax Q3" },
 ];
 
-for (const tp of taxPayments) {
+for (const tp of taxPaymentsData) {
   insertTax.run(tp.fy, tp.q, tp.amount, tp.date, tp.challan, tp.notes, new Date().toISOString());
   console.log(`  ${tp.fy} ${tp.q}: ₹${tp.amount.toLocaleString()}`);
 }
