@@ -18,6 +18,7 @@ export const clients = sqliteTable("clients", {
   email: text("email"),
   phone: text("phone"),
   country: text("country"),
+  currency: text("currency").notNull().default("EUR"),
   isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
   createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
 });
@@ -27,6 +28,7 @@ export const projects = sqliteTable("projects", {
   clientId: integer("client_id").notNull().references(() => clients.id),
   name: text("name").notNull(),
   defaultDailyRate: real("default_daily_rate").notNull(),
+  currency: text("currency").notNull().default("EUR"),
   isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
   createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
 });
@@ -101,6 +103,7 @@ export const invoices = sqliteTable("invoices", {
   igstRate: real("igst_rate").default(0),
   igstAmount: real("igst_amount").default(0),
   total: real("total").notNull().default(0),
+  currency: text("currency").notNull().default("EUR"),
   // Status
   status: text("status", { enum: ["draft", "sent", "paid", "cancelled"] }).notNull().default("draft"),
   notes: text("notes"),
