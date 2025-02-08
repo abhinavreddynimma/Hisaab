@@ -23,7 +23,8 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { LineItemsEditor, type LineItem } from "./line-items-editor";
 import { createInvoice, getAutoPopulatedLineItems } from "@/actions/invoices";
-import { formatEuro } from "@/lib/utils";
+import { formatForeignCurrency } from "@/lib/utils";
+import { getCurrencySymbol } from "@/lib/constants";
 import type { Client, Project } from "@/lib/types";
 
 const LUT_NOTE = "Supply meant for export of services under LUT without payment of IGST";
@@ -53,6 +54,14 @@ export function InvoiceForm({ clients, projects }: InvoiceFormProps) {
     if (!clientId) return projects;
     return projects.filter((p) => p.clientId === parseInt(clientId));
   }, [clientId, projects]);
+
+  const selectedProject = projectId
+    ? projects.find((p) => p.id === parseInt(projectId))
+    : null;
+  const selectedClient = clientId
+    ? clients.find((c) => c.id === parseInt(clientId))
+    : null;
+  const currency = selectedProject?.currency ?? selectedClient?.currency ?? "EUR";
 
   // When client changes, reset project if it no longer matches
   function handleClientChange(value: string) {
@@ -271,7 +280,7 @@ export function InvoiceForm({ clients, projects }: InvoiceFormProps) {
           </div>
         </CardHeader>
         <CardContent>
-          <LineItemsEditor items={lineItems} onChange={setLineItems} />
+          <LineItemsEditor items={lineItems} onChange={setLineItems} currency={currency} />
         </CardContent>
       </Card>
 
@@ -284,16 +293,16 @@ export function InvoiceForm({ clients, projects }: InvoiceFormProps) {
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Subtotal</span>
-              <span>{formatEuro(subtotal)}</span>
+              <span>{formatForeignCurrency(subtotal, currency)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">IGST (0%)</span>
-              <span>{formatEuro(0)}</span>
+              <span>{formatForeignCurrency(0, currency)}</span>
             </div>
             <Separator />
             <div className="flex justify-between text-base font-semibold">
               <span>Total</span>
-              <span>{formatEuro(total)}</span>
+              <span>{formatForeignCurrency(total, currency)}</span>
             </div>
           </div>
           <p className="text-xs text-muted-foreground">

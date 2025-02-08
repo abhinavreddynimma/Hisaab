@@ -30,6 +30,7 @@ export async function getActiveProjects(): Promise<(Project & { clientName: stri
       isActive: projects.isActive,
       createdAt: projects.createdAt,
       clientName: clients.name,
+      currency: projects.currency,
     })
     .from(projects)
     .innerJoin(clients, eq(projects.clientId, clients.id))
@@ -49,6 +50,7 @@ export async function createProject(data: {
   clientId: number;
   name: string;
   defaultDailyRate: number;
+  currency?: string;
 }): Promise<{ success: boolean; id?: number }> {
   const result = db
     .insert(projects)
@@ -56,6 +58,7 @@ export async function createProject(data: {
       clientId: data.clientId,
       name: data.name,
       defaultDailyRate: data.defaultDailyRate,
+      currency: data.currency || "EUR",
     })
     .run();
 
@@ -64,7 +67,7 @@ export async function createProject(data: {
 
 export async function updateProject(
   id: number,
-  data: { name?: string; defaultDailyRate?: number }
+  data: { name?: string; defaultDailyRate?: number; currency?: string }
 ): Promise<{ success: boolean }> {
   db.update(projects).set(data).where(eq(projects.id, id)).run();
   return { success: true };

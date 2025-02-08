@@ -33,6 +33,26 @@ export const INVOICE_STATUSES = {
 
 export type InvoiceStatus = keyof typeof INVOICE_STATUSES;
 
+export const SUPPORTED_CURRENCIES = [
+  { code: "EUR", symbol: "€", name: "Euro", pluralName: "Euros" },
+  { code: "USD", symbol: "$", name: "US Dollar", pluralName: "US Dollars" },
+  { code: "GBP", symbol: "£", name: "British Pound", pluralName: "British Pounds" },
+  { code: "AUD", symbol: "A$", name: "Australian Dollar", pluralName: "Australian Dollars" },
+  { code: "CAD", symbol: "C$", name: "Canadian Dollar", pluralName: "Canadian Dollars" },
+  { code: "SGD", symbol: "S$", name: "Singapore Dollar", pluralName: "Singapore Dollars" },
+  { code: "CHF", symbol: "CHF", name: "Swiss Franc", pluralName: "Swiss Francs" },
+] as const;
+
+export function getCurrencySymbol(code: string): string {
+  return SUPPORTED_CURRENCIES.find((c) => c.code === code)?.symbol ?? code;
+}
+
+export function getCurrencyName(code: string, plural = false): string {
+  const c = SUPPORTED_CURRENCIES.find((cur) => cur.code === code);
+  if (!c) return code;
+  return plural ? c.pluralName : c.name;
+}
+
 export const GST_RATES = [0, 5, 12, 18, 28] as const;
 
 export const DEFAULT_HSN_SAC = "998314"; // Management consulting services

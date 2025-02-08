@@ -63,6 +63,7 @@ export interface Client {
   email: string | null;
   phone: string | null;
   country: string | null;
+  currency: string;
   isActive: boolean;
   createdAt: string;
 }
@@ -72,6 +73,7 @@ export interface Project {
   clientId: number;
   name: string;
   defaultDailyRate: number;
+  currency: string;
   isActive: boolean;
   createdAt: string;
 }
@@ -149,6 +151,7 @@ export interface Invoice {
   igstRate: number | null;
   igstAmount: number | null;
   total: number;
+  currency: string;
   status: InvoiceStatus;
   notes: string | null;
   paidDate: string | null;
@@ -198,11 +201,12 @@ export interface DashboardStats {
   thisMonthEarnings: number;
   leaveBalance: number;
   openInvoices: number;
-  outstandingEur: number;
+  outstandingByCurrency: { currency: string; amount: number }[];
   avgPaymentDelay: number | null;
   nextMonthProjection: {
     estimatedInr: number;
     workingDays: number;
     avgRate: number;
+    currency: string;
   } | null;
 }
