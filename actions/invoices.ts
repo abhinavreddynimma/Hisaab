@@ -59,6 +59,7 @@ const invoiceSelectFields = {
   igstRate: invoices.igstRate,
   igstAmount: invoices.igstAmount,
   total: invoices.total,
+  currency: invoices.currency,
   status: invoices.status,
   notes: invoices.notes,
   paidDate: invoices.paidDate,
@@ -185,6 +186,10 @@ export async function createInvoice(data: {
 
   if (!client) return { success: false };
 
+  // Determine currency from project → client → default
+  const project = data.projectId ? await getProject(data.projectId) : null;
+  const currency = project?.currency ?? client.currency ?? "EUR";
+
   const subtotal = data.lineItems.reduce((sum, item) => sum + item.amount, 0);
   // Export of services under LUT — IGST at 0%
   const cgstRate = 0, cgstAmount = 0, sgstRate = 0, sgstAmount = 0, igstRate = 0, igstAmount = 0;
@@ -245,6 +250,7 @@ export async function createInvoice(data: {
       igstRate,
       igstAmount,
       total,
+      currency,
       status: "draft",
       notes: data.notes || null,
     })

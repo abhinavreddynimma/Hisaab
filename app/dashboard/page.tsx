@@ -7,7 +7,8 @@ import {
   getRecentInvoices,
   getMonthlyExchangeRateData,
   getCalendarOverviewData,
-  getLiveEurInrRate,
+  getLiveRate,
+  getPrimaryCurrency,
 } from "@/actions/dashboard";
 import { StatsCards } from "@/components/dashboard/stats-cards";
 import { EarningsChart } from "@/components/dashboard/earnings-chart";
@@ -18,6 +19,7 @@ import { ExchangeRateChart } from "@/components/dashboard/exchange-rate-chart";
 import { CalendarOverview } from "@/components/dashboard/calendar-overview";
 
 export default async function DashboardPage() {
+  const primaryCurrency = await getPrimaryCurrency();
   const [stats, monthlyEarnings, clientEarnings, monthlyBreakdown, balanceData, recentInvoices, exchangeRates, calendarData, liveRate] =
     await Promise.all([
       getDashboardStats(),
@@ -28,7 +30,7 @@ export default async function DashboardPage() {
       getRecentInvoices(),
       getMonthlyExchangeRateData(),
       getCalendarOverviewData(),
-      getLiveEurInrRate(),
+      getLiveRate(primaryCurrency),
     ]);
 
   return (
@@ -48,7 +50,7 @@ export default async function DashboardPage() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <RecentInvoices invoices={recentInvoices} />
-        <ExchangeRateChart data={exchangeRates} liveRate={liveRate} />
+        <ExchangeRateChart data={exchangeRates} liveRate={liveRate} currency={primaryCurrency} />
       </div>
     </div>
   );
