@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
+import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid } from "recharts";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { EXPENSE_ACCOUNT_TYPES } from "@/lib/constants";
 import type { ExpenseAccount, ExpenseTransaction, ExpenseBudget, ExpenseTarget, ExpenseAccountType } from "@/lib/types";
@@ -88,12 +88,20 @@ export function AccountDetailView({ drillDown, budgets, targets }: AccountDetail
           <CardHeader><CardTitle className="text-base">Monthly Trend</CardTitle></CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={monthlyTrend}>
+              <LineChart data={monthlyTrend}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
                 <XAxis dataKey="month" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
                 <Tooltip formatter={(value: number | undefined) => [formatCurrency(value ?? 0), "Amount"]} contentStyle={{ borderRadius: 12, fontSize: 13 }} />
-                <Bar dataKey="amount" fill={typeConfig?.color || "#6366f1"} radius={[4, 4, 0, 0]} />
-              </BarChart>
+                <Line
+                  type="monotone"
+                  dataKey="amount"
+                  stroke={typeConfig?.color || "#f97316"}
+                  strokeWidth={2.5}
+                  dot={{ r: 4, fill: typeConfig?.color || "#f97316", strokeWidth: 0 }}
+                  activeDot={{ r: 6, strokeWidth: 2, stroke: "#fff" }}
+                />
+              </LineChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
