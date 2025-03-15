@@ -13,8 +13,8 @@ interface StatsData {
   totalTransfersOut: number;
   net: number;
   incomeByCategory: { id: number; name: string; amount: number; percentage: number; color: string | null }[];
-  expenseByCategory: { id: number; name: string; amount: number; percentage: number; color: string | null }[];
-  transfersByType: { type: string; amount: number; percentage: number }[];
+  expenseByCategory: { id: number; name: string; amount: number; percentage: number; color: string | null; subCategories: { id: number; name: string; amount: number; percentage: number; color: string | null }[] }[];
+  transfersByType: { type: string; amount: number; percentage: number; subCategories: { id: number; name: string; amount: number; percentage: number; color: string | null }[] }[];
   topLevelSplit: {
     postTaxIncome: number;
     investments: { amount: number; percentage: number };
@@ -46,8 +46,8 @@ export function StatsView({ stats, fyStats, fyOverview, currentMonth, currentYea
   const activeStats = period === "month" ? stats : fyStats;
 
   const outflowData = [
-    ...activeStats.expenseByCategory.map(c => ({ id: c.id, name: c.name, value: c.amount, color: c.color })),
-    ...activeStats.transfersByType.map(t => ({ id: 0, name: t.type, value: t.amount, color: t.type === "Investments" ? "#6366f1" : "#f59e0b" })),
+    ...activeStats.expenseByCategory.map(c => ({ id: c.id, name: c.name, value: c.amount, color: c.color, subCategories: c.subCategories })),
+    ...activeStats.transfersByType.map(t => ({ id: 0, name: t.type, value: t.amount, color: t.type === "Investments" ? "#6366f1" : "#f59e0b", subCategories: t.subCategories })),
   ];
 
   const incomeData = activeStats.incomeByCategory.map(c => ({ id: c.id, name: c.name, value: c.amount, color: c.color }));
