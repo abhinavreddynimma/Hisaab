@@ -1,39 +1,60 @@
 # Hisaab
 
-A freelancer payroll management app for tracking income, clients, invoices, work days, and tax obligations. Built with Next.js, SQLite, and Drizzle ORM.
+A freelancer payroll management app for tracking income, clients, invoices, work days, and tax obligations. Built for India-based freelancers billing international clients.
 
-## Features
-
-- **Dashboard** — Overview of earnings, invoices, leave balance, and financial projections
-- **Client Management** — Create and manage client profiles with projects and daily rates
-- **Calendar** — Track working days, leaves, holidays, half-days, and extra working days
-- **Invoices** — Generate invoices with line items, tax calculations (CGST/SGST/IGST), and PDF export
-- **Payments** — Record payment receipts with EUR-to-INR exchange rates and bank/platform charges
-- **Tax Tracking** — Track quarterly advance tax payments by financial year
-- **Settings** — Configure invoice numbering, tax rates, leave policies, and user profile
+Built with Next.js, SQLite, and Drizzle ORM.
 
 ## Screenshots
 
 ### Dashboard
+At-a-glance summary of total earnings (INR), current month revenue, and next month projections. A multi-month calendar highlights working days, leaves, holidays, and extra days. Leave balance cards show accrued vs. taken leaves and extra working days.
+
 ![Dashboard](docs/screenshots/dashboard.png)
 
 ### Calendar
+Full monthly calendar view for tracking each day — mark days as working, leave, holiday, half-day, or extra working. Bottom summary shows totals for the month along with leave balance.
+
 ![Calendar](docs/screenshots/calendar.png)
 
+### Clients
+Manage client profiles with company details, contact info, currency, and active/inactive status.
+
+![Clients](docs/screenshots/clients.png)
+
+### Client Detail
+View client details, associated projects with daily rates, and quickly add new projects.
+
+![Client Detail](docs/screenshots/client-detail.png)
+
 ### Invoices
+List of all invoices with filtering by status (Draft, Sent, Paid, Cancelled). Shows invoice number, client, billing period, amount, paid date, and status at a glance.
+
 ![Invoices](docs/screenshots/invoices.png)
 
 ### Invoice Detail
+Professional invoice preview with from/to details, GSTIN/PAN, line items with HSN/SAC codes, tax calculations (CGST/SGST/IGST), total in words, and bank/SEPA/SWIFT payment details. Print and PDF export supported.
+
 ![Invoice Detail](docs/screenshots/invoice-detail.png)
 
-### Client Management
-![Clients](docs/screenshots/clients.png)
-
 ### Tax Tracking
+Automatic tax computation under Section 44ADA (presumptive income at 50%). Shows slab-wise breakdown, cess, total liability, advance tax payments by quarter, and balance payable. Includes a projection tab for estimating full-year tax.
+
 ![Tax](docs/screenshots/tax.png)
 
 ### Settings
+Configure your profile (name, address, GSTIN, PAN), bank details (Indian bank, SEPA, SWIFT), leave policy (accrual rate, standard working days), and invoice settings (prefix, numbering, default HSN/SAC, tax type).
+
 ![Settings](docs/screenshots/settings.png)
+
+## Features
+
+- **Dashboard** — Earnings summary, multi-month calendar overview, leave balance, monthly breakdown charts (working days, earnings), client revenue pie chart, recent invoices, and EUR-INR exchange rate history
+- **Client Management** — Create and manage clients with full address, currency (EUR, USD, GBP, AUD, CAD, SGD, CHF), and multiple projects per client with configurable daily rates
+- **Calendar** — Track working days, leaves, holidays, half-days, and extra working days with per-day project assignment and notes
+- **Invoices** — Auto-generate line items from calendar entries, tax calculations (CGST/SGST for domestic, IGST for exports under LUT), professional preview layout, PDF export, and payment recording with exchange rate conversion
+- **Tax Tracking** — Automatic computation under Section 44ADA with slab-wise breakdown, quarterly advance tax tracking (Indian FY Apr-Mar), and full-year projections
+- **Settings** — User profile with GSTIN/PAN, Indian bank + SEPA + SWIFT transfer details, configurable leave policy, and invoice numbering preferences
+- **Light/Dark Mode** — Full theme support with toggle
 
 ## Tech Stack
 
@@ -72,97 +93,17 @@ A freelancer payroll management app for tracking income, clients, invoices, work
 
 4. Open [http://localhost:3000/hisaab](http://localhost:3000/hisaab)
 
+## Demo Data
+
+To populate the app with realistic demo data (a full financial year of invoices, calendar entries, and tax payments):
+
+```bash
+npm run seed:demo
+```
+
 ## Production Build
 
 ```bash
 npm run build
 npm start
 ```
-
-## Self-Hosting with Docker
-
-Host Hisaab on your home server (tested on Beelink Mini S13) so it runs 24/7 and is accessible to your accountant, CA, or anyone on your network.
-
-### Prerequisites
-
-- [Docker](https://docs.docker.com/engine/install/) and [Docker Compose](https://docs.docker.com/compose/install/) installed on your server
-- Git (to clone the repo)
-
-### Quick Start
-
-```bash
-# Clone the repo
-git clone https://github.com/your-username/hisaab.git
-cd hisaab
-
-# Build and start (runs in background, restarts automatically)
-docker compose up -d --build
-```
-
-Hisaab is now running at **http://your-server-ip:3000**
-
-### Configuration
-
-Create a `.env` file to customize settings (all optional):
-
-```env
-# Port to expose on the host (default: 3000)
-PORT=3000
-
-# Where to store database and attachments on the host (default: ./data)
-DATA_LOCATION=./data
-```
-
-### Commands Reference
-
-```bash
-# Start the app (build + run in background)
-docker compose up -d --build
-
-# View logs
-docker compose logs -f
-
-# Stop the app
-docker compose down
-
-# Restart the app
-docker compose restart
-
-# Rebuild after pulling new changes
-git pull
-docker compose up -d --build
-
-# Check health status
-docker inspect --format='{{.State.Health.Status}}' hisaab
-
-# Back up your data (database + attachments)
-cp -r ./data ./data-backup-$(date +%Y%m%d)
-```
-
-### Data & Backups
-
-All your data lives in one directory (`./data` by default):
-- `payroll.db` — SQLite database (clients, invoices, settings, etc.)
-- `attachments/` — uploaded invoice attachments
-
-To back up, just copy this directory. To migrate to a new server, copy `./data` to the new machine and run `docker compose up -d --build`.
-
-### Accessing from Other Devices
-
-Once running, Hisaab is accessible to anyone on your local network at `http://<server-ip>:3000`.
-
-To share with people outside your network (your CA, accountant, etc.), you have a few options:
-
-1. **Tailscale / ZeroTier** (recommended) — Create a private network. Install the client on your server and their devices. No port forwarding needed, fully encrypted.
-2. **Cloudflare Tunnel** — Expose your server to the internet securely without opening ports. Free tier available.
-3. **Reverse proxy + port forwarding** — Use Nginx or Caddy as a reverse proxy with a domain name and Let's Encrypt SSL. Forward port 443 on your router to the server.
-
-### Updating
-
-```bash
-cd hisaab
-git pull
-docker compose up -d --build
-```
-
-The database schema auto-migrates on startup, so updates are safe.
