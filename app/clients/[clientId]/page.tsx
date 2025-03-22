@@ -35,7 +35,7 @@ export default async function ClientPage({ params }: ClientPageProps) {
             <span className="sr-only">Back to clients</span>
           </Link>
         </Button>
-        <h1 className="text-2xl font-bold tracking-tight">{client.name}</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">{client.name}</h1>
       </div>
 
       <ClientDetails client={client} projects={projects} />

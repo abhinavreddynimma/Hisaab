@@ -11,6 +11,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "migrate-data": "npx tsx scripts/migrate-from-json.ts",
+    "seed:demo": "npx tsx scripts/seed-demo.ts",
     "docs:screenshots": "node scripts/take-screenshots.mjs",
     "docs:readme": "node scripts/update-readme.mjs",
     "docs:refresh": "bash scripts/refresh-docs.sh"
