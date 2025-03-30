@@ -34,33 +34,52 @@ interface CategoryPieChartProps {
 }
 
 const RADIAN = Math.PI / 180;
+const LABEL_HEIGHT = 16; // estimated height of one label line
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function renderLabel(props: any) {
-  const { cx, cy, midAngle, outerRadius, name, percent } = props;
-  const pct = ((percent ?? 0) * 100);
-  const pctStr = pct < 1 ? pct.toFixed(1) : Math.round(pct).toString();
+// Collect raw label positions, then spread them to avoid overlap
+function createLabelRenderer() {
+  const placedLabels: { x: number; y: number; side: "left" | "right" }[] = [];
 
-  const radius = (outerRadius ?? 100) + 25;
-  const x = cx + radius * Math.cos(-(midAngle ?? 0) * RADIAN);
-  const y = cy + radius * Math.sin(-(midAngle ?? 0) * RADIAN);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return function renderLabel(props: any) {
+    const { cx, cy, midAngle, outerRadius, name, percent, index } = props;
+    const pct = ((percent ?? 0) * 100);
+    const pctStr = pct < 1 ? pct.toFixed(1) : Math.round(pct).toString();
 
-  const truncated = (name ?? "").length > 12 ? (name ?? "").slice(0, 11) + "…" : (name ?? "");
+    const radius = (outerRadius ?? 100) + 25;
+    let x = cx + radius * Math.cos(-(midAngle ?? 0) * RADIAN);
+    let y = cy + radius * Math.sin(-(midAngle ?? 0) * RADIAN);
+    const side: "left" | "right" = x > cx ? "right" : "left";
 
-  return (
-    <text
-      x={x}
-      y={y}
-      textAnchor={x > cx ? "start" : "end"}
-      dominantBaseline="central"
-      className="fill-foreground"
-      fontSize={11}
-      fontWeight={600}
-    >
-      <tspan fontWeight={700}>{truncated}</tspan>
-      <tspan dx={4} className="fill-muted-foreground" fontWeight={400}>{pctStr}%</tspan>
-    </text>
-  );
+    // Push apart from existing labels on the same side
+    const sameSide = placedLabels.filter(l => l.side === side);
+    for (const placed of sameSide) {
+      if (Math.abs(y - placed.y) < LABEL_HEIGHT) {
+        // Nudge down if overlapping
+        y = placed.y + LABEL_HEIGHT;
+      }
+    }
+
+    placedLabels.push({ x, y, side });
+
+    const truncated = (name ?? "").length > 14 ? (name ?? "").slice(0, 13) + "…" : (name ?? "");
+
+    return (
+      <text
+        key={`label-${index}`}
+        x={x}
+        y={y}
+        textAnchor={side === "right" ? "start" : "end"}
+        dominantBaseline="central"
+        className="fill-foreground"
+        fontSize={10}
+        fontWeight={600}
+      >
+        <tspan fontWeight={700}>{truncated}</tspan>
+        <tspan dx={3} className="fill-muted-foreground" fontWeight={400}>{pctStr}%</tspan>
+      </text>
+    );
+  };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -91,6 +110,7 @@ export function CategoryPieChart({ data, title, onCategoryClick }: CategoryPieCh
     );
   }
 
+  const labelRenderer = createLabelRenderer();
   const activeData = drillDown
     ? drillDown.subData
     : data;
@@ -143,7 +163,7 @@ export function CategoryPieChart({ data, title, onCategoryClick }: CategoryPieCh
         </div>
       </CardHeader>
       <CardContent className="pb-4">
-        <ResponsiveContainer width="100%" height={360}>
+        <ResponsiveContainer width="100%" height={400}>
           <PieChart>
             <Pie
               data={activeData}
@@ -157,7 +177,7 @@ export function CategoryPieChart({ data, title, onCategoryClick }: CategoryPieCh
               stroke="rgba(255,255,255,0.5)"
               onClick={(_, idx) => handlePieClick(idx)}
               style={{ cursor: "pointer" }}
-              label={renderLabel}
+              label={labelRenderer}
               labelLine={{ stroke: "var(--muted-foreground)", strokeWidth: 0.8, strokeOpacity: 0.5 }}
               isAnimationActive={false}
             >
