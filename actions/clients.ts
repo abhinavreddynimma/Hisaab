@@ -4,8 +4,10 @@ import { db } from "@/db";
 import { clients } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import type { Client } from "@/lib/types";
+import { assertAdminAccess } from "@/lib/auth";
 
 export async function getClients(includeInactive = false): Promise<Client[]> {
+  await assertAdminAccess();
   if (includeInactive) {
     return db.select().from(clients).orderBy(clients.name).all() as Client[];
   }
@@ -18,6 +20,7 @@ export async function getClients(includeInactive = false): Promise<Client[]> {
 }
 
 export async function getClient(id: number): Promise<Client | null> {
+  await assertAdminAccess();
   const client = db.select().from(clients).where(eq(clients.id, id)).get();
   return (client as Client) ?? null;
 }
@@ -36,6 +39,7 @@ export async function createClient(data: {
   phone?: string;
   currency?: string;
 }): Promise<{ success: boolean; id?: number }> {
+  await assertAdminAccess();
   const result = db
     .insert(clients)
     .values({
@@ -74,6 +78,7 @@ export async function updateClient(
     currency?: string;
   }
 ): Promise<{ success: boolean }> {
+  await assertAdminAccess();
   db.update(clients)
     .set({
       name: data.name,
@@ -96,6 +101,7 @@ export async function updateClient(
 }
 
 export async function toggleClientActive(id: number): Promise<{ success: boolean }> {
+  await assertAdminAccess();
   const client = db.select().from(clients).where(eq(clients.id, id)).get();
   if (!client) return { success: false };
 
