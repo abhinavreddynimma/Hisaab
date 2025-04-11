@@ -28,11 +28,20 @@ A freelancer payroll management app for tracking income, clients, work days, inv
 ### Calendar Day Entry
 ![Calendar Day Entry](docs/screenshots/calendar-day-entry.png)
 
+### Calendar Snapshot
+![Calendar Snapshot](docs/screenshots/calendar-snapshot.png)
+
 ### Client Management
 ![Client Management](docs/screenshots/clients.png)
 
 ### Client Detail
 ![Client Detail](docs/screenshots/client-detail.png)
+
+### Add Project
+![Add Project](docs/screenshots/client-add-project.png)
+
+### New Client Form
+![New Client Form](docs/screenshots/client-new.png)
 
 ### Invoices
 ![Invoices](docs/screenshots/invoices.png)
@@ -54,6 +63,9 @@ A freelancer payroll management app for tracking income, clients, work days, inv
 
 ### Tax Projection
 ![Tax Projection](docs/screenshots/tax-projection.png)
+
+### Tax Payment
+![Tax Payment](docs/screenshots/tax-payment.png)
 
 ### Settings Overview
 ![Settings Overview](docs/screenshots/settings.png)

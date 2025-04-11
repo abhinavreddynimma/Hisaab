@@ -27,6 +27,7 @@ function getRecordIds() {
     const client = db.prepare("SELECT id FROM clients ORDER BY id LIMIT 1").get();
     const invoice = db.prepare("SELECT id FROM invoices ORDER BY id DESC LIMIT 1").get();
     const paid = db.prepare("SELECT id FROM invoices WHERE status = 'paid' ORDER BY id DESC LIMIT 1").get();
+    const unpaid = db.prepare("SELECT id FROM invoices WHERE status != 'paid' AND status != 'cancelled' ORDER BY id DESC LIMIT 1").get();
     const withAttachments = db
       .prepare(`
         SELECT i.id
@@ -48,6 +49,7 @@ function getRecordIds() {
       clientId: client?.id ?? defaults.clientId,
       invoiceId: invoice?.id ?? defaults.invoiceId,
       paidInvoiceId: paid?.id ?? invoice?.id ?? defaults.paidInvoiceId,
+      unpaidInvoiceId: unpaid?.id ?? invoice?.id ?? defaults.invoiceId,
       attachmentInvoiceId: withAttachments?.id ?? paid?.id ?? invoice?.id ?? defaults.attachmentInvoiceId,
     };
   } catch {
@@ -61,7 +63,7 @@ async function takeScreenshots() {
   }
   mkdirSync(SCREENSHOTS_DIR, { recursive: true });
 
-  const { clientId, invoiceId, paidInvoiceId, attachmentInvoiceId } = getRecordIds();
+  const { clientId, invoiceId, paidInvoiceId, unpaidInvoiceId, attachmentInvoiceId } = getRecordIds();
 
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({
@@ -101,20 +103,20 @@ async function takeScreenshots() {
 
   console.log("Taking screenshots...\n");
 
-  console.log("1/17 Dashboard");
+  console.log("1/22 Dashboard");
   await goto("/dashboard");
   await screenshot("dashboard");
 
-  console.log("2/17 Dashboard Charts");
+  console.log("2/22 Dashboard Charts");
   await page.evaluate(() => window.scrollTo(0, 900));
   await page.waitForTimeout(400);
   await screenshot("dashboard-charts");
 
-  console.log("3/17 Calendar");
+  console.log("3/22 Calendar");
   await goto("/calendar");
   await screenshot("calendar");
 
-  console.log("4/17 Calendar Day Entry");
+  console.log("4/22 Calendar Day Entry");
   const dayCell = page.locator("div.grid.grid-cols-7 > button").first();
   if (await dayCell.count()) {
     await dayCell.click();
@@ -123,23 +125,74 @@ async function takeScreenshots() {
   await screenshot("calendar-day-entry");
   await page.keyboard.press("Escape").catch(() => {});
 
-  console.log("5/17 Clients");
+  console.log("5/22 Calendar Snapshot");
+  await goto("/calendar");
+  const snapshotBtn = page.getByRole("button", { name: "Snapshot" });
+  if (await snapshotBtn.count()) {
+    await snapshotBtn.click();
+    await page.getByRole("dialog").waitFor({ state: "visible", timeout: 2500 }).catch(() => {});
+    await page.waitForTimeout(300);
+  }
+  await screenshot("calendar-snapshot");
+  await page.keyboard.press("Escape").catch(() => {});
+
+  console.log("6/22 Clients");
   await goto("/clients");
   await screenshot("clients");
 
-  console.log("6/17 Client Detail");
+  console.log("7/22 Client Detail");
   await goto(`/clients/${clientId}`);
   await screenshot("client-detail");
 
-  console.log("7/17 Invoices");
+  console.log("8/22 Add Project");
+  const addProjectBtn = page.getByRole("button", { name: "Add Project" });
+  if (await addProjectBtn.count()) {
+    await addProjectBtn.click();
+    await page.getByRole("dialog").waitFor({ state: "visible", timeout: 2500 }).catch(() => {});
+    await page.waitForTimeout(300);
+  }
+  await screenshot("client-add-project");
+  await page.keyboard.press("Escape").catch(() => {});
+
+  console.log("9/22 New Client Form");
+  await goto("/clients/new");
+  await screenshot("client-new");
+
+  console.log("10/22 Invoices");
   await goto("/invoices");
   await screenshot("invoices");
 
-  console.log("8/17 Invoice Detail");
+  console.log("11/22 Mark as Paid");
+  await goto("/invoices");
+  let capturedMarkPaid = false;
+  const menuBtns = page.locator("table button[aria-haspopup='menu']");
+  const menuCount = await menuBtns.count();
+  for (let i = 0; i < menuCount && !capturedMarkPaid; i++) {
+    await menuBtns.nth(i).click();
+    await page.waitForTimeout(300);
+    const markPaidItem = page.getByRole("menuitem", { name: "Mark as Paid" });
+    if (await markPaidItem.count()) {
+      await markPaidItem.click();
+      await page.getByRole("dialog").waitFor({ state: "visible", timeout: 2500 }).catch(() => {});
+      await page.waitForTimeout(300);
+      await screenshot("invoice-mark-paid");
+      await page.keyboard.press("Escape").catch(() => {});
+      capturedMarkPaid = true;
+    } else {
+      await page.keyboard.press("Escape").catch(() => {});
+      await page.waitForTimeout(200);
+    }
+  }
+  if (!capturedMarkPaid) {
+    console.log("  Skipped: No unpaid invoices found for Mark as Paid dialog");
+  }
+
+  console.log("12/22 Invoice Detail");
+
   await goto(`/invoices/${paidInvoiceId || invoiceId}`);
   await screenshot("invoice-detail");
 
-  console.log("9/17 Invoice Payment Details");
+  console.log("13/22 Invoice Payment Details");
   const paymentSection = page.locator("text=Payment Details").first();
   if (await paymentSection.count()) {
     await paymentSection.scrollIntoViewIfNeeded();
@@ -150,7 +203,7 @@ async function takeScreenshots() {
   }
   await screenshot("invoice-payment");
 
-  console.log("10/17 Invoice Attachments");
+  console.log("14/22 Invoice Attachments");
   await goto(`/invoices/${attachmentInvoiceId || paidInvoiceId || invoiceId}`);
   const attachmentsSection = page.locator("text=Attachments").first();
   if (await attachmentsSection.count()) {
@@ -162,23 +215,34 @@ async function takeScreenshots() {
   }
   await screenshot("invoice-attachments");
 
-  console.log("11/17 Invoice Create Form");
+  console.log("15/22 Invoice Create Form");
   await goto("/invoices/new");
   await screenshot("invoice-create");
 
-  console.log("12/17 Tax Overview");
+  console.log("16/22 Tax Overview");
   await goto("/tax");
   await screenshot("tax");
 
-  console.log("13/17 Tax Projection");
+  console.log("17/22 Tax Projection");
   await clickTab("Projection");
   await screenshot("tax-projection");
 
-  console.log("14/17 Settings");
+  console.log("18/22 Tax Payment");
+  await goto("/tax");
+  const addPaymentBtn = page.getByRole("button", { name: "Add Payment" });
+  if (await addPaymentBtn.count()) {
+    await addPaymentBtn.click();
+    await page.getByRole("dialog").waitFor({ state: "visible", timeout: 2500 }).catch(() => {});
+    await page.waitForTimeout(300);
+  }
+  await screenshot("tax-payment");
+  await page.keyboard.press("Escape").catch(() => {});
+
+  console.log("19/22 Settings Overview");
   await goto("/settings");
   await screenshot("settings");
 
-  console.log("15/17 Settings Bank");
+  console.log("20/22 Settings Bank");
   const sepaHeading = page.locator("text=SEPA Transfer Details").first();
   if (await sepaHeading.count()) {
     await sepaHeading.scrollIntoViewIfNeeded();
@@ -186,11 +250,11 @@ async function takeScreenshots() {
   }
   await screenshot("settings-bank");
 
-  console.log("16/17 Settings Leave Policy");
+  console.log("21/22 Settings Leave Policy");
   await clickTab("Leave Policy");
   await screenshot("settings-leave-policy");
 
-  console.log("17/17 Settings Invoice");
+  console.log("22/22 Settings Invoice");
   await clickTab("Invoice Settings");
   await screenshot("settings-invoice");
 
