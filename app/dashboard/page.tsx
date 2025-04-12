@@ -54,7 +54,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+      <h1 className="font-display text-2xl font-bold tracking-tight">Dashboard</h1>
 
       <StatsCards stats={stats} />
 

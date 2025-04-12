@@ -53,7 +53,7 @@ export function AppShell({ children, authState }: AppShellProps) {
             user={authState.user}
           />
         </div>
-        <main className="p-4 lg:p-6">{children}</main>
+        <main className="p-4 lg:p-8">{children}</main>
       </div>
     </div>
   )
