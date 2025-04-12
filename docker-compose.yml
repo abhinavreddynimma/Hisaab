@@ -1,10 +1,19 @@
+name: hisaab
+
 services:
   hisaab:
     build: .
+    container_name: hisaab
     ports:
       - "${PORT:-3000}:3000"
     volumes:
-      - ./data:/app/data
+      - ${DATA_LOCATION:-./data}:/app/data
     env_file:
       - .env
-    restart: unless-stopped
+    restart: always
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3

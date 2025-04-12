@@ -67,7 +67,7 @@ export function CalendarPageClient({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Calendar</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Calendar</h1>
         <div className="flex items-center gap-2">
           <AlertDialog>
             <AlertDialogTrigger asChild>
@@ -111,7 +111,7 @@ export function CalendarPageClient({
           <Button variant="outline" size="icon" onClick={() => navigateMonth(-1)}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="min-w-[160px] text-center text-sm font-medium">
+          <span className="min-w-[180px] text-center text-base font-display font-semibold tracking-tight">
             {MONTH_NAMES[month - 1]} {year}
           </span>
           <Button variant="outline" size="icon" onClick={() => navigateMonth(1)}>
