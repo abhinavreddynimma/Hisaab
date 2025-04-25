@@ -2,6 +2,17 @@ import type { DayType, InvoiceStatus } from "./constants";
 
 export type { DayType, InvoiceStatus };
 
+export type AuthRole = "admin" | "viewer";
+
+export interface AuthUser {
+  id: number;
+  name: string;
+  email: string;
+  role: AuthRole;
+  isActive: boolean;
+  createdAt: string;
+}
+
 export interface UserProfile {
   name: string;
   company: string;
