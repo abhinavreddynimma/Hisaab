@@ -4,13 +4,18 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
+    "dev:demo": "DATABASE_PATH=./data/demo.db next dev --turbopack",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
-    "migrate-data": "npx tsx scripts/migrate-from-json.ts"
+    "migrate-data": "npx tsx scripts/migrate-from-json.ts",
+    "seed:demo": "npx tsx scripts/seed-demo.ts",
+    "docs:screenshots": "node scripts/take-screenshots.mjs",
+    "docs:readme": "node scripts/update-readme.mjs",
+    "docs:refresh": "bash scripts/refresh-docs.sh"
   },
   "keywords": [],
   "author": "",
@@ -55,6 +60,7 @@
     "drizzle-kit": "^0.31.9",
     "eslint": "^9.39.2",
     "eslint-config-next": "^16.1.6",
+    "playwright": "^1.58.2",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.18",
     "tsx": "^4.21.0",

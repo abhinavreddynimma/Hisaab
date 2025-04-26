@@ -4,8 +4,10 @@ import { db } from "@/db";
 import { projects, projectRates } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import type { Project, ProjectRate } from "@/lib/types";
+import { assertAdminAccess } from "@/lib/auth";
 
 export async function getProjectsByClient(clientId: number): Promise<Project[]> {
+  await assertAdminAccess();
   return db
     .select()
     .from(projects)
@@ -15,6 +17,7 @@ export async function getProjectsByClient(clientId: number): Promise<Project[]> 
 }
 
 export async function getActiveProjects(): Promise<(Project & { clientName: string })[]> {
+  await assertAdminAccess();
   const rows = db.query.projects.findMany({
     where: eq(projects.isActive, true),
     with: {},
@@ -42,6 +45,7 @@ export async function getActiveProjects(): Promise<(Project & { clientName: stri
 }
 
 export async function getProject(id: number): Promise<Project | null> {
+  await assertAdminAccess();
   const project = db.select().from(projects).where(eq(projects.id, id)).get();
   return (project as Project) ?? null;
 }
@@ -52,6 +56,7 @@ export async function createProject(data: {
   defaultDailyRate: number;
   currency?: string;
 }): Promise<{ success: boolean; id?: number }> {
+  await assertAdminAccess();
   const result = db
     .insert(projects)
     .values({
@@ -69,11 +74,13 @@ export async function updateProject(
   id: number,
   data: { name?: string; defaultDailyRate?: number; currency?: string }
 ): Promise<{ success: boolean }> {
+  await assertAdminAccess();
   db.update(projects).set(data).where(eq(projects.id, id)).run();
   return { success: true };
 }
 
 export async function toggleProjectActive(id: number): Promise<{ success: boolean }> {
+  await assertAdminAccess();
   const project = db.select().from(projects).where(eq(projects.id, id)).get();
   if (!project) return { success: false };
 
@@ -89,6 +96,7 @@ export async function getProjectRate(
   projectId: number,
   monthKey: string
 ): Promise<number | null> {
+  await assertAdminAccess();
   const rate = db
     .select()
     .from(projectRates)
@@ -105,6 +113,7 @@ export async function setProjectRate(
   monthKey: string,
   dailyRate: number
 ): Promise<{ success: boolean }> {
+  await assertAdminAccess();
   const existing = db
     .select()
     .from(projectRates)
@@ -126,6 +135,7 @@ export async function setProjectRate(
 }
 
 export async function getProjectRates(projectId: number): Promise<ProjectRate[]> {
+  await assertAdminAccess();
   return db
     .select()
     .from(projectRates)
@@ -135,6 +145,7 @@ export async function getProjectRates(projectId: number): Promise<ProjectRate[]>
 }
 
 export async function deleteProjectRate(id: number): Promise<{ success: boolean }> {
+  await assertAdminAccess();
   db.delete(projectRates).where(eq(projectRates.id, id)).run();
   return { success: true };
 }
@@ -143,6 +154,7 @@ export async function getEffectiveRate(
   projectId: number,
   monthKey: string
 ): Promise<number> {
+  await assertAdminAccess();
   const override = await getProjectRate(projectId, monthKey);
   if (override !== null) return override;
 
