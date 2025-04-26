@@ -1,0 +1,20 @@
+name: Sync main to abhi-personal
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push main to abhi-personal
+        run: git push origin main:abhi-personal
