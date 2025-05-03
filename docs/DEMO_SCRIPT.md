@@ -2,6 +2,12 @@
 
 Use this flow for consistent demos and docs refresh.
 
+**Important:** Start the server with the demo database before capturing screenshots:
+
+```bash
+npm run dev:demo
+```
+
 ## 1. Dashboard
 - Open `/hisaab/dashboard`
 - Confirm cards, recent invoices, and exchange-rate trends are visible
