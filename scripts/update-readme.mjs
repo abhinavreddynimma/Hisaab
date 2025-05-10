@@ -18,35 +18,132 @@ const features = [
   "Invoice Attachments - Upload and manage proof documents like FIRA and bank statements after payment",
   "Tax Tracking - Advance-tax computation, quarterly payments, and projection tab",
   "Settings - Profile, domestic bank details, SEPA/SWIFT transfer details, leave policy, and invoice settings",
+  "Access Control - Admin setup, viewer accounts with tags, and session-based authentication",
 ];
 
 const screenshots = [
-  { title: "Dashboard", file: "dashboard.png" },
-  { title: "Dashboard Charts", file: "dashboard-charts.png" },
-  { title: "Calendar", file: "calendar.png" },
-  { title: "Calendar Day Entry", file: "calendar-day-entry.png" },
-  { title: "Calendar Snapshot", file: "calendar-snapshot.png" },
-  { title: "Client Management", file: "clients.png" },
-  { title: "Client Detail", file: "client-detail.png" },
-  { title: "Add Project", file: "client-add-project.png" },
-  { title: "New Client Form", file: "client-new.png" },
-  { title: "Invoices", file: "invoices.png" },
-  { title: "Invoice Detail", file: "invoice-detail.png" },
-  { title: "Invoice Payment Details", file: "invoice-payment.png" },
-  { title: "Invoice Attachments (FIRA / Bank Statement)", file: "invoice-attachments.png" },
-  { title: "Invoice Create Form", file: "invoice-create.png" },
-  { title: "Tax Overview", file: "tax.png" },
-  { title: "Tax Projection", file: "tax-projection.png" },
-  { title: "Tax Payment", file: "tax-payment.png" },
-  { title: "Settings Overview", file: "settings.png" },
-  { title: "Settings - Bank Details", file: "settings-bank.png" },
-  { title: "Settings - Leave Policy", file: "settings-leave-policy.png" },
-  { title: "Settings - Invoice Settings", file: "settings-invoice.png" },
+  {
+    title: "Login",
+    file: "login.png",
+    description: "Your data stays yours. One-click sign-in keeps freelancers in and strangers out.",
+  },
+  {
+    title: "Dashboard",
+    file: "dashboard.png",
+    description: "Everything you earned this year, last month, and today — in one glance. No spreadsheet gymnastics required.",
+  },
+  {
+    title: "Dashboard Charts",
+    file: "dashboard-charts.png",
+    description: "Watch your income trend upward and exchange rates in real time. The graphs your accountant wishes you had.",
+  },
+  {
+    title: "Calendar",
+    file: "calendar.png",
+    description: "Color-coded work days, leaves, holidays, and overtime — your entire month mapped out like a visual timesheet.",
+  },
+  {
+    title: "Calendar Day Entry",
+    file: "calendar-day-entry.png",
+    description: "Click any day to log work, mark leave, or add notes. Time tracking that takes 2 seconds, not 20 minutes.",
+  },
+  {
+    title: "Calendar Snapshot",
+    file: "calendar-snapshot.png",
+    description: "One-click monthly summary: working days, leaves, overtime, and balance. Perfect for client reports.",
+  },
+  {
+    title: "Client Management",
+    file: "clients.png",
+    description: "All your clients at a glance — active, inactive, multi-currency. Manage a global roster from one place.",
+  },
+  {
+    title: "Client Detail",
+    file: "client-detail.png",
+    description: "Deep-dive into any client: projects, rates, invoices, and contact info. Everything your next invoice needs.",
+  },
+  {
+    title: "Add Project",
+    file: "client-add-project.png",
+    description: "Spin up a new project with a daily rate in seconds. Because freelancers juggle more than one gig at a time.",
+  },
+  {
+    title: "New Client Form",
+    file: "client-new.png",
+    description: "Onboard a client in under a minute — name, company, address, currency. Ready to invoice on day one.",
+  },
+  {
+    title: "Invoices",
+    file: "invoices.png",
+    description: "Paid, sent, cancelled — every invoice across every client, filterable and sorted. Never chase a payment blind.",
+  },
+  {
+    title: "Mark as Paid",
+    file: "invoice-mark-paid.png",
+    description: "Record FX rate, platform fees, and bank charges when marking paid. Know exactly how much hit your account.",
+  },
+  {
+    title: "Invoice Detail",
+    file: "invoice-detail.png",
+    description: "A print-ready invoice with line items, tax breakdown, and SEPA/SWIFT payment details baked in.",
+  },
+  {
+    title: "Invoice Payment Details",
+    file: "invoice-payment.png",
+    description: "FX conversion, platform charges, bank fees — see the full money trail from client payment to your bank.",
+  },
+  {
+    title: "Invoice Attachments",
+    file: "invoice-attachments.png",
+    description: "Attach FIRA certificates, bank statements, or any proof doc right on the invoice. Audit-ready in one click.",
+  },
+  {
+    title: "Invoice Create Form",
+    file: "invoice-create.png",
+    description: "Auto-populated from your calendar — just pick the month and client. Your invoice writes itself.",
+  },
+  {
+    title: "Tax Overview",
+    file: "tax.png",
+    description: "Advance tax paid, quarterly breakdown, and remaining liability. File day stops being a surprise.",
+  },
+  {
+    title: "Tax Projection",
+    file: "tax-projection.png",
+    description: "See what you'll owe before the quarter ends. Plan ahead so tax season is a non-event.",
+  },
+  {
+    title: "Tax Payment",
+    file: "tax-payment.png",
+    description: "Log each challan with amount, date, and reference number. Your tax paper trail, digitized.",
+  },
+  {
+    title: "Settings",
+    file: "settings.png",
+    description: "Your profile, GSTIN, PAN, and domestic bank details — the foundation every invoice is built on.",
+  },
+  {
+    title: "Settings - Leave Policy",
+    file: "settings-leave-policy.png",
+    description: "Set leaves per month and tracking start date. The app does the math — you just take the day off.",
+  },
+  {
+    title: "Settings - Invoice Settings",
+    file: "settings-invoice.png",
+    description: "Invoice prefix, auto-numbering, default HSN/SAC, and tax type. Configure once, invoice forever.",
+  },
+  {
+    title: "Settings - Access Control",
+    file: "settings-access.png",
+    description: "Add your accountant, CA, or lawyer as read-only viewers with tags. Share access without sharing your password.",
+  },
 ];
 
 const featureMarkdown = features.map((item) => `- ${item}`).join("\n");
 const screenshotMarkdown = screenshots
-  .map(({ title, file }) => `### ${title}\n![${title}](docs/screenshots/${file})`)
+  .map(({ title, file, description }) =>
+    `### ${title}\n${description}\n\n![${title}](docs/screenshots/${file})`
+  )
   .join("\n\n");
 
 const readmeContent = `# Hisaab
@@ -227,6 +324,7 @@ const requiredFeatureChecks = [
   "Payment Reconciliation - Paid date, FX conversion, platform/bank charges, and net INR realized",
   "Tax Tracking - Advance-tax computation, quarterly payments, and projection tab",
   "Settings - Profile, domestic bank details, SEPA/SWIFT transfer details, leave policy, and invoice settings",
+  "Access Control - Admin setup, viewer accounts with tags, and session-based authentication",
 ];
 
 const missingFeatureMentions = requiredFeatureChecks.filter(
