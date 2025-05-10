@@ -9,6 +9,7 @@ export interface AuthUser {
   name: string;
   email: string;
   role: AuthRole;
+  tag: string | null;
   isActive: boolean;
   createdAt: string;
 }
