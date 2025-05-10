@@ -34,8 +34,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# database
+# database (keep demo.db tracked)
 /data/*.db
+!/data/demo.db
 /data/*.db-journal
 /data/*.db-shm
 /data/*.db-wal
