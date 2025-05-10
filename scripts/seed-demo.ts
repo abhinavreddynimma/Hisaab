@@ -5,6 +5,7 @@
 
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
 import Database from "better-sqlite3";
 
 const DB_PATH = path.join(__dirname, "../data/payroll.db");
@@ -200,6 +201,12 @@ function getFrenchHolidays(year: number): Set<string> {
   return holidays;
 }
 
+function hashPassword(password: string): string {
+  const salt = crypto.randomBytes(16).toString("hex");
+  const hash = crypto.scryptSync(password, salt, 64).toString("hex");
+  return `scrypt-v1$${salt}$${hash}`;
+}
+
 // ── Seed Settings ──
 
 console.log("Seeding settings...");
@@ -219,7 +226,7 @@ upsert.run("user_profile", JSON.stringify({
   country: "India",
   gstin: "29AABCS1429B1ZV",
   pan: "AABCS1429B",
-  email: "rahul.sharma@example.com",
+  email: "rahul@hisaab.dev",
   phone: "+91 98765 43210",
   bankName: "State Bank of India",
   bankAccount: "00000039028837301",
@@ -242,7 +249,7 @@ upsert.run("user_profile", JSON.stringify({
 
 upsert.run("invoice_settings", JSON.stringify({
   prefix: "HSB",
-  nextNumber: 11,
+  nextNumber: 19,
   defaultHsnSac: "998314",
   defaultTaxRate: 18,
   taxType: "igst",
@@ -256,36 +263,69 @@ upsert.run("leave_policy", JSON.stringify({
 
 upsert.run("default_project", JSON.stringify({ projectId: 1 }));
 
-// ── Seed Client ──
+upsert.run("access_control", JSON.stringify({ sessionsEnabled: true }));
 
-console.log("Seeding client...");
+// ── Seed Clients ──
 
-db.prepare(`
-  INSERT INTO clients (name, company, gstin, address_line_1, address_line_2, city, state, pincode, email, phone, country, is_active, created_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
-`).run(
-  "Pierre Martin",
-  "TechVision SAS",
-  null,
-  "14 Rue de Rivoli",
-  "3ème étage",
-  "Paris",
-  "Île-de-France",
-  "75001",
-  "pierre.martin@techvision.fr",
-  "+33 1 42 60 31 00",
-  "France",
-  "2025-04-01T10:00:00.000Z",
+console.log("Seeding clients...");
+
+const insertClient = db.prepare(`
+  INSERT INTO clients (name, company, gstin, address_line_1, address_line_2, city, state, pincode, email, phone, country, currency, is_active, created_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`);
+
+// Client 1: Pierre Martin - Active, EUR, full-time
+insertClient.run(
+  "Pierre Martin", "TechVision SAS", null,
+  "14 Rue de Rivoli", "3ème étage", "Paris", "Île-de-France", "75001",
+  "pierre.martin@techvision.fr", "+33 1 42 60 31 00", "France",
+  "EUR", 1, "2025-04-01T10:00:00.000Z",
 );
 
-// ── Seed Project ──
+// Client 2: Sarah Johnson - Active, USD, part-time (1-2 weeks/month)
+insertClient.run(
+  "Sarah Johnson", "DigitalWave Inc", null,
+  "350 Fifth Avenue", "Suite 3200", "New York", "NY", "10118",
+  "sarah.johnson@digitalwave.io", "+1 212 555 0147", "United States",
+  "USD", 1, "2025-09-15T10:00:00.000Z",
+);
 
-console.log("Seeding project...");
+// Client 3: Marc Dubois - Inactive, EUR (past client)
+insertClient.run(
+  "Marc Dubois", "Stratégie Numérique SARL", null,
+  "27 Boulevard Haussmann", null, "Lyon", "Auvergne-Rhône-Alpes", "69002",
+  "marc.dubois@strategienumerique.fr", "+33 4 72 40 50 60", "France",
+  "EUR", 0, "2024-10-01T10:00:00.000Z",
+);
 
-db.prepare(`
-  INSERT INTO projects (client_id, name, default_daily_rate, is_active, created_at)
-  VALUES (1, ?, 130, 1, ?)
-`).run("Frontend Development", "2025-04-01T10:00:00.000Z");
+// Client 4: Lisa Chen - Inactive, AUD (past client)
+insertClient.run(
+  "Lisa Chen", "PacificTech Pty Ltd", null,
+  "120 Collins Street", "Level 8", "Melbourne", "Victoria", "3000",
+  "lisa.chen@pacifictech.com.au", "+61 3 9000 1234", "Australia",
+  "AUD", 0, "2024-11-01T10:00:00.000Z",
+);
+
+// ── Seed Projects ──
+
+console.log("Seeding projects...");
+
+const insertProject = db.prepare(`
+  INSERT INTO projects (client_id, name, default_daily_rate, currency, is_active, created_at)
+  VALUES (?, ?, ?, ?, ?, ?)
+`);
+
+// Project 1: Pierre Martin - Frontend Development (€130/day) - Active
+insertProject.run(1, "Frontend Development", 130, "EUR", 1, "2025-04-01T10:00:00.000Z");
+
+// Project 2: Sarah Johnson - UI Consulting ($80/day) - Active
+insertProject.run(2, "UI Consulting", 80, "USD", 1, "2025-10-01T10:00:00.000Z");
+
+// Project 3: Marc Dubois - Backend API (€120/day) - Inactive
+insertProject.run(3, "Backend API Development", 120, "EUR", 0, "2024-10-01T10:00:00.000Z");
+
+// Project 4: Lisa Chen - Mobile App Design (A$110/day) - Inactive
+insertProject.run(4, "Mobile App Design", 110, "AUD", 0, "2024-11-01T10:00:00.000Z");
 
 // ── Seed Day Entries ──
 
@@ -295,39 +335,51 @@ const insertDay = db.prepare(
   "INSERT OR REPLACE INTO day_entries (date, day_type, project_id, notes) VALUES (?, ?, ?, ?)"
 );
 
-// Leave days distribution (17 full leaves across Apr 2025 – Feb 2026)
-// With 1.5 leaves/month × 11 months = 16.5 gained
-// 17 full + 4 half×0.5 = 19 consumed → balance = 16.5 - 19 = -2.5
+// Leave days distribution:
+// Accrued: 1.5 leaves/month × 11 months (Apr 2025 – Feb 2026) = 16.5
+// Target balance: -4.5 → consumed = 16.5 + 4.5 = 21
+// 19 full leaves + 4 half days (×0.5 = 2) = 21 consumed ✓
 const leaveDays: Record<string, number[]> = {
-  "2025-04": [10, 11],     // Thu, Fri
-  "2025-05": [19],          // Mon
-  "2025-06": [20],          // Fri
-  "2025-07": [7, 21, 28],   // Mon, Mon, Mon (summer)
-  "2025-08": [18, 22],      // Mon, Fri
-  "2025-09": [12],          // Fri
-  "2025-10": [3],           // Fri
-  "2025-11": [14],          // Fri
-  "2025-12": [22, 23, 26],  // Mon, Tue, Fri (Christmas break)
-  "2026-01": [2],           // Fri (after New Year)
-  "2026-02": [6],           // Fri
+  "2025-04": [10, 11],       // Thu, Fri
+  "2025-05": [19, 26],       // Mon, Mon (added 26th for balance)
+  "2025-06": [20],           // Fri
+  "2025-07": [7, 21, 28],    // Mon, Mon, Mon (summer)
+  "2025-08": [18, 22],       // Mon, Fri — showcase month: 2 leaves ✓
+  "2025-09": [12, 19],       // Fri, Fri (added 19th for balance)
+  "2025-10": [3],            // Fri
+  "2025-11": [14],           // Fri
+  "2025-12": [22, 23, 26],   // Mon, Tue, Fri (Christmas break)
+  "2026-01": [2],            // Fri (after New Year)
+  "2026-02": [6],            // Fri
 };
 
-// Half days (4 total)
+// Half days (4 total → 2 consumed)
 const halfDays: Record<string, number[]> = {
-  "2025-07": [11, 25],  // Fri, Fri (summer half days)
-  "2025-10": [31],       // Fri (Halloween)
-  "2025-12": [19],       // Fri (before Christmas break)
+  "2025-07": [11, 25],   // Fri, Fri (summer half days)
+  "2025-10": [31],        // Fri (Halloween)
+  "2025-12": [19],        // Fri (before Christmas break)
 };
 
-// Extra working Saturdays (7 total)
+// Extra working Saturdays (8 total)
 const extraWorkingDays: Record<string, number[]> = {
-  "2025-06": [14],  // Sat
-  "2025-08": [9],   // Sat
-  "2025-09": [6],   // Sat
-  "2025-10": [18],  // Sat
-  "2025-11": [8],   // Sat
-  "2026-01": [10],  // Sat
-  "2026-02": [7],   // Sat
+  "2025-05": [17],   // Sat
+  "2025-06": [14],   // Sat
+  "2025-08": [9],    // Sat — showcase month: 1 extra ✓
+  "2025-09": [6],    // Sat
+  "2025-10": [18],   // Sat
+  "2025-11": [8],    // Sat
+  "2026-01": [10],   // Sat
+  "2026-02": [7],    // Sat
+};
+
+// Days assigned to Sarah Johnson's project (project 2) — part-time ~5-8 days/month
+// Starting from Oct 2025 when she became a client
+const sarahDays: Record<string, number[]> = {
+  "2025-10": [6, 7, 8, 9, 10, 13, 14],          // 7 days (first 1.5 weeks)
+  "2025-11": [3, 4, 5, 6, 7, 10],                // 6 days (first week+)
+  "2025-12": [1, 2, 3, 4, 5],                    // 5 days (first week)
+  "2026-01": [6, 7, 8, 9, 13, 14, 15],            // 7 days (Jan 10 is Sat, use 15 instead)
+  "2026-02": [2, 3, 4, 5, 9, 10],                // 6 days
 };
 
 // Full financial year: April 2025 through March 2026
@@ -337,7 +389,8 @@ const months = [
   [2026, 1], [2026, 2], [2026, 3],
 ];
 
-const workingDaysPerMonth: Record<string, number> = {};
+// Track working days per month per project for invoicing
+const workingDaysPerMonth: Record<string, { pierre: number; sarah: number }> = {};
 
 const seedDays = db.transaction(() => {
   for (const [year, month] of months) {
@@ -347,16 +400,19 @@ const seedDays = db.transaction(() => {
     const leaveSet = new Set(leaveDays[key] ?? []);
     const halfSet = new Set(halfDays[key] ?? []);
     const extraSet = new Set(extraWorkingDays[key] ?? []);
-    let workCount = 0;
+    const sarahSet = new Set(sarahDays[key] ?? []);
+    let pierreCount = 0;
+    let sarahCount = 0;
 
     for (let d = 1; d <= dim; d++) {
       const ds = dateStr(year, month, d);
       let dayType: string;
-      let projectId: number | null = 1;
+      let projectId: number | null = 1; // default to Pierre's project
 
       if (extraSet.has(d)) {
         dayType = "extra_working";
-        workCount += 1;
+        // Extra working days go to Pierre's project
+        pierreCount += 1;
       } else if (isWeekend(year, month, d)) {
         dayType = "weekend";
         projectId = null;
@@ -368,17 +424,23 @@ const seedDays = db.transaction(() => {
         projectId = null;
       } else if (halfSet.has(d)) {
         dayType = "half_day";
-        workCount += 0.5;
+        // Half days counted under Pierre
+        pierreCount += 0.5;
       } else {
         dayType = "working";
-        workCount += 1;
+        if (sarahSet.has(d)) {
+          projectId = 2; // Sarah's project
+          sarahCount += 1;
+        } else {
+          pierreCount += 1;
+        }
       }
 
       insertDay.run(ds, dayType, projectId, null);
     }
 
-    workingDaysPerMonth[key] = workCount;
-    console.log(`  ${key}: ${workCount} effective working days`);
+    workingDaysPerMonth[key] = { pierre: pierreCount, sarah: sarahCount };
+    console.log(`  ${key}: Pierre=${pierreCount}, Sarah=${sarahCount} effective working days`);
   }
 });
 
@@ -388,7 +450,6 @@ seedDays();
 
 console.log("Seeding invoices...");
 
-const DAILY_RATE = 130;
 const IGST_RATE = 18;
 
 const fromProfile = {
@@ -396,7 +457,7 @@ const fromProfile = {
   address: "42, Koramangala 4th Block, HSR Layout, Bangalore, Karnataka 560034, India",
   gstin: "29AABCS1429B1ZV",
   pan: "AABCS1429B",
-  email: "rahul.sharma@example.com",
+  email: "rahul@hisaab.dev",
   phone: "+91 98765 43210",
   bankName: "State Bank of India",
   bankAccount: "00000039028837301",
@@ -408,50 +469,139 @@ const fromProfile = {
   sepaBank: "BNP Paribas",
 };
 
-const toClient = {
-  name: "Pierre Martin",
-  company: "TechVision SAS",
-  address: "14 Rue de Rivoli, 3ème étage, Paris, Île-de-France 75001, France",
-  email: "pierre.martin@techvision.fr",
+// Client address snapshots for invoices
+const clientSnapshots: Record<string, { name: string; company: string; address: string; email: string }> = {
+  pierre: {
+    name: "Pierre Martin",
+    company: "TechVision SAS",
+    address: "14 Rue de Rivoli, 3ème étage, Paris, Île-de-France 75001, France",
+    email: "pierre.martin@techvision.fr",
+  },
+  sarah: {
+    name: "Sarah Johnson",
+    company: "DigitalWave Inc",
+    address: "350 Fifth Avenue, Suite 3200, New York, NY 10118, United States",
+    email: "sarah.johnson@digitalwave.io",
+  },
+  marc: {
+    name: "Marc Dubois",
+    company: "Stratégie Numérique SARL",
+    address: "27 Boulevard Haussmann, Lyon, Auvergne-Rhône-Alpes 69002, France",
+    email: "marc.dubois@strategienumerique.fr",
+  },
+  lisa: {
+    name: "Lisa Chen",
+    company: "PacificTech Pty Ltd",
+    address: "120 Collins Street, Level 8, Melbourne, Victoria 3000, Australia",
+    email: "lisa.chen@pacifictech.com.au",
+  },
 };
 
-// Actual historical EUR-INR monthly average rates
-const exchangeRates: Record<string, number> = {
-  "2025-04": 96.05,
-  "2025-05": 96.07,
-  "2025-06": 98.97,
-  "2025-07": 100.68,
-  "2025-08": 101.93,
-  "2025-09": 103.56,
-  "2025-10": 102.94,
-  "2025-11": 102.79,
-  "2025-12": 105.40,
-  "2026-01": 105.01,
+// EUR-INR monthly average rates
+const eurToInr: Record<string, number> = {
+  "2024-11": 89.20, "2024-12": 90.15, "2025-01": 91.50, "2025-02": 92.10, "2025-03": 93.80,
+  "2025-04": 96.05, "2025-05": 96.07, "2025-06": 98.97, "2025-07": 100.68,
+  "2025-08": 101.93, "2025-09": 103.56, "2025-10": 102.94, "2025-11": 102.79,
+  "2025-12": 105.40, "2026-01": 105.01,
 };
 
-// Platform charges (EUR) and bank charges (INR) per invoice
-const platformChargesArr = [3.50, 4.00, 3.75, 4.25, 3.80, 3.60, 4.10, 3.90, 4.00, 3.70];
-const bankChargesArr = [250, 300, 275, 350, 225, 280, 320, 260, 310, 240];
+// USD-INR monthly average rates
+const usdToInr: Record<string, number> = {
+  "2025-10": 84.20, "2025-11": 84.50, "2025-12": 85.10, "2026-01": 85.80,
+};
+
+// AUD-INR rates (for past Lisa Chen invoices)
+const audToInr: Record<string, number> = {
+  "2024-12": 54.30, "2025-01": 55.10,
+};
 
 interface InvoiceConfig {
+  number: number;
+  clientKey: string;
+  clientId: number;
+  projectId: number;
   monthKey: string;
-  status: "paid" | "sent" | "draft";
-  paidDate: string;
+  currency: string;
+  dailyRate: number;
+  workDays: number;
+  status: "paid" | "sent" | "cancelled";
+  paidDate: string | null;
+  fxRate: number;
+  platformCharges: number;
+  bankCharges: number;
 }
 
-// 10 invoices, all paid (Apr 2025 – Jan 2026)
+// Build invoice configs
 const invoiceConfigs: InvoiceConfig[] = [
-  { monthKey: "2025-04", status: "paid", paidDate: "2025-05-19" },
-  { monthKey: "2025-05", status: "paid", paidDate: "2025-06-17" },
-  { monthKey: "2025-06", status: "paid", paidDate: "2025-07-18" },
-  { monthKey: "2025-07", status: "paid", paidDate: "2025-08-18" },
-  { monthKey: "2025-08", status: "paid", paidDate: "2025-09-18" },
-  { monthKey: "2025-09", status: "paid", paidDate: "2025-10-17" },
-  { monthKey: "2025-10", status: "paid", paidDate: "2025-11-17" },
-  { monthKey: "2025-11", status: "paid", paidDate: "2025-12-18" },
-  { monthKey: "2025-12", status: "paid", paidDate: "2026-01-16" },
-  { monthKey: "2026-01", status: "paid", paidDate: "2026-02-09" },
+  // Non-active client invoices (past)
+  { number: 1, clientKey: "marc", clientId: 3, projectId: 3, monthKey: "2024-11", currency: "EUR",
+    dailyRate: 120, workDays: 20, status: "paid", paidDate: "2024-12-18",
+    fxRate: eurToInr["2024-11"], platformCharges: 3.20, bankCharges: 250 },
+  { number: 2, clientKey: "marc", clientId: 3, projectId: 3, monthKey: "2024-12", currency: "EUR",
+    dailyRate: 120, workDays: 18, status: "paid", paidDate: "2025-01-20",
+    fxRate: eurToInr["2024-12"], platformCharges: 3.50, bankCharges: 275 },
+  { number: 3, clientKey: "lisa", clientId: 4, projectId: 4, monthKey: "2024-12", currency: "AUD",
+    dailyRate: 110, workDays: 15, status: "paid", paidDate: "2025-01-22",
+    fxRate: audToInr["2024-12"], platformCharges: 4.00, bankCharges: 200 },
+  { number: 4, clientKey: "lisa", clientId: 4, projectId: 4, monthKey: "2025-01", currency: "AUD",
+    dailyRate: 110, workDays: 12, status: "paid", paidDate: "2025-02-19",
+    fxRate: audToInr["2025-01"], platformCharges: 3.80, bankCharges: 210 },
+
+  // Pierre Martin invoices (Apr 2025 – Jan 2026)
+  { number: 5, clientKey: "pierre", clientId: 1, projectId: 1, monthKey: "2025-04", currency: "EUR",
+    dailyRate: 130, workDays: 0, status: "paid", paidDate: "2025-05-19",
+    fxRate: eurToInr["2025-04"], platformCharges: 3.50, bankCharges: 250 },
+  { number: 6, clientKey: "pierre", clientId: 1, projectId: 1, monthKey: "2025-05", currency: "EUR",
+    dailyRate: 130, workDays: 0, status: "paid", paidDate: "2025-06-17",
+    fxRate: eurToInr["2025-05"], platformCharges: 4.00, bankCharges: 300 },
+  { number: 7, clientKey: "pierre", clientId: 1, projectId: 1, monthKey: "2025-06", currency: "EUR",
+    dailyRate: 130, workDays: 0, status: "cancelled", paidDate: null,
+    fxRate: eurToInr["2025-06"], platformCharges: 0, bankCharges: 0 },
+  { number: 8, clientKey: "pierre", clientId: 1, projectId: 1, monthKey: "2025-07", currency: "EUR",
+    dailyRate: 130, workDays: 0, status: "paid", paidDate: "2025-08-18",
+    fxRate: eurToInr["2025-07"], platformCharges: 4.25, bankCharges: 350 },
+  { number: 9, clientKey: "pierre", clientId: 1, projectId: 1, monthKey: "2025-08", currency: "EUR",
+    dailyRate: 130, workDays: 0, status: "paid", paidDate: "2025-09-18",
+    fxRate: eurToInr["2025-08"], platformCharges: 3.80, bankCharges: 225 },
+  { number: 10, clientKey: "pierre", clientId: 1, projectId: 1, monthKey: "2025-09", currency: "EUR",
+    dailyRate: 130, workDays: 0, status: "paid", paidDate: "2025-10-17",
+    fxRate: eurToInr["2025-09"], platformCharges: 3.60, bankCharges: 280 },
+  { number: 11, clientKey: "pierre", clientId: 1, projectId: 1, monthKey: "2025-10", currency: "EUR",
+    dailyRate: 130, workDays: 0, status: "paid", paidDate: "2025-11-17",
+    fxRate: eurToInr["2025-10"], platformCharges: 4.10, bankCharges: 320 },
+  { number: 12, clientKey: "pierre", clientId: 1, projectId: 1, monthKey: "2025-11", currency: "EUR",
+    dailyRate: 130, workDays: 0, status: "paid", paidDate: "2025-12-18",
+    fxRate: eurToInr["2025-11"], platformCharges: 3.90, bankCharges: 260 },
+  { number: 13, clientKey: "pierre", clientId: 1, projectId: 1, monthKey: "2025-12", currency: "EUR",
+    dailyRate: 130, workDays: 0, status: "paid", paidDate: "2026-01-16",
+    fxRate: eurToInr["2025-12"], platformCharges: 4.00, bankCharges: 310 },
+  { number: 14, clientKey: "pierre", clientId: 1, projectId: 1, monthKey: "2026-01", currency: "EUR",
+    dailyRate: 130, workDays: 0, status: "paid", paidDate: "2026-02-09",
+    fxRate: eurToInr["2026-01"], platformCharges: 3.70, bankCharges: 240 },
+
+  // Sarah Johnson invoices (Oct 2025 – Jan 2026)
+  { number: 15, clientKey: "sarah", clientId: 2, projectId: 2, monthKey: "2025-10", currency: "USD",
+    dailyRate: 80, workDays: 0, status: "paid", paidDate: "2025-11-20",
+    fxRate: usdToInr["2025-10"], platformCharges: 2.50, bankCharges: 180 },
+  { number: 16, clientKey: "sarah", clientId: 2, projectId: 2, monthKey: "2025-11", currency: "USD",
+    dailyRate: 80, workDays: 0, status: "cancelled", paidDate: null,
+    fxRate: usdToInr["2025-11"], platformCharges: 0, bankCharges: 0 },
+  { number: 17, clientKey: "sarah", clientId: 2, projectId: 2, monthKey: "2025-12", currency: "USD",
+    dailyRate: 80, workDays: 0, status: "paid", paidDate: "2026-01-18",
+    fxRate: usdToInr["2025-12"], platformCharges: 2.80, bankCharges: 190 },
+  { number: 18, clientKey: "sarah", clientId: 2, projectId: 2, monthKey: "2026-01", currency: "USD",
+    dailyRate: 80, workDays: 0, status: "sent", paidDate: null,
+    fxRate: usdToInr["2026-01"], platformCharges: 0, bankCharges: 0 },
 ];
+
+// Fill in workDays from calculated data for Pierre and Sarah invoices
+for (const cfg of invoiceConfigs) {
+  if (cfg.workDays === 0 && cfg.clientKey === "pierre") {
+    cfg.workDays = workingDaysPerMonth[cfg.monthKey]?.pierre ?? 20;
+  } else if (cfg.workDays === 0 && cfg.clientKey === "sarah") {
+    cfg.workDays = workingDaysPerMonth[cfg.monthKey]?.sarah ?? 5;
+  }
+}
 
 const insertInvoice = db.prepare(`
   INSERT INTO invoices (
@@ -463,10 +613,10 @@ const insertInvoice = db.prepare(`
     from_sepa_account_type, from_sepa_address,
     to_name, to_company, to_address, to_gstin, to_email,
     subtotal, igst_rate, igst_amount, total,
-    status, paid_date, eur_to_inr_rate, platform_charges, bank_charges, net_inr_amount,
+    currency, status, paid_date, eur_to_inr_rate, platform_charges, bank_charges, net_inr_amount,
     created_at
   ) VALUES (
-    ?, 1, 1,
+    ?, ?, ?,
     ?, ?, ?, ?,
     ?, ?, ?, ?, ?, ?, ?,
     ?, ?, ?, ?,
@@ -474,7 +624,7 @@ const insertInvoice = db.prepare(`
     ?, ?,
     ?, ?, ?, ?, ?,
     ?, ?, ?, ?,
-    ?, ?, ?, ?, ?, ?,
+    ?, ?, ?, ?, ?, ?, ?,
     ?
   )
 `);
@@ -484,15 +634,16 @@ const insertLineItem = db.prepare(`
   VALUES (?, ?, ?, ?, ?, ?)
 `);
 
+const currencySymbol: Record<string, string> = { EUR: "€", USD: "$", AUD: "A$" };
+
 const seedInvoices = db.transaction(() => {
-  for (let i = 0; i < invoiceConfigs.length; i++) {
-    const cfg = invoiceConfigs[i];
+  for (const cfg of invoiceConfigs) {
     const [yearStr, monthStr] = cfg.monthKey.split("-");
     const year = parseInt(yearStr);
     const month = parseInt(monthStr);
     const dim = daysInMonth(year, month);
 
-    const invoiceNumber = `HSB-${pad(i + 1)}`;
+    const invoiceNumber = `HSB-${pad(cfg.number)}`;
     const periodStart = `${cfg.monthKey}-01`;
     const periodEnd = `${cfg.monthKey}-${pad(dim)}`;
 
@@ -503,42 +654,52 @@ const seedInvoices = db.transaction(() => {
     const issueDate = dateStr(issueYear, issueMonth, 1);
     const dueDate = dateStr(issueYear, issueMonth, 15);
 
-    const workDays = workingDaysPerMonth[cfg.monthKey] ?? 20;
-    const subtotal = workDays * DAILY_RATE;
+    const subtotal = cfg.workDays * cfg.dailyRate;
     const igstAmount = +(subtotal * IGST_RATE / 100).toFixed(2);
     const total = +(subtotal + igstAmount).toFixed(2);
 
-    const rate = exchangeRates[cfg.monthKey] ?? 100;
-    const platformCharges = platformChargesArr[i];
-    const bankCharges = bankChargesArr[i];
-    const grossInr = total * rate;
-    const netInrAmount = +(grossInr - (platformCharges * rate) - bankCharges).toFixed(2);
+    const rate = cfg.fxRate;
+    let netInrAmount: number | null = null;
+    if (cfg.status === "paid") {
+      const grossInr = total * rate;
+      netInrAmount = +(grossInr - (cfg.platformCharges * rate) - cfg.bankCharges).toFixed(2);
+    }
+
+    const client = clientSnapshots[cfg.clientKey];
 
     insertInvoice.run(
-      invoiceNumber, periodStart, periodEnd, issueDate, dueDate,
+      invoiceNumber, cfg.clientId, cfg.projectId,
+      periodStart, periodEnd, issueDate, dueDate,
       fromProfile.name, "", fromProfile.address, fromProfile.gstin, fromProfile.pan,
       fromProfile.email, fromProfile.phone,
       fromProfile.bankName, fromProfile.bankAccount, fromProfile.bankIfsc, fromProfile.bankBranch,
       fromProfile.sepaAccountName, fromProfile.sepaIban, fromProfile.sepaBic, fromProfile.sepaBank,
       "Current", "42 Koramangala, Bangalore 560034, India",
-      toClient.name, toClient.company, toClient.address, null, toClient.email,
+      client.name, client.company, client.address, null, client.email,
       subtotal, IGST_RATE, igstAmount, total,
-      cfg.status, cfg.paidDate, rate, platformCharges, bankCharges, netInrAmount,
+      cfg.currency, cfg.status, cfg.paidDate, rate,
+      cfg.status === "paid" ? cfg.platformCharges : null,
+      cfg.status === "paid" ? cfg.bankCharges : null,
+      netInrAmount,
       new Date().toISOString(),
     );
 
-    const invoiceId = i + 1;
+    const sym = currencySymbol[cfg.currency] ?? cfg.currency;
+    const projectName = cfg.projectId === 1 ? "Frontend Development"
+      : cfg.projectId === 2 ? "UI Consulting"
+      : cfg.projectId === 3 ? "Backend API Development"
+      : "Mobile App Design";
 
     insertLineItem.run(
-      invoiceId,
-      `${workDays} working days - Frontend Development @ €${DAILY_RATE}/day`,
+      cfg.number,
+      `${cfg.workDays} working days - ${projectName} @ ${sym}${cfg.dailyRate}/day`,
       "998314",
-      workDays,
-      DAILY_RATE,
+      cfg.workDays,
+      cfg.dailyRate,
       subtotal,
     );
 
-    console.log(`  ${invoiceNumber}: ${workDays} days, €${total.toFixed(2)}, ₹${netInrAmount.toLocaleString()}, status=${cfg.status}`);
+    console.log(`  ${invoiceNumber}: ${cfg.clientKey}, ${cfg.workDays} days, ${sym}${total.toFixed(2)}, status=${cfg.status}`);
   }
 });
 
@@ -564,7 +725,48 @@ for (const tp of taxPaymentsData) {
   console.log(`  ${tp.fy} ${tp.q}: ₹${tp.amount.toLocaleString()}`);
 }
 
+// ── Seed Users (Admin + Viewers) ──
+
+console.log("Seeding users...");
+
+const insertUser = db.prepare(`
+  INSERT INTO users (name, email, password_hash, role, tag, is_active, created_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?)
+`);
+
+// Admin: Rahul Sharma (password: demo1234)
+insertUser.run(
+  "Rahul Sharma", "rahul@hisaab.dev",
+  hashPassword("demo1234"), "admin", null, 1,
+  "2025-04-01T10:00:00.000Z",
+);
+
+// Viewer 1: Priya Patel (accountant)
+insertUser.run(
+  "Priya Patel", "priya.patel@example.com",
+  hashPassword("viewer123"), "viewer", "accountant", 1,
+  "2025-06-15T10:00:00.000Z",
+);
+
+// Viewer 2: Amit Kumar (lawyer) - disabled
+insertUser.run(
+  "Amit Kumar", "amit.kumar@example.com",
+  hashPassword("viewer123"), "viewer", "lawyer", 0,
+  "2025-08-01T10:00:00.000Z",
+);
+
+console.log("  Admin: Rahul Sharma (rahul@hisaab.dev)");
+console.log("  Viewer: Priya Patel (accountant, active)");
+console.log("  Viewer: Amit Kumar (lawyer, disabled)");
+
 // ── Done ──
 
 db.close();
 console.log("\nDemo data seeded successfully!");
+console.log("\nLeave balance check:");
+console.log("  Accrued: 1.5 × 11 months = 16.5");
+console.log("  Full leaves: 19, Half days: 4 (×0.5 = 2)");
+console.log("  Consumed: 19 + 2 = 21");
+console.log("  Balance: 16.5 - 21 = -4.5 ✓");
+console.log("  Extra working days: 8 ✓");
+console.log("\nShowcase month (Aug 2025): 2 leaves, 1 holiday (Aug 15), 1 extra Saturday (Aug 9) ✓");
