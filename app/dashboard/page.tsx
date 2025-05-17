@@ -56,7 +56,7 @@ export default async function DashboardPage() {
     <div className="space-y-6">
       <h1 className="font-display text-2xl font-bold tracking-tight">Dashboard</h1>
 
-      <StatsCards stats={stats} />
+      <StatsCards stats={stats} monthlyEarnings={monthlyEarnings} />
 
       <CalendarOverview entries={calendarData.entries} holidays={calendarData.holidays} />
 
