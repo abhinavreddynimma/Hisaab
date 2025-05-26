@@ -270,3 +270,34 @@ docker compose up -d --build
 ```
 
 The database schema auto-migrates on startup, so updates are safe.
+
+### Automated Updates (Cron)
+
+Use the built-in script to auto-update the server when `main` changes:
+
+```bash
+cd hisaab
+chmod +x scripts/auto-update.sh scripts/install-auto-update-cron.sh
+bash scripts/install-auto-update-cron.sh
+```
+
+Default schedule is every 10 minutes and logs go to `./data/auto-update.log`.
+
+Customize schedule or log file:
+
+```bash
+INTERVAL="*/5 * * * *" LOG_FILE="$HOME/hisaab-update.log" bash scripts/install-auto-update-cron.sh
+```
+
+The updater script:
+- fetches `origin/main`
+- skips if no commit changed
+- fast-forward pulls when new commits exist
+- runs `docker compose up -d --build --remove-orphans`
+- skips deployment if local uncommitted changes exist
+
+Remove the cron job:
+
+```bash
+crontab -l | grep -v 'hisaab-auto-update' | crontab -
+```
