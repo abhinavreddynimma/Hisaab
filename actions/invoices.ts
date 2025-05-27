@@ -2,7 +2,7 @@
 
 import { db } from "@/db";
 import { invoices, invoiceLineItems, invoiceAttachments, clients, projects } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 import { getInvoiceSettings, getUserProfile } from "./settings";
 import { getDayEntriesForRange } from "./day-entries";
 import { getEffectiveRate } from "./projects";
@@ -161,7 +161,7 @@ export async function getAutoPopulatedLineItems(
 
   return [
     {
-      description: `Software Development (${project?.name ?? "Project"}) for ${startDate} to ${endDate}`,
+      description: `Software Development (${project?.name ?? "Project"})`,
       hsnSac: invoiceSettings.defaultHsnSac,
       quantity,
       unitPrice: rate,
@@ -365,6 +365,34 @@ export async function getInvoiceAttachments(invoiceId: number): Promise<InvoiceA
     .where(eq(invoiceAttachments.invoiceId, invoiceId))
     .orderBy(desc(invoiceAttachments.createdAt))
     .all() as InvoiceAttachment[];
+}
+
+export async function getAllInvoiceAttachments(): Promise<Record<number, InvoiceAttachment[]>> {
+  await assertAuthenticatedAccess();
+  const all = db
+    .select()
+    .from(invoiceAttachments)
+    .orderBy(desc(invoiceAttachments.createdAt))
+    .all() as InvoiceAttachment[];
+  const byInvoice: Record<number, InvoiceAttachment[]> = {};
+  for (const att of all) {
+    (byInvoice[att.invoiceId] ??= []).push(att);
+  }
+  return byInvoice;
+}
+
+export async function getInvoiceAttachmentCounts(): Promise<Record<number, number>> {
+  await assertAuthenticatedAccess();
+  const rows = db
+    .select({ invoiceId: invoiceAttachments.invoiceId, count: sql<number>`count(*)` })
+    .from(invoiceAttachments)
+    .groupBy(invoiceAttachments.invoiceId)
+    .all();
+  const counts: Record<number, number> = {};
+  for (const row of rows) {
+    counts[row.invoiceId] = row.count;
+  }
+  return counts;
 }
 
 export async function addInvoiceAttachment(data: {
