@@ -2,12 +2,21 @@
 
 import { db } from "@/db";
 import { invoices, dayEntries, clients, projects, projectRates } from "@/db/schema";
-import { eq, desc, sql, and, like } from "drizzle-orm";
+import { eq, desc, sql, and, like, lte } from "drizzle-orm";
 import { getLeavePolicy, getDefaultProjectId } from "./settings";
 import { calculateLeaveBalance, calculateMonthSummary, withImplicitWorkingDays } from "@/lib/calculations";
 import { getFrenchHolidays } from "@/lib/constants";
 import type { DashboardStats, DayEntry } from "@/lib/types";
 import { assertAdminAccess, assertAuthenticatedAccess } from "@/lib/auth";
+
+const MONTH_KEY_REGEX = /^\d{4}-\d{2}$/;
+const DATE_KEY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+function normalizeRateLookupDate(value: string): string {
+  if (DATE_KEY_REGEX.test(value)) return value;
+  if (MONTH_KEY_REGEX.test(value)) return `${value}-31`;
+  return value;
+}
 
 function toDateString(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
@@ -43,11 +52,14 @@ function getDayEntriesForMonthInternal(year: number, month: number): DayEntry[] 
     .all() as DayEntry[];
 }
 
-function getEffectiveRateInternal(projectId: number, monthKey: string): number {
+function getEffectiveRateInternal(projectId: number, effectiveOn: string): number {
+  const lookupDate = normalizeRateLookupDate(effectiveOn);
   const override = db
     .select({ dailyRate: projectRates.dailyRate })
     .from(projectRates)
-    .where(and(eq(projectRates.projectId, projectId), eq(projectRates.monthKey, monthKey)))
+    .where(and(eq(projectRates.projectId, projectId), lte(projectRates.monthKey, lookupDate)))
+    .orderBy(desc(projectRates.monthKey))
+    .limit(1)
     .get();
   if (override?.dailyRate != null) return override.dailyRate;
 
