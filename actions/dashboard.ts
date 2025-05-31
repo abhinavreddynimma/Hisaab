@@ -236,7 +236,7 @@ export async function getMonthlyEarningsData(months: number = 12): Promise<
     const monthInvoices = db
       .select({ netInrAmount: invoices.netInrAmount })
       .from(invoices)
-      .where(and(eq(invoices.status, "paid"), like(invoices.billingPeriodStart, `${monthKey}%`)))
+      .where(and(eq(invoices.status, "paid"), like(invoices.paidDate, `${monthKey}%`)))
       .all();
 
     const earnings = monthInvoices.reduce((sum, inv) => sum + (inv.netInrAmount ?? 0), 0);
