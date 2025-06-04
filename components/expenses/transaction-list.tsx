@@ -1,0 +1,169 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { Trash2, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Plus } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { formatCurrency, formatDate } from "@/lib/utils";
+import { deleteExpenseTransaction } from "@/actions/expenses";
+import type { ExpenseTransaction } from "@/lib/types";
+
+interface TransactionListProps {
+  transactions: ExpenseTransaction[];
+  totalIncome: number;
+  totalExpenses: number;
+  onEdit: (txn: ExpenseTransaction) => void;
+  onAddNew: () => void;
+}
+
+const TYPE_CONFIG = {
+  income: { icon: ArrowDownLeft, color: "text-emerald-600", bg: "bg-emerald-50", label: "Income" },
+  expense: { icon: ArrowUpRight, color: "text-rose-600", bg: "bg-rose-50", label: "Expense" },
+  transfer: { icon: ArrowLeftRight, color: "text-blue-600", bg: "bg-blue-50", label: "Transfer" },
+};
+
+export function TransactionList({ transactions, totalIncome, totalExpenses, onEdit, onAddNew }: TransactionListProps) {
+  const router = useRouter();
+
+  async function handleDelete(id: number) {
+    try {
+      await deleteExpenseTransaction(id);
+      toast.success("Transaction deleted");
+      router.refresh();
+    } catch {
+      toast.error("Failed to delete transaction");
+    }
+  }
+
+  const net = totalIncome - totalExpenses;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="text-xs text-muted-foreground mb-1">Income</p>
+            <p className="text-lg font-bold tabular-nums text-emerald-600">{formatCurrency(totalIncome)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="text-xs text-muted-foreground mb-1">Expenses</p>
+            <p className="text-lg font-bold tabular-nums text-rose-600">{formatCurrency(totalExpenses)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="text-xs text-muted-foreground mb-1">Net</p>
+            <p className={`text-lg font-bold tabular-nums ${net >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+              {formatCurrency(Math.abs(net))}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardContent className="p-0">
+          {transactions.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <p className="text-muted-foreground mb-2">No transactions this month</p>
+              <Button variant="link" onClick={onAddNew}>
+                <Plus className="mr-1 h-4 w-4" />
+                Add your first transaction
+              </Button>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[100px]">Date</TableHead>
+                  <TableHead className="w-[80px]">Type</TableHead>
+                  <TableHead>Category / Account</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead>Note</TableHead>
+                  <TableHead className="w-[50px]"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {transactions.map((txn) => {
+                  const config = TYPE_CONFIG[txn.type];
+                  const Icon = config.icon;
+                  return (
+                    <TableRow
+                      key={txn.id}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => onEdit(txn)}
+                    >
+                      <TableCell className="text-sm tabular-nums">{formatDate(txn.date)}</TableCell>
+                      <TableCell>
+                        <div className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${config.bg} ${config.color}`}>
+                          <Icon className="h-3 w-3" />
+                          {config.label}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {txn.type === "transfer" ? (
+                          <span className="text-sm">{txn.fromAccountName} → {txn.toAccountName}</span>
+                        ) : (
+                          <div>
+                            <span className="text-sm font-medium">{txn.categoryName}</span>
+                            {txn.accountName && (
+                              <span className="text-xs text-muted-foreground ml-2">({txn.accountName})</span>
+                            )}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className={`text-right font-medium tabular-nums ${txn.type === "income" ? "text-emerald-600" : txn.type === "expense" ? "text-rose-600" : ""}`}>
+                        {txn.type === "income" ? "+" : txn.type === "expense" ? "-" : ""}{formatCurrency(txn.amount)}
+                        {txn.type === "transfer" && txn.fees && txn.fees > 0 && (
+                          <span className="text-xs text-muted-foreground ml-1">(+{formatCurrency(txn.fees)} fees)</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
+                        {txn.note || "—"}
+                      </TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Transaction</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Delete this {txn.type} of {formatCurrency(txn.amount)}?
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleDelete(txn.id)}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

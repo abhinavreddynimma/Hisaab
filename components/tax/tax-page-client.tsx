@@ -54,7 +54,7 @@ interface TaxComputation {
 }
 
 interface TaxProjection {
-  monthlyBreakdown: { month: string; actual: number; projected: boolean; workingDays?: number }[];
+  monthlyBreakdown: { month: string; actual: number; projected: boolean; workingDays?: number; invoiceBased?: boolean }[];
   monthsElapsed: number;
   monthsRemaining: number;
   avgRate: number;
@@ -408,7 +408,10 @@ export function TaxPageClient({ initialPayments, initialSummary, initialFY, comp
                     )}>
                       {m.actual > 0 ? formatCurrency(m.actual) : "—"}
                     </p>
-                    {m.projected && m.workingDays !== undefined && (
+                    {m.projected && m.invoiceBased && (
+                      <p className="text-[10px] text-muted-foreground mt-0.5">Invoice sent</p>
+                    )}
+                    {m.projected && !m.invoiceBased && m.workingDays !== undefined && (
                       <p className="text-[10px] text-muted-foreground mt-0.5">{m.workingDays} days / ₹{projection.avgRate.toFixed(2)}</p>
                     )}
                   </div>
@@ -417,11 +420,18 @@ export function TaxPageClient({ initialPayments, initialSummary, initialFY, comp
             </CardContent>
           </Card>
 
-          {projection.monthsRemaining > 0 && (
-            <p className="text-xs text-muted-foreground">
-              * Based on {projection.monthsElapsed} month{projection.monthsElapsed !== 1 ? "s" : ""} of actual data, projecting {projection.monthsRemaining} remaining month{projection.monthsRemaining !== 1 ? "s" : ""} from calendar working days.
-            </p>
-          )}
+          {projection.monthsRemaining > 0 && (() => {
+            const invoiceCount = projection.monthlyBreakdown.filter((m) => m.invoiceBased).length;
+            const workingDaysCount = projection.monthsRemaining - invoiceCount;
+            const parts: string[] = [];
+            if (invoiceCount > 0) parts.push(`${invoiceCount} from sent invoices`);
+            if (workingDaysCount > 0) parts.push(`${workingDaysCount} from calendar working days`);
+            return (
+              <p className="text-xs text-muted-foreground">
+                * Based on {projection.monthsElapsed} month{projection.monthsElapsed !== 1 ? "s" : ""} of actual data, projecting {projection.monthsRemaining} remaining month{projection.monthsRemaining !== 1 ? "s" : ""} ({parts.join(", ")}).
+              </p>
+            );
+          })()}
 
           {/* Projected Tax Computation */}
           <Card className="print:break-before-page">
