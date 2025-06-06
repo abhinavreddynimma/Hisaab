@@ -13,6 +13,7 @@ RUN apk add --no-cache libc6-compat python3 make g++
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+ENV SKIP_DB_MIGRATIONS=true
 RUN npm run build
 
 # Stage 3: Production runner
