@@ -207,6 +207,11 @@ export const expenseTransactions = sqliteTable("expense_transactions", {
   fees: real("fees").default(0),
   note: text("note"),
   tags: text("tags"),
+  // Source tracking: "manual" (default), "invoice", "bank_statement" (future)
+  source: text("source").notNull().default("manual"),
+  sourceId: text("source_id"), // e.g. invoice ID, bank statement row ID
+  // Status: "confirmed" (default), "estimated" (for sent but unpaid invoices)
+  status: text("status", { enum: ["confirmed", "estimated"] }).notNull().default("confirmed"),
   createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
 });
 
