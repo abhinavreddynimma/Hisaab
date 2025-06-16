@@ -116,7 +116,7 @@ export function BudgetProgressCard({ budget, financialYear, onEdit }: BudgetProg
               <span className="text-muted-foreground ml-2">· avg {formatCurrency(trendData.average)}/mo</span>
             )}
           </span>
-          <span className={cn("font-medium tabular-nums", isOver ? "text-red-600" : "text-muted-foreground")}>
+          <span className={cn("font-medium tabular-nums", isOver ? "text-amber-600" : "text-muted-foreground")}>
             {isOver ? `${percentage.toFixed(0)}%` : `${formatCurrency(remaining)} left`}
           </span>
         </div>
@@ -150,16 +150,16 @@ export function BudgetProgressCard({ budget, financialYear, onEdit }: BudgetProg
                       )}
 
                       {/* Budget line */}
-                      <ReferenceLine y={budget.monthlyAmount} stroke="#f43f5e" strokeDasharray="6 3" strokeWidth={1.5}>
-                        <Label value={`Budget ${formatCurrency(budget.monthlyAmount)}`} position="insideTopLeft" className="fill-rose-500" fontSize={10} />
+                      <ReferenceLine y={budget.monthlyAmount} stroke="#f59e0b" strokeDasharray="6 3" strokeWidth={1.5}>
+                        <Label value={`Budget ${formatCurrency(budget.monthlyAmount)}`} position="insideTopLeft" className="fill-amber-600" fontSize={10} />
                       </ReferenceLine>
 
                       <Line
                         type="monotone"
                         dataKey="amount"
-                        stroke="#f43f5e"
+                        stroke="#6366f1"
                         strokeWidth={2}
-                        dot={{ r: 4, fill: "#f43f5e", strokeWidth: 0 }}
+                        dot={{ r: 4, fill: "#6366f1", strokeWidth: 0 }}
                         activeDot={{ r: 6, strokeWidth: 2, stroke: "#fff" }}
                         label={renderDotLabel}
                       />
