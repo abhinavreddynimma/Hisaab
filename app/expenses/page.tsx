@@ -10,6 +10,7 @@ import {
   seedDefaultAccounts,
 } from "@/actions/expenses";
 import { ExpensesPageClient } from "@/components/expenses/expenses-page-client";
+import { syncAllInvoicesToExpenses } from "@/actions/invoice-expense-sync";
 
 interface ExpensesPageProps {
   searchParams: Promise<{ fy?: string; month?: string; year?: string; tab?: string }>;
@@ -23,6 +24,9 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
 
   // Auto-seed defaults on first visit
   await seedDefaultAccounts();
+
+  // Sync all invoices to expense transactions (idempotent — safe to call every load)
+  await syncAllInvoicesToExpenses();
 
   const now = new Date();
   const currentMonth = params.month ? parseInt(params.month) : now.getMonth() + 1;
