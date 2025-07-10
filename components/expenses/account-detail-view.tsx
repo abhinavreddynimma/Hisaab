@@ -12,6 +12,13 @@ import { EXPENSE_ACCOUNT_TYPES } from "@/lib/constants";
 import { CategoryPieChart } from "./category-pie-chart";
 import type { ExpenseAccount, ExpenseTransaction, ExpenseBudget, ExpenseTarget, ExpenseAccountType } from "@/lib/types";
 
+function fmtCompact(v: number): string {
+  if (v >= 10000000) return `₹${(v / 10000000).toFixed(1)}Cr`;
+  if (v >= 100000) return `₹${(v / 100000).toFixed(1)}L`;
+  if (v >= 1000) return `₹${(v / 1000).toFixed(0)}k`;
+  return `₹${v.toFixed(0)}`;
+}
+
 interface AccountDetailViewProps {
   drillDown: {
     account: ExpenseAccount | null;
@@ -117,21 +124,21 @@ export function AccountDetailView({ drillDown, budgets, targets }: AccountDetail
                 {/* Monthly average line */}
                 {monthlyAvg > 0 && (
                   <ReferenceLine y={monthlyAvg} stroke="#94a3b8" strokeDasharray="4 4" strokeWidth={1}>
-                    <Label value={`avg ${formatCurrency(monthlyAvg)}`} position="right" className="fill-muted-foreground" fontSize={9} />
+                    <Label value={`avg ${fmtCompact(monthlyAvg)}`} position="insideTopRight" className="fill-muted-foreground" fontSize={9} dy={-2} />
                   </ReferenceLine>
                 )}
 
                 {/* Budget line (for expense categories) */}
                 {budgetAmount && (
-                  <ReferenceLine y={budgetAmount} stroke="#f43f5e" strokeDasharray="6 3" strokeWidth={1.5}>
-                    <Label value={`budget ${formatCurrency(budgetAmount)}`} position="right" className="fill-rose-500" fontSize={9} />
+                  <ReferenceLine y={budgetAmount} stroke="#f59e0b" strokeDasharray="6 3" strokeWidth={1.5}>
+                    <Label value={`budget ${fmtCompact(budgetAmount)}`} position="insideTopLeft" className="fill-amber-600" fontSize={9} dy={-2} />
                   </ReferenceLine>
                 )}
 
                 {/* Target line (for investment/savings) */}
                 {targetAmount && (
                   <ReferenceLine y={targetAmount} stroke="#10b981" strokeDasharray="6 3" strokeWidth={1.5}>
-                    <Label value={`target ${formatCurrency(targetAmount)}`} position="right" className="fill-emerald-500" fontSize={9} />
+                    <Label value={`target ${fmtCompact(targetAmount)}`} position="insideTopLeft" className="fill-emerald-600" fontSize={9} dy={-2} />
                   </ReferenceLine>
                 )}
 
