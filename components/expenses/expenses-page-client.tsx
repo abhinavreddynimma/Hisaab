@@ -86,7 +86,23 @@ export function ExpensesPageClient({
     let newYear = currentYear;
     if (newMonth < 1) { newMonth = 12; newYear--; }
     if (newMonth > 12) { newMonth = 1; newYear++; }
-    router.push(`/expenses?month=${newMonth}&year=${newYear}&fy=${financialYear}`);
+    // Auto-update FY based on month
+    const newFY = newMonth >= 4 ? `${newYear}-${String(newYear + 1).slice(2)}` : `${newYear - 1}-${String(newYear).slice(2)}`;
+    router.push(`/expenses?month=${newMonth}&year=${newYear}&fy=${newFY}`);
+  }
+
+  function navigateFY(direction: -1 | 1) {
+    const [startStr] = financialYear.split("-");
+    const startYear = parseInt(startStr) + direction;
+    const newFY = `${startYear}-${String(startYear + 1).slice(2)}`;
+    // Jump to April of the new FY (or current month if in current FY)
+    const now = new Date();
+    const currentFY = now.getMonth() >= 3 ? `${now.getFullYear()}-${String(now.getFullYear() + 1).slice(2)}` : `${now.getFullYear() - 1}-${String(now.getFullYear()).slice(2)}`;
+    if (newFY === currentFY) {
+      router.push(`/expenses?fy=${newFY}`);
+    } else {
+      router.push(`/expenses?month=4&year=${startYear}&fy=${newFY}`);
+    }
   }
 
   function handleAddTxn() {
@@ -130,7 +146,15 @@ export function ExpensesPageClient({
                 Today
               </Button>
             )}
-            <span className="text-xs text-muted-foreground ml-2">FY {financialYear}</span>
+            <span className="flex items-center gap-1 ml-2">
+              <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => navigateFY(-1)}>
+                <ChevronLeft className="h-3 w-3" />
+              </Button>
+              <span className="text-xs text-muted-foreground">FY {financialYear}</span>
+              <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => navigateFY(1)}>
+                <ChevronRight className="h-3 w-3" />
+              </Button>
+            </span>
           </div>
         </div>
         <Button onClick={handleAddTxn}>
