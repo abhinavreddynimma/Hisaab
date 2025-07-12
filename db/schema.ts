@@ -232,6 +232,23 @@ export const expenseBudgetCategories = sqliteTable("expense_budget_categories", 
   uniqueIndex("budget_category_idx").on(table.budgetId, table.categoryId),
 ]);
 
+export const expenseRecurring = sqliteTable("expense_recurring", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  type: text("type", { enum: ["expense", "transfer"] }).notNull().default("expense"),
+  amount: real("amount").notNull(),
+  categoryId: integer("category_id").references(() => expenseAccounts.id),
+  accountId: integer("account_id").references(() => expenseAccounts.id),
+  fromAccountId: integer("from_account_id").references(() => expenseAccounts.id),
+  toAccountId: integer("to_account_id").references(() => expenseAccounts.id),
+  frequency: text("frequency", { enum: ["monthly", "quarterly", "yearly"] }).notNull().default("monthly"),
+  dayOfMonth: integer("day_of_month").notNull().default(1), // 1-28
+  startDate: text("start_date").notNull(), // "YYYY-MM-DD"
+  endDate: text("end_date"), // null = ongoing
+  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+});
+
 export const expenseTargets = sqliteTable("expense_targets", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   accountId: integer("account_id").notNull().references(() => expenseAccounts.id),
