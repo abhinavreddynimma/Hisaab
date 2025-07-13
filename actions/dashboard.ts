@@ -372,30 +372,32 @@ export async function getBalanceData(): Promise<{
   const { year: currentYear, month: currentMonth, monthEndStr } = getCurrentMonthWindow();
   const entriesUpToMonthEnd = allEntries.filter((entry) => entry.date <= monthEndStr);
 
-  const leaveBalance = calculateLeaveBalance(policy, entriesUpToMonthEnd, currentYear, currentMonth);
-  const totalExtraWorking = entriesUpToMonthEnd.filter((e) => e.dayType === "extra_working").length;
-  const extraBalance = totalExtraWorking + leaveBalance;
-
-  const [startYear, startMonth] = policy.trackingStartDate.split("-").map(Number);
-  let months = 0;
-  let year = startYear;
-  let month = startMonth;
-  while (year < currentYear || (year === currentYear && month <= currentMonth)) {
-    months++;
-    month++;
-    if (month > 12) { month = 1; year++; }
-  }
-
-  const leavesAllowed = months * policy.leavesPerMonth;
-  const leavesTaken = entriesUpToMonthEnd.filter((e) => e.dayType === "leave").length +
-    entriesUpToMonthEnd.filter((e) => e.dayType === "half_day").length * 0.5;
-
+  // Scope all balances to current FY (April → March)
   const fyStartYear = currentMonth >= 4 ? currentYear : currentYear - 1;
   const fyEndYear = fyStartYear + 1;
   const fyStart = `${fyStartYear}-04-01`;
   const fyEnd = `${fyEndYear}-03-31`;
   const periodEnd = monthEndStr < fyEnd ? monthEndStr : fyEnd;
   const fyEntries = entriesUpToMonthEnd.filter((e) => e.date >= fyStart && e.date <= periodEnd);
+
+  // FY-scoped leave balance: count months in this FY only
+  const fyStartMonth = 4; // April
+  let fyMonthsElapsed = 0;
+  {
+    let y = fyStartYear;
+    let m = fyStartMonth;
+    while (y < currentYear || (y === currentYear && m <= currentMonth)) {
+      fyMonthsElapsed++;
+      m++;
+      if (m > 12) { m = 1; y++; }
+    }
+  }
+  const leavesAllowed = fyMonthsElapsed * policy.leavesPerMonth;
+  const leavesTaken = fyEntries.filter((e) => e.dayType === "leave").length +
+    fyEntries.filter((e) => e.dayType === "half_day").length * 0.5;
+  const leaveBalance = leavesAllowed - leavesTaken;
+  const totalExtraWorking = fyEntries.filter((e) => e.dayType === "extra_working").length;
+  const extraBalance = totalExtraWorking + leaveBalance;
 
   const leavesTakenToDate = fyEntries.reduce((sum, entry) => {
     if (entry.dayType === "leave") return sum + 1;
