@@ -36,6 +36,20 @@ interface ExpensesPageClientProps {
   budgets: (ExpenseBudget & { categoryIds: number[]; categoryNames: string[]; spent: number })[];
   targets: ExpenseTarget[];
   recurringExpenses: ExpenseRecurring[];
+  fyStats: {
+    totalIncome: number;
+    totalExpenses: number;
+    totalTransfersOut: number;
+    net: number;
+    incomeByCategory: { id: number; name: string; amount: number; percentage: number; color: string | null }[];
+    expenseByCategory: { id: number; name: string; amount: number; percentage: number; color: string | null }[];
+    transfersByType: { type: string; amount: number; percentage: number }[];
+  };
+  fyOverview: {
+    months: { month: string; year: number; monthNum: number; income: number; expense: number; net: number }[];
+    totalIncome: number;
+    totalExpenses: number;
+  };
   currentMonth: number;
   currentYear: number;
   financialYear: string;
@@ -52,6 +66,8 @@ export function ExpensesPageClient({
   budgets,
   targets,
   recurringExpenses,
+  fyStats,
+  fyOverview,
   currentMonth,
   currentYear,
   financialYear,
@@ -142,6 +158,8 @@ export function ExpensesPageClient({
         <TabsContent value="stats" className="mt-4">
           <StatsView
             stats={stats}
+            fyStats={fyStats}
+            fyOverview={fyOverview}
             currentMonth={currentMonth}
             currentYear={currentYear}
             financialYear={financialYear}
