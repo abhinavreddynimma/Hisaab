@@ -7,8 +7,10 @@ import {
   getExpenseStats,
   getExpenseBudgets,
   getExpenseTargets,
+  getExpenseFYOverview,
   seedDefaultAccounts,
 } from "@/actions/expenses";
+import { getFYDateRange } from "@/lib/constants";
 import { ExpensesPageClient } from "@/components/expenses/expenses-page-client";
 import { syncAllInvoicesToExpenses } from "@/actions/invoice-expense-sync";
 import { syncRecurringForMonth, getRecurringExpenses } from "@/actions/recurring-expenses";
@@ -40,7 +42,9 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
   const startDate = `${currentYear}-${String(currentMonth).padStart(2, "0")}-01`;
   const endDate = `${currentYear}-${String(currentMonth).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
 
-  const [accounts, accountsGrouped, transactions, stats, budgets, targets, recurringExpenses] = await Promise.all([
+  const { start: fyStart, end: fyEnd } = getFYDateRange(fy);
+
+  const [accounts, accountsGrouped, transactions, stats, budgets, targets, recurringExpenses, fyStats, fyOverview] = await Promise.all([
     getExpenseAccounts(),
     getExpenseAccountsGrouped(),
     getExpenseTransactions({ startDate, endDate }),
@@ -48,6 +52,8 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
     getExpenseBudgets(fy),
     getExpenseTargets(fy),
     getRecurringExpenses(),
+    getExpenseStats(fyStart, fyEnd),
+    getExpenseFYOverview(fy),
   ]);
 
   return (
@@ -59,6 +65,8 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
       budgets={budgets}
       targets={targets}
       recurringExpenses={recurringExpenses}
+      fyStats={fyStats}
+      fyOverview={fyOverview}
       currentMonth={currentMonth}
       currentYear={currentYear}
       financialYear={fy}
