@@ -34,7 +34,7 @@ interface ExpensesPageClientProps {
     transfersByType: { type: string; amount: number; percentage: number }[];
   };
   budgets: (ExpenseBudget & { categoryIds: number[]; categoryNames: string[]; spent: number })[];
-  targets: ExpenseTarget[];
+  targets: (ExpenseTarget & { accountIds: number[]; accountNames: string[]; thisMonthActual: number; fyAverage: number })[];
   recurringExpenses: ExpenseRecurring[];
   fyStats: {
     totalIncome: number;
