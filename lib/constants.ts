@@ -141,19 +141,31 @@ export const DEFAULT_EXPENSE_TAGS = [
 ] as const;
 
 export const DEFAULT_EXPENSE_CATEGORIES: Record<string, { items: string[]; subCategories?: Record<string, string[]> }> = {
-  income: { items: ["Salary", "Freelance", "Interest", "Dividends", "Other Income"] },
+  income: { items: ["Salary", "Freelance Income", "Refunds", "Interest Gained", "Investment Gains", "Other"] },
   expense: {
-    items: ["Food", "Transport", "Shopping", "Health", "Entertainment", "Utilities", "Rent", "Education", "Personal Care", "Other"],
+    items: ["Essential Expenses", "Shopping", "Fitness", "Health & Wellness", "Bills", "Entertainment", "Hobbies", "Travel", "Gifts", "Car", "Tax"],
     subCategories: {
-      "Food": ["Eating Out", "Groceries", "Snacks"],
-      "Transport": ["Fuel", "Auto/Cab", "Public Transport"],
-      "Shopping": ["Clothes", "Electronics", "Home"],
-      "Health": ["Doctor", "Pharmacy", "Gym"],
+      "Essential Expenses": ["Groceries"],
+      "Shopping": ["Electronics", "Clothes", "Shoes", "Household"],
+      "Fitness": ["Gear/Equipment", "Apparel", "Fees/Subscription", "Nutrition"],
+      "Health & Wellness": ["Personal Care", "Dermatologist"],
+      "Bills": ["Utility Bills", "Subscriptions"],
+      "Entertainment": ["Movies", "Concerts", "Activities"],
+      "Hobbies": ["3D Printing", "SaaS", "Electronics/IOT"],
+      "Travel": ["Trips", "Camping Gear"],
+      "Gifts": ["Friends", "Family"],
+      "Car": ["EMI", "Fuel", "Mods/Accessories"],
+      "Tax": ["Advance Tax"],
     }
   },
-  investment: { items: ["Mutual Funds", "Stocks", "ETFs", "FD", "PPF"] },
-  savings: { items: ["Personal Savings", "Emergency Fund"] },
-  bank: { items: ["Primary Bank"] },
+  investment: {
+    items: ["Kapil ChitFunds", "Mutual Funds", "ETFs", "Stock Picks", "Crypto"],
+    subCategories: {
+      "Kapil ChitFunds": ["Chitti 1", "Chitti 2", "Chitti 3", "Chitti 4", "Mom Chitti"],
+    }
+  },
+  savings: { items: ["Personal Savings"] },
+  bank: { items: ["SBI", "BOB"] },
   cash: { items: ["Cash"] },
 };
 
