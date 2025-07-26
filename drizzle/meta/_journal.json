@@ -50,6 +50,13 @@
       "when": 1773651007527,
       "tag": "0006_bitter_wallflower",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1773854400000,
+      "tag": "0007_targets_bundling",
+      "breakpoints": true
     }
   ]
 }

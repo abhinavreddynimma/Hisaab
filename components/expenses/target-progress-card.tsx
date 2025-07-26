@@ -1,13 +1,11 @@
 "use client";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { formatCurrency, cn } from "@/lib/utils";
-import { EXPENSE_ACCOUNT_TYPES } from "@/lib/constants";
-import type { ExpenseTarget, ExpenseAccountType } from "@/lib/types";
+import type { ExpenseTarget } from "@/lib/types";
 
 interface TargetProgressCardProps {
-  target: ExpenseTarget;
+  target: ExpenseTarget & { accountIds?: number[]; accountNames?: string[] };
   onClick?: () => void;
 }
 
@@ -21,17 +19,15 @@ export function TargetProgressCard({ target, onClick }: TargetProgressCardProps)
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const todayPosition = (now.getDate() / daysInMonth) * 100;
 
-  const typeConfig = target.accountType ? EXPENSE_ACCOUNT_TYPES[target.accountType as ExpenseAccountType] : null;
-
   return (
     <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={onClick}>
       <CardContent className="p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-sm">{target.accountName}</h3>
-          {typeConfig && (
-            <Badge variant="outline" className="text-[10px]" style={{ borderColor: typeConfig.color }}>
-              {typeConfig.label}
-            </Badge>
+        <div>
+          <h3 className="font-semibold text-sm">{target.name}</h3>
+          {target.accountNames && target.accountNames.length > 0 && (
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {target.accountNames.join(", ")}
+            </p>
           )}
         </div>
 

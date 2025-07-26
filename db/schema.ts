@@ -251,9 +251,17 @@ export const expenseRecurring = sqliteTable("expense_recurring", {
 
 export const expenseTargets = sqliteTable("expense_targets", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  accountId: integer("account_id").notNull().references(() => expenseAccounts.id),
+  name: text("name").notNull(),
   monthlyAmount: real("monthly_amount").notNull(),
   financialYear: text("financial_year").notNull(),
   isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
   createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
 });
+
+export const expenseTargetAccounts = sqliteTable("expense_target_accounts", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  targetId: integer("target_id").notNull().references(() => expenseTargets.id),
+  accountId: integer("account_id").notNull().references(() => expenseAccounts.id),
+}, (table) => [
+  uniqueIndex("target_account_idx").on(table.targetId, table.accountId),
+]);

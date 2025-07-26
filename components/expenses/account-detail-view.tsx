@@ -19,7 +19,7 @@ interface AccountDetailViewProps {
     totalAmount: number;
   };
   budgets: (ExpenseBudget & { categoryIds: number[]; categoryNames: string[]; spent: number })[];
-  targets: ExpenseTarget[];
+  targets: (ExpenseTarget & { accountIds?: number[]; accountNames?: string[] })[];
   financialYear: string;
 }
 
@@ -38,7 +38,7 @@ export function AccountDetailView({ drillDown, budgets, targets }: AccountDetail
 
   const typeConfig = EXPENSE_ACCOUNT_TYPES[account.type as ExpenseAccountType];
   const linkedBudget = budgets.find(b => b.categoryIds.includes(account.id));
-  const linkedTarget = targets.find(t => t.accountId === account.id);
+  const linkedTarget = targets.find(t => t.accountIds?.includes(account.id));
 
   return (
     <div className="space-y-6">
