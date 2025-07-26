@@ -32,6 +32,7 @@ interface ExpensesPageClientProps {
     incomeByCategory: { id: number; name: string; amount: number; percentage: number; color: string | null }[];
     expenseByCategory: { id: number; name: string; amount: number; percentage: number; color: string | null }[];
     transfersByType: { type: string; amount: number; percentage: number }[];
+    topLevelSplit: { postTaxIncome: number; investments: { amount: number; percentage: number }; savings: { amount: number; percentage: number }; expenses: { amount: number; percentage: number } };
   };
   budgets: (ExpenseBudget & { categoryIds: number[]; categoryNames: string[]; spent: number })[];
   targets: (ExpenseTarget & { accountIds: number[]; accountNames: string[]; thisMonthActual: number; fyAverage: number })[];
@@ -44,6 +45,7 @@ interface ExpensesPageClientProps {
     incomeByCategory: { id: number; name: string; amount: number; percentage: number; color: string | null }[];
     expenseByCategory: { id: number; name: string; amount: number; percentage: number; color: string | null }[];
     transfersByType: { type: string; amount: number; percentage: number }[];
+    topLevelSplit: { postTaxIncome: number; investments: { amount: number; percentage: number }; savings: { amount: number; percentage: number }; expenses: { amount: number; percentage: number } };
   };
   fyOverview: {
     months: { month: string; year: number; monthNum: number; income: number; expense: number; net: number }[];

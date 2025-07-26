@@ -252,7 +252,7 @@ export interface ExpenseAccount {
   createdAt: string;
 }
 
-export type ExpenseTransactionSource = "manual" | "invoice" | "recurring" | "bank_statement";
+export type ExpenseTransactionSource = "manual" | "invoice" | "recurring" | "tax_payment" | "bank_statement";
 export type ExpenseTransactionStatus = "confirmed" | "estimated";
 
 export interface ExpenseTransaction {

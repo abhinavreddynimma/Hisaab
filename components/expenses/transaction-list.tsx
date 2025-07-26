@@ -110,7 +110,7 @@ export function TransactionList({ transactions, totalIncome, totalExpenses, onEd
                   return (
                     <TableRow
                       key={txn.id}
-                      className={`hover:bg-muted/50 ${txn.source === "invoice" || (txn.source === "recurring" && txn.status === "confirmed") ? "opacity-80" : "cursor-pointer"}`}
+                      className={`hover:bg-muted/50 ${txn.source !== "manual" ? "opacity-80" : "cursor-pointer"}`}
                       onClick={() => txn.source === "manual" && onEdit(txn)}
                     >
                       <TableCell className="text-sm tabular-nums">{formatDate(txn.date)}</TableCell>
@@ -130,6 +130,12 @@ export function TransactionList({ transactions, totalIncome, totalExpenses, onEd
                             <div className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${txn.status === "estimated" ? "bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-400" : "bg-violet-50 text-violet-600 dark:bg-violet-950 dark:text-violet-400"}`}>
                               <Repeat className="h-2.5 w-2.5" />
                               {txn.status === "estimated" ? "Est." : "Rec."}
+                            </div>
+                          )}
+                          {txn.source === "tax_payment" && (
+                            <div className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-orange-50 text-orange-600 dark:bg-orange-950 dark:text-orange-400">
+                              <Link2 className="h-2.5 w-2.5" />
+                              Tax
                             </div>
                           )}
                         </div>
@@ -156,7 +162,9 @@ export function TransactionList({ transactions, totalIncome, totalExpenses, onEd
                         {txn.note || "—"}
                       </TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>
-                        {txn.source === "recurring" && txn.status === "estimated" ? (
+                        {txn.source === "tax_payment" ? (
+                          <span className="text-[10px] text-muted-foreground">auto</span>
+                        ) : txn.source === "recurring" && txn.status === "estimated" ? (
                           <Button
                             variant="ghost"
                             size="icon"

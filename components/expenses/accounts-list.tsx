@@ -90,16 +90,34 @@ export function AccountsList({ accountsGrouped }: AccountsListProps) {
                     </div>
                     {account.children.length > 0 && (
                       <div className="ml-4 space-y-0.5">
-                        {account.children.map(child => (
-                          <div
-                            key={child.id}
-                            className="flex items-center justify-between py-1.5 px-2 -mx-2 rounded-lg hover:bg-muted/50 cursor-pointer text-muted-foreground"
-                            onClick={() => router.push(`/expenses/${child.id}`)}
-                          >
-                            <span className="text-xs">{child.name}</span>
-                            <ChevronRight className="h-3 w-3" />
-                          </div>
-                        ))}
+                        {account.children.map(child => {
+                          const grandchildren = (child as ExpenseAccount & { children?: ExpenseAccount[] }).children ?? [];
+                          return (
+                            <div key={child.id}>
+                              <div
+                                className="flex items-center justify-between py-1.5 px-2 -mx-2 rounded-lg hover:bg-muted/50 cursor-pointer text-muted-foreground"
+                                onClick={() => router.push(`/expenses/${child.id}`)}
+                              >
+                                <span className="text-xs font-medium">{child.name}</span>
+                                <ChevronRight className="h-3 w-3" />
+                              </div>
+                              {grandchildren.length > 0 && (
+                                <div className="ml-4 space-y-0.5">
+                                  {grandchildren.map(gc => (
+                                    <div
+                                      key={gc.id}
+                                      className="flex items-center justify-between py-1 px-2 -mx-2 rounded-lg hover:bg-muted/50 cursor-pointer text-muted-foreground/60"
+                                      onClick={() => router.push(`/expenses/${gc.id}`)}
+                                    >
+                                      <span className="text-[11px]">{gc.name}</span>
+                                      <ChevronRight className="h-2.5 w-2.5" />
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
