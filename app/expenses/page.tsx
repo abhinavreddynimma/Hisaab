@@ -27,12 +27,7 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
   const params = await searchParams;
   const fy = params.fy || getCurrentFinancialYear();
 
-  // One-time migration: check if we need to reset to new account structure
-  const existingAccounts = await getExpenseAccounts();
-  const hasOldAccounts = existingAccounts.some(a => a.name === "Primary Bank" || a.name === "Emergency Fund" || a.name === "Freelance Income");
-  if (hasOldAccounts) {
-    await resetExpenseData();
-  }
+  // Migration v2 is complete — no more auto-reset needed
 
   // Auto-seed defaults on first visit
   await seedDefaultAccounts();
