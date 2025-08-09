@@ -65,7 +65,7 @@ function estimateNetInr(eurAmount: number): number {
 }
 
 /** Find or create the "Salary" account used for invoice-linked income. */
-async function getOrCreateFreelanceIncomeAccount(): Promise<number> {
+async function getOrCreateSalaryCategory(): Promise<number> {
   const existing = db
     .select()
     .from(expenseAccounts)
@@ -89,6 +89,22 @@ async function getOrCreateFreelanceIncomeAccount(): Promise<number> {
     .run();
 
   return Number(result.lastInsertRowid);
+}
+
+/** Find SBI bank account to link invoice income to. */
+function getSBIAccountId(): number | null {
+  const sbi = db
+    .select()
+    .from(expenseAccounts)
+    .where(
+      and(
+        eq(expenseAccounts.type, "bank"),
+        eq(expenseAccounts.name, "SBI"),
+      ),
+    )
+    .get();
+
+  return sbi?.id ?? null;
 }
 
 /** Find the existing expense transaction linked to an invoice. */
@@ -133,7 +149,8 @@ export async function syncInvoiceToExpense(invoiceId: number): Promise<void> {
   if (!invoice) return;
 
   const existing = findLinkedTransaction(invoiceId);
-  const categoryId = await getOrCreateFreelanceIncomeAccount();
+  const categoryId = await getOrCreateSalaryCategory();
+  const sbiAccountId = getSBIAccountId();
 
   // Determine the amount to record:
   // - If paid and we have INR conversion → use netInrAmount
@@ -164,6 +181,7 @@ export async function syncInvoiceToExpense(invoiceId: number): Promise<void> {
             amount: estimatedInr,
             fees: 0,
             note,
+            accountId: sbiAccountId,
             status: "estimated",
           })
           .where(eq(expenseTransactions.id, existing.id))
@@ -175,6 +193,7 @@ export async function syncInvoiceToExpense(invoiceId: number): Promise<void> {
             date,
             amount: estimatedInr,
             categoryId,
+            accountId: sbiAccountId,
             fees: 0,
             note,
             source: "invoice",
@@ -196,6 +215,7 @@ export async function syncInvoiceToExpense(invoiceId: number): Promise<void> {
             amount,
             fees,
             note,
+            accountId: sbiAccountId,
             status: "confirmed",
           })
           .where(eq(expenseTransactions.id, existing.id))
@@ -207,6 +227,7 @@ export async function syncInvoiceToExpense(invoiceId: number): Promise<void> {
             date,
             amount,
             categoryId,
+            accountId: sbiAccountId,
             fees,
             note,
             source: "invoice",
@@ -248,18 +269,18 @@ export async function syncAllInvoicesToExpenses(): Promise<{ synced: number }> {
     .all();
 
   const linkedTxns = db
-    .select({ sourceId: expenseTransactions.sourceId, status: expenseTransactions.status })
+    .select({ sourceId: expenseTransactions.sourceId, status: expenseTransactions.status, accountId: expenseTransactions.accountId })
     .from(expenseTransactions)
     .where(eq(expenseTransactions.source, "invoice"))
     .all();
 
-  const linkedMap = new Map(linkedTxns.map((r) => [r.sourceId, r.status]));
+  const linkedMap = new Map(linkedTxns.map((r) => [r.sourceId, { status: r.status, accountId: r.accountId }]));
 
   let synced = 0;
   for (const inv of activeInvoices) {
     const existing = linkedMap.get(String(inv.id));
-    // Sync if: no linked transaction, or it's estimated (re-estimate with latest rates)
-    if (!existing || existing === "estimated") {
+    // Sync if: no linked transaction, estimated (re-estimate rates), or missing accountId
+    if (!existing || existing.status === "estimated" || !existing.accountId) {
       await syncInvoiceToExpense(inv.id);
       synced++;
     }
