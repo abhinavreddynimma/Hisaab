@@ -104,37 +104,23 @@ export function StatsView({ stats, fyStats, fyOverview, currentMonth, currentYea
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-3 gap-4">
         <Card>
-          <CardContent className="p-3 text-center">
+          <CardContent className="p-4 text-center">
             <p className="text-xs text-muted-foreground mb-1">Income</p>
-            <p className="text-base font-bold tabular-nums text-emerald-600">{formatCurrency(activeStats.totalIncome)}</p>
+            <p className="text-lg font-bold tabular-nums text-emerald-600">{formatCurrency(activeStats.totalIncome)}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-3 text-center">
+          <CardContent className="p-4 text-center">
             <p className="text-xs text-muted-foreground mb-1">Tax</p>
-            <p className="text-base font-bold tabular-nums text-orange-600">{formatCurrency(activeStats.totalTax)}</p>
+            <p className="text-lg font-bold tabular-nums text-orange-600">{formatCurrency(activeStats.totalTax)}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-3 text-center">
-            <p className="text-xs text-muted-foreground mb-1">Expenses</p>
-            <p className="text-base font-bold tabular-nums text-rose-600">{formatCurrency(activeStats.totalExpenses)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3 text-center">
-            <p className="text-xs text-muted-foreground mb-1">Transfers</p>
-            <p className="text-base font-bold tabular-nums text-violet-600">{formatCurrency(activeStats.totalTransfersOut)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3 text-center">
-            <p className="text-xs text-muted-foreground mb-1">Net</p>
-            <p className={`text-base font-bold tabular-nums ${activeStats.net >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-              {activeStats.net >= 0 ? "+" : ""}{formatCurrency(activeStats.net)}
-            </p>
+          <CardContent className="p-4 text-center">
+            <p className="text-xs text-muted-foreground mb-1">Net Income</p>
+            <p className="text-lg font-bold tabular-nums text-emerald-700">{formatCurrency(activeStats.topLevelSplit.postTaxIncome)}</p>
           </CardContent>
         </Card>
       </div>
