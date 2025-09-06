@@ -53,7 +53,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       getDashboardStats(),
       getMonthlyEarningsData(),
       getClientEarningsData(),
-      getMonthlyBreakdownData(),
+      getMonthlyBreakdownData(fy),
       getBalanceData(fy),
       getRecentInvoices(),
       getMonthlyExchangeRateData(),
