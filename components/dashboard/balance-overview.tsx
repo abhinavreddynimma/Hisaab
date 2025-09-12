@@ -253,9 +253,9 @@ function CumulativeTooltip({ active, payload, label }: { active?: boolean; paylo
   if (!active || !payload?.length) return null;
   const d = payload[0]?.payload as CumulativeEntry;
   const rows = [
-    { label: "Working", value: d.cumWorking, color: "#10b981" },
+    { label: "Working", value: d.cumWorking, color: "#6366f1" },
     { label: "Extra", value: d.cumExtra, color: "#10b981" },
-    { label: "Leaves", value: d.cumLeaves, color: "#ef4444" },
+    { label: "Leaves", value: d.cumLeaves, color: "#fb7185" },
   ].filter((r) => r.value > 0);
 
   return (
@@ -458,7 +458,7 @@ export function BalanceOverview({ balanceData, monthlyData, financialYear }: Bal
                     yAxisId="left"
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fontSize: 10, fill: "#10b981" }}
+                    tick={{ fontSize: 10, fill: "#6366f1" }}
                     width={35}
                   />
                   {/* Right Y axis for leaves/extra (small scale) */}
@@ -467,13 +467,13 @@ export function BalanceOverview({ balanceData, monthlyData, financialYear }: Bal
                     orientation="right"
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fontSize: 10, fill: "#ef4444" }}
+                    tick={{ fontSize: 10, fill: "#fb7185" }}
                     width={30}
                   />
                   <Tooltip content={<CumulativeTooltip />} />
-                  <Line yAxisId="left" type="monotone" dataKey="cumWorking" stroke="#10b981" strokeWidth={2.5} dot={{ r: 4, fill: "#10b981" }} name="Working" label={renderLabel("#10b981")} />
-                  <Line yAxisId="right" type="monotone" dataKey="cumExtra" stroke="#10b981" strokeWidth={2} strokeDasharray="4 4" dot={{ r: 3, fill: "#10b981" }} name="Extra" label={renderLabel("#059669")} />
-                  <Line yAxisId="right" type="monotone" dataKey="cumLeaves" stroke="#ef4444" strokeWidth={2} dot={{ r: 4, fill: "#ef4444" }} name="Leaves" label={renderLabel("#ef4444")} />
+                  <Line yAxisId="left" type="monotone" dataKey="cumWorking" stroke="#6366f1" strokeWidth={2.5} dot={{ r: 4, fill: "#6366f1" }} name="Working" label={renderLabel("#6366f1")} />
+                  <Line yAxisId="right" type="monotone" dataKey="cumExtra" stroke="#10b981" strokeWidth={2} strokeDasharray="4 4" dot={{ r: 3, fill: "#10b981" }} name="Extra" label={renderLabel("#10b981")} />
+                  <Line yAxisId="right" type="monotone" dataKey="cumLeaves" stroke="#fb7185" strokeWidth={2} dot={{ r: 4, fill: "#fb7185" }} name="Leaves" label={renderLabel("#fb7185")} />
                 </LineChart>
               </ResponsiveContainer>
             );
