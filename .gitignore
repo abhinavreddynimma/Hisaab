@@ -51,8 +51,6 @@ next-env.d.ts
 .vscode/
 .idea/
 
-.claude/
-
 # personal notes
 tweet-drafts.txt
 
