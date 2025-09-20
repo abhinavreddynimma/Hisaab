@@ -1,6 +1,6 @@
 "use client";
 
-import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
 
@@ -19,29 +19,38 @@ const RADIAN = Math.PI / 180;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function renderLabel(props: any) {
-  const { cx, cy, midAngle, outerRadius, name, percent } = props;
+  const { cx, cy, midAngle, innerRadius, outerRadius, percent } = props;
   const pct = Math.round((percent ?? 0) * 100);
-  // Only label slices >= 8% to avoid overlap — smaller ones are in the list below
-  if (pct < 8) return null;
+  if (pct < 5) return null;
 
-  const radius = (outerRadius ?? 90) + 24;
+  const radius = ((innerRadius ?? 0) + (outerRadius ?? 100)) / 2;
   const x = cx + radius * Math.cos(-(midAngle ?? 0) * RADIAN);
   const y = cy + radius * Math.sin(-(midAngle ?? 0) * RADIAN);
-
-  const truncated = (name ?? "").length > 10 ? (name ?? "").slice(0, 9) + "…" : (name ?? "");
 
   return (
     <text
       x={x}
       y={y}
-      textAnchor={x > cx ? "start" : "end"}
+      textAnchor="middle"
       dominantBaseline="central"
-      className="fill-foreground"
-      fontSize={11}
-      fontWeight={500}
+      fill="#fff"
+      fontSize={12}
+      fontWeight={700}
     >
-      {truncated} {pct}%
+      {pct}%
     </text>
+  );
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function CustomTooltip({ active, payload }: any) {
+  if (!active || !payload?.length) return null;
+  const { name, value } = payload[0];
+  return (
+    <div className="rounded-lg border bg-background px-3 py-2 shadow-lg">
+      <p className="text-sm font-semibold">{name}</p>
+      <p className="text-sm text-muted-foreground tabular-nums">{formatCurrency(value)}</p>
+    </div>
   );
 }
 
@@ -65,27 +74,29 @@ export function CategoryPieChart({ data, title, onCategoryClick }: CategoryPieCh
     <Card>
       <CardHeader className="pb-2"><CardTitle className="text-base">{title}</CardTitle></CardHeader>
       <CardContent className="pb-4">
-        <ResponsiveContainer width="100%" height={260}>
+        <ResponsiveContainer width="100%" height={300}>
           <PieChart>
             <Pie
               data={data}
               cx="50%"
               cy="50%"
-              innerRadius={50}
-              outerRadius={90}
+              outerRadius={120}
               dataKey="value"
               nameKey="name"
               paddingAngle={1}
-              strokeWidth={0}
+              strokeWidth={1}
+              stroke="rgba(255,255,255,0.5)"
               onClick={(_, idx) => onCategoryClick?.(data[idx].id)}
               style={{ cursor: "pointer" }}
               label={renderLabel}
               labelLine={false}
+              isAnimationActive={false}
             >
               {data.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={entry.color || DEFAULT_COLORS[index % DEFAULT_COLORS.length]} />
               ))}
             </Pie>
+            <Tooltip content={<CustomTooltip />} />
           </PieChart>
         </ResponsiveContainer>
 
