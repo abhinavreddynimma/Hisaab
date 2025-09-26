@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { ChevronLeft } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
@@ -9,8 +11,24 @@ const DEFAULT_COLORS = [
   "#ec4899", "#14b8a6", "#f97316", "#3b82f6", "#84cc16",
 ];
 
+interface SubCategory {
+  id: number;
+  name: string;
+  amount: number;
+  percentage: number;
+  color: string | null;
+}
+
+interface PieDataItem {
+  id: number;
+  name: string;
+  value: number;
+  color: string | null;
+  subCategories?: SubCategory[];
+}
+
 interface CategoryPieChartProps {
-  data: { id: number; name: string; value: number; color: string | null }[];
+  data: PieDataItem[];
   title: string;
   onCategoryClick?: (id: number) => void;
 }
@@ -55,6 +73,8 @@ function CustomTooltip({ active, payload }: any) {
 }
 
 export function CategoryPieChart({ data, title, onCategoryClick }: CategoryPieChartProps) {
+  const [drillDown, setDrillDown] = useState<{ parent: PieDataItem; subData: PieDataItem[] } | null>(null);
+
   if (data.length === 0) {
     return (
       <Card>
@@ -68,16 +88,62 @@ export function CategoryPieChart({ data, title, onCategoryClick }: CategoryPieCh
     );
   }
 
-  const total = data.reduce((s, d) => s + d.value, 0);
+  const activeData = drillDown
+    ? drillDown.subData
+    : data;
+  const activeTitle = drillDown
+    ? `${drillDown.parent.name} breakdown`
+    : title;
+  const total = activeData.reduce((s, d) => s + d.value, 0);
+
+  function handlePieClick(idx: number) {
+    if (drillDown) {
+      // Already drilled down — clicking sub-category navigates to detail
+      onCategoryClick?.(activeData[idx].id);
+      return;
+    }
+
+    const item = data[idx];
+    if (item.subCategories && item.subCategories.length > 0) {
+      setDrillDown({
+        parent: item,
+        subData: item.subCategories.map(sc => ({
+          id: sc.id,
+          name: sc.name,
+          value: sc.amount,
+          color: sc.color,
+        })),
+      });
+    } else {
+      onCategoryClick?.(item.id);
+    }
+  }
+
+  function handleListClick(item: PieDataItem) {
+    onCategoryClick?.(item.id);
+  }
 
   return (
     <Card>
-      <CardHeader className="pb-2"><CardTitle className="text-base">{title}</CardTitle></CardHeader>
+      <CardHeader className="pb-2">
+        <div className="flex items-center gap-2">
+          {drillDown && (
+            <button
+              type="button"
+              onClick={() => setDrillDown(null)}
+              className="rounded-md p-1 hover:bg-muted transition-colors"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+          )}
+          <CardTitle className="text-base">{activeTitle}</CardTitle>
+        </div>
+      </CardHeader>
       <CardContent className="pb-4">
         <ResponsiveContainer width="100%" height={300}>
           <PieChart>
             <Pie
-              data={data}
+              data={activeData}
               cx="50%"
               cy="50%"
               outerRadius={120}
@@ -86,13 +152,13 @@ export function CategoryPieChart({ data, title, onCategoryClick }: CategoryPieCh
               paddingAngle={1}
               strokeWidth={1}
               stroke="rgba(255,255,255,0.5)"
-              onClick={(_, idx) => onCategoryClick?.(data[idx].id)}
+              onClick={(_, idx) => handlePieClick(idx)}
               style={{ cursor: "pointer" }}
               label={renderLabel}
               labelLine={false}
               isAnimationActive={false}
             >
-              {data.map((entry, index) => (
+              {activeData.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={entry.color || DEFAULT_COLORS[index % DEFAULT_COLORS.length]} />
               ))}
             </Pie>
@@ -102,14 +168,15 @@ export function CategoryPieChart({ data, title, onCategoryClick }: CategoryPieCh
 
         {/* Category list below */}
         <div className="space-y-2 mt-2">
-          {data.map((item, idx) => {
+          {activeData.map((item, idx) => {
             const pct = total > 0 ? Math.round((item.value / total) * 100) : 0;
             const color = item.color || DEFAULT_COLORS[idx % DEFAULT_COLORS.length];
+            const hasSubCats = !drillDown && item.subCategories && item.subCategories.length > 0;
             return (
               <div
                 key={`${item.name}-${idx}`}
                 className="flex items-center gap-3 cursor-pointer hover:bg-muted/50 rounded-lg px-2 py-1.5"
-                onClick={() => onCategoryClick?.(item.id)}
+                onClick={() => handleListClick(item)}
               >
                 <span
                   className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold text-white shrink-0"
@@ -118,6 +185,23 @@ export function CategoryPieChart({ data, title, onCategoryClick }: CategoryPieCh
                   {pct}%
                 </span>
                 <span className="flex-1 text-sm font-medium truncate">{item.name}</span>
+                {hasSubCats && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDrillDown({
+                        parent: item,
+                        subData: item.subCategories!.map(sc => ({
+                          id: sc.id, name: sc.name, value: sc.amount, color: sc.color,
+                        })),
+                      });
+                    }}
+                    className="text-[10px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded border border-border/50 hover:border-border transition-colors"
+                  >
+                    split
+                  </button>
+                )}
                 <span className="text-sm font-semibold tabular-nums">{formatCurrency(item.value)}</span>
               </div>
             );
