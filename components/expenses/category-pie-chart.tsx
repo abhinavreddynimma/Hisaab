@@ -37,25 +37,28 @@ const RADIAN = Math.PI / 180;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function renderLabel(props: any) {
-  const { cx, cy, midAngle, innerRadius, outerRadius, percent } = props;
-  const pct = Math.round((percent ?? 0) * 100);
-  if (pct < 5) return null;
+  const { cx, cy, midAngle, outerRadius, name, percent } = props;
+  const pct = ((percent ?? 0) * 100);
+  const pctStr = pct < 1 ? pct.toFixed(1) : Math.round(pct).toString();
 
-  const radius = ((innerRadius ?? 0) + (outerRadius ?? 100)) / 2;
+  const radius = (outerRadius ?? 100) + 25;
   const x = cx + radius * Math.cos(-(midAngle ?? 0) * RADIAN);
   const y = cy + radius * Math.sin(-(midAngle ?? 0) * RADIAN);
+
+  const truncated = (name ?? "").length > 12 ? (name ?? "").slice(0, 11) + "…" : (name ?? "");
 
   return (
     <text
       x={x}
       y={y}
-      textAnchor="middle"
+      textAnchor={x > cx ? "start" : "end"}
       dominantBaseline="central"
-      fill="#fff"
-      fontSize={12}
-      fontWeight={700}
+      className="fill-foreground"
+      fontSize={11}
+      fontWeight={600}
     >
-      {pct}%
+      <tspan fontWeight={700}>{truncated}</tspan>
+      <tspan dx={4} className="fill-muted-foreground" fontWeight={400}>{pctStr}%</tspan>
     </text>
   );
 }
@@ -140,7 +143,7 @@ export function CategoryPieChart({ data, title, onCategoryClick }: CategoryPieCh
         </div>
       </CardHeader>
       <CardContent className="pb-4">
-        <ResponsiveContainer width="100%" height={300}>
+        <ResponsiveContainer width="100%" height={360}>
           <PieChart>
             <Pie
               data={activeData}
@@ -155,7 +158,7 @@ export function CategoryPieChart({ data, title, onCategoryClick }: CategoryPieCh
               onClick={(_, idx) => handlePieClick(idx)}
               style={{ cursor: "pointer" }}
               label={renderLabel}
-              labelLine={false}
+              labelLine={{ stroke: "var(--muted-foreground)", strokeWidth: 0.8, strokeOpacity: 0.5 }}
               isAnimationActive={false}
             >
               {activeData.map((entry, index) => (
