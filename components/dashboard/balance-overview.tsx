@@ -349,7 +349,8 @@ export function BalanceOverview({ balanceData, monthlyData, financialYear }: Bal
       {/* FY Working Days Comparison */}
       {(() => {
         const cmp = balanceData.fyWorkingDaysComparison;
-        const effectiveDays = cmp.yourWorkingDays + cmp.extraWorkingDays - cmp.leavesTaken;
+        // yourWorkingDays already excludes leaves (implicit weekdays minus leave entries)
+        const effectiveDays = cmp.yourWorkingDays + cmp.extraWorkingDays;
         const frenchPct = (cmp.frenchEmployeeWorkingDays / cmp.totalWeekdaysInFY) * 100;
         const yourPct = Math.min((effectiveDays / cmp.totalWeekdaysInFY) * 100, 100);
         const diff = effectiveDays - cmp.frenchEmployeeWorkingDays;
