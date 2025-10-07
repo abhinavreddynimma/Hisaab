@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { ChevronLeft } from "lucide-react";
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
 
@@ -33,17 +32,228 @@ interface CategoryPieChartProps {
   onCategoryClick?: (id: number) => void;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function CustomTooltip({ active, payload }: any) {
-  if (!active || !payload?.length) return null;
-  const { name, value, payload: entry } = payload[0];
-  const total = entry?.total;
-  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
+const RADIAN = Math.PI / 180;
+const LABEL_LINE_HEIGHT = 18;
+
+interface SliceInfo {
+  startAngle: number;
+  endAngle: number;
+  midAngle: number;
+  color: string;
+  name: string;
+  pct: string;
+  index: number;
+}
+
+function computeSlices(data: PieDataItem[], total: number): SliceInfo[] {
+  const slices: SliceInfo[] = [];
+  let currentAngle = 90; // start from top
+  for (let i = 0; i < data.length; i++) {
+    const pctNum = total > 0 ? (data[i].value / total) * 100 : 0;
+    const sweep = (data[i].value / total) * 360;
+    const startAngle = currentAngle;
+    const endAngle = currentAngle + sweep;
+    const midAngle = startAngle + sweep / 2;
+    slices.push({
+      startAngle,
+      endAngle,
+      midAngle,
+      color: data[i].color || DEFAULT_COLORS[i % DEFAULT_COLORS.length],
+      name: data[i].name,
+      pct: pctNum < 1 ? pctNum.toFixed(1) : Math.round(pctNum).toString(),
+      index: i,
+    });
+    currentAngle = endAngle;
+  }
+  return slices;
+}
+
+function describeArc(cx: number, cy: number, r: number, startAngle: number, endAngle: number): string {
+  const start = {
+    x: cx + r * Math.cos(-startAngle * RADIAN),
+    y: cy + r * Math.sin(-startAngle * RADIAN),
+  };
+  const end = {
+    x: cx + r * Math.cos(-endAngle * RADIAN),
+    y: cy + r * Math.sin(-endAngle * RADIAN),
+  };
+  const largeArc = endAngle - startAngle > 180 ? 1 : 0;
+  return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 1 ${end.x} ${end.y}`;
+}
+
+function describeSlice(cx: number, cy: number, r: number, startAngle: number, endAngle: number): string {
+  const start = {
+    x: cx + r * Math.cos(-startAngle * RADIAN),
+    y: cy + r * Math.sin(-startAngle * RADIAN),
+  };
+  const end = {
+    x: cx + r * Math.cos(-endAngle * RADIAN),
+    y: cy + r * Math.sin(-endAngle * RADIAN),
+  };
+  const largeArc = endAngle - startAngle > 180 ? 1 : 0;
+  return `M ${cx} ${cy} L ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 1 ${end.x} ${end.y} Z`;
+}
+
+/** Distribute labels evenly on each side to prevent overlap */
+function distributeLabels(
+  slices: SliceInfo[],
+  cx: number,
+  cy: number,
+  outerR: number,
+  chartHeight: number,
+): { slice: SliceInfo; labelX: number; labelY: number; edgeX: number; edgeY: number; anchor: "start" | "end" }[] {
+  const labelR = outerR + 14;
+  const textR = outerR + 40;
+
+  // Compute natural positions
+  const items = slices.map((s) => {
+    const cos = Math.cos(-s.midAngle * RADIAN);
+    const sin = Math.sin(-s.midAngle * RADIAN);
+    const side: "left" | "right" = cos >= 0 ? "right" : "left";
+    return {
+      slice: s,
+      edgeX: cx + labelR * cos,
+      edgeY: cy + labelR * sin,
+      naturalY: cy + labelR * sin,
+      side,
+    };
+  });
+
+  // Separate by side and sort by naturalY
+  const right = items.filter((i) => i.side === "right").sort((a, b) => a.naturalY - b.naturalY);
+  const left = items.filter((i) => i.side === "left").sort((a, b) => a.naturalY - b.naturalY);
+
+  // Spread labels to avoid overlap on each side
+  function spread(group: typeof right) {
+    if (group.length === 0) return;
+    // First pass: push down
+    for (let i = 1; i < group.length; i++) {
+      const prev = group[i - 1];
+      const curr = group[i];
+      if (curr.naturalY - prev.naturalY < LABEL_LINE_HEIGHT) {
+        curr.naturalY = prev.naturalY + LABEL_LINE_HEIGHT;
+      }
+    }
+    // Second pass: pull up if exceeding bounds
+    const maxY = cy + chartHeight / 2 - 10;
+    if (group[group.length - 1].naturalY > maxY) {
+      group[group.length - 1].naturalY = maxY;
+      for (let i = group.length - 2; i >= 0; i--) {
+        if (group[i].naturalY > group[i + 1].naturalY - LABEL_LINE_HEIGHT) {
+          group[i].naturalY = group[i + 1].naturalY - LABEL_LINE_HEIGHT;
+        }
+      }
+    }
+  }
+
+  spread(right);
+  spread(left);
+
+  return [...right, ...left].map((item) => ({
+    slice: item.slice,
+    labelX: item.side === "right" ? cx + textR : cx - textR,
+    labelY: item.naturalY,
+    edgeX: item.edgeX,
+    edgeY: item.edgeY,
+    anchor: item.side === "right" ? "start" as const : "end" as const,
+  }));
+}
+
+function CustomPieChart({
+  data,
+  hoveredIdx,
+  onHover,
+  onClick,
+}: {
+  data: PieDataItem[];
+  hoveredIdx: number | null;
+  onHover: (idx: number | null) => void;
+  onClick: (idx: number) => void;
+}) {
+  const width = 500;
+  const height = 400;
+  const cx = width / 2;
+  const cy = height / 2;
+  const outerR = 120;
+  const total = data.reduce((s, d) => s + d.value, 0);
+
+  const slices = useMemo(() => computeSlices(data, total), [data, total]);
+  const labels = useMemo(() => distributeLabels(slices, cx, cy, outerR, height), [slices, cx, cy, height]);
+
   return (
-    <div className="rounded-lg border bg-background px-3 py-2 shadow-lg">
-      <p className="text-sm font-semibold">{name}</p>
-      <p className="text-sm text-muted-foreground tabular-nums">{formatCurrency(value)} ({pct}%)</p>
-    </div>
+    <svg viewBox={`0 0 ${width} ${height}`} className="w-full" style={{ maxHeight: 400 }}>
+      {/* Pie slices */}
+      {slices.map((s, i) => {
+        const isHovered = hoveredIdx === i;
+        const isDimmed = hoveredIdx !== null && hoveredIdx !== i;
+        // Slightly explode hovered slice
+        const offset = isHovered ? 6 : 0;
+        const ox = offset * Math.cos(-s.midAngle * RADIAN);
+        const oy = offset * Math.sin(-s.midAngle * RADIAN);
+        return (
+          <path
+            key={`slice-${i}`}
+            d={describeSlice(cx + ox, cy + oy, outerR, s.startAngle, s.endAngle)}
+            fill={s.color}
+            opacity={isDimmed ? 0.4 : 1}
+            stroke="rgba(255,255,255,0.7)"
+            strokeWidth={1.5}
+            style={{ cursor: "pointer", transition: "opacity 0.15s" }}
+            onMouseEnter={() => onHover(i)}
+            onMouseLeave={() => onHover(null)}
+            onClick={() => onClick(i)}
+          />
+        );
+      })}
+
+      {/* Labels with connector lines */}
+      {labels.map((l) => {
+        const isDimmed = hoveredIdx !== null && hoveredIdx !== l.slice.index;
+        const truncated = l.slice.name.length > 12 ? l.slice.name.slice(0, 11) + "…" : l.slice.name;
+        return (
+          <g key={`label-${l.slice.index}`} opacity={isDimmed ? 0.3 : 1} style={{ transition: "opacity 0.15s" }}>
+            {/* Connector line */}
+            <line
+              x1={l.edgeX}
+              y1={l.edgeY}
+              x2={l.labelX}
+              y2={l.labelY}
+              stroke={l.slice.color}
+              strokeWidth={0.8}
+              strokeOpacity={0.6}
+            />
+            <circle cx={l.edgeX} cy={l.edgeY} r={2} fill={l.slice.color} />
+            {/* Label text */}
+            <text
+              x={l.labelX}
+              y={l.labelY}
+              textAnchor={l.anchor}
+              dominantBaseline="central"
+              className="fill-foreground"
+              fontSize={11}
+              fontWeight={600}
+              style={{ cursor: "pointer" }}
+              onMouseEnter={() => onHover(l.slice.index)}
+              onMouseLeave={() => onHover(null)}
+              onClick={() => onClick(l.slice.index)}
+            >
+              {truncated}
+            </text>
+            <text
+              x={l.labelX}
+              y={l.labelY + 13}
+              textAnchor={l.anchor}
+              dominantBaseline="central"
+              className="fill-muted-foreground"
+              fontSize={10}
+              fontWeight={400}
+            >
+              {l.slice.pct} %
+            </text>
+          </g>
+        );
+      })}
+    </svg>
   );
 }
 
@@ -67,9 +277,6 @@ export function CategoryPieChart({ data, title, onCategoryClick }: CategoryPieCh
   const activeData = drillDown ? drillDown.subData : data;
   const activeTitle = drillDown ? `${drillDown.parent.name} breakdown` : title;
   const total = activeData.reduce((s, d) => s + d.value, 0);
-
-  // Add total to each entry so tooltip can compute %
-  const chartData = activeData.map(d => ({ ...d, total }));
 
   function handlePieClick(idx: number) {
     if (drillDown) {
@@ -121,39 +328,15 @@ export function CategoryPieChart({ data, title, onCategoryClick }: CategoryPieCh
         </div>
       </CardHeader>
       <CardContent className="pb-4">
-        <ResponsiveContainer width="100%" height={300}>
-          <PieChart>
-            <Pie
-              data={chartData}
-              cx="50%"
-              cy="50%"
-              outerRadius={120}
-              dataKey="value"
-              nameKey="name"
-              paddingAngle={1}
-              strokeWidth={1.5}
-              stroke="rgba(255,255,255,0.7)"
-              onClick={(_, idx) => handlePieClick(idx)}
-              onMouseEnter={(_, idx) => setHoveredIdx(idx)}
-              onMouseLeave={() => setHoveredIdx(null)}
-              style={{ cursor: "pointer", outline: "none" }}
-              isAnimationActive={false}
-            >
-              {chartData.map((entry, index) => (
-                <Cell
-                  key={`cell-${index}`}
-                  fill={entry.color || DEFAULT_COLORS[index % DEFAULT_COLORS.length]}
-                  opacity={hoveredIdx !== null && hoveredIdx !== index ? 0.5 : 1}
-                  style={{ transition: "opacity 0.15s", outline: "none" }}
-                />
-              ))}
-            </Pie>
-            <Tooltip content={<CustomTooltip />} />
-          </PieChart>
-        </ResponsiveContainer>
+        <CustomPieChart
+          data={activeData}
+          hoveredIdx={hoveredIdx}
+          onHover={setHoveredIdx}
+          onClick={handlePieClick}
+        />
 
         {/* Category list */}
-        <div className="space-y-1 mt-1">
+        <div className="space-y-1 mt-2">
           {activeData.map((item, idx) => {
             const pct = total > 0 ? (item.value / total * 100) : 0;
             const pctStr = pct < 1 ? pct.toFixed(1) : Math.round(pct).toString();
