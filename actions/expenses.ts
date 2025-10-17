@@ -145,12 +145,26 @@ export async function seedDefaultAccounts(): Promise<{ success: boolean }> {
       const subCats = config.subCategories?.[name];
       if (subCats) {
         for (const [subIdx, subName] of subCats.entries()) {
-          db.insert(expenseAccounts).values({
+          const subResult = db.insert(expenseAccounts).values({
             name: subName,
             type: type as ExpenseAccountType,
             parentId,
             sortOrder: subIdx,
           }).run();
+
+          // 3rd level: sub-sub-categories
+          const subSubItems = config.subSubCategories?.[subName];
+          if (subSubItems) {
+            const subParentId = Number(subResult.lastInsertRowid);
+            for (const [ssIdx, ssName] of subSubItems.entries()) {
+              db.insert(expenseAccounts).values({
+                name: ssName,
+                type: type as ExpenseAccountType,
+                parentId: subParentId,
+                sortOrder: ssIdx,
+              }).run();
+            }
+          }
         }
       }
     }
