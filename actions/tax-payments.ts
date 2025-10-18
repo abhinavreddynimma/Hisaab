@@ -270,16 +270,18 @@ export async function getTaxProjection(financialYear: string): Promise<{
   const projectedWorkingDays: (number | undefined)[] = Array(12).fill(undefined);
 
   for (let i = monthsElapsed; i < 12; i++) {
-    // FY month index to calendar year/month: Apr(i=0)=startYear/4, Mar(i=11)=startYear+1/3
-    const calYear = i < 9 ? startYear : startYear + 1;
-    const calMonth = i < 9 ? i + 4 : i - 8;
+    // Income received in month i comes from working in month i-1
+    // (invoice for previous month gets paid this month)
+    const prevIdx = i - 1;
+    const prevCalYear = prevIdx < 9 ? startYear : startYear + 1;
+    const prevCalMonth = prevIdx < 9 ? prevIdx + 4 : prevIdx - 8;
 
-    const entries = await getDayEntriesForMonth(calYear, calMonth);
-    const holidays = getFrenchHolidays(calYear);
-    const augmented = withImplicitWorkingDays(entries as DayEntry[], calYear, calMonth, holidays);
+    const entries = await getDayEntriesForMonth(prevCalYear, prevCalMonth);
+    const holidays = getFrenchHolidays(prevCalYear);
+    const augmented = withImplicitWorkingDays(entries as DayEntry[], prevCalYear, prevCalMonth, holidays);
     const summary = calculateMonthSummary(augmented);
 
-    const monthKey = `${calYear}-${String(calMonth).padStart(2, "0")}`;
+    const monthKey = `${prevCalYear}-${String(prevCalMonth).padStart(2, "0")}`;
     const dailyRate = defaultProjectId ? await getEffectiveRate(defaultProjectId, monthKey) : 0;
 
     const eurAmount = summary.effectiveWorkingDays * dailyRate;
