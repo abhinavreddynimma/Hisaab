@@ -509,16 +509,13 @@ export async function getBalanceData(financialYear?: string): Promise<{
   }, 0);
   const allFyExtraWorking = allFyEntries.filter(e => e.dayType === "extra_working").length;
 
-  // Count implicit working days: past (up to today) = assume working, future = only explicit
+  // Count implicit working days for the entire FY (including future)
+  // This allows the bar to reflect planned leaves/extra working for the full year
   let implicitWorkingDays = 0;
-  const today = new Date();
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   const trackingStart = `${policy.trackingStartDate}-01`;
   const implicitStartDate = new Date(Math.max(fyStartDate.getTime(), new Date(trackingStart).getTime()));
-  // Only count implicit days up to today (future days need explicit entries)
   for (let d = new Date(implicitStartDate); d <= fyEndDate; d.setDate(d.getDate() + 1)) {
     const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    if (dateStr > todayStr) break; // Don't assume future days as working
     const day = d.getDay();
     if (day === 0 || day === 6) continue;
     if (allFyEntryByDate.has(dateStr)) continue;
