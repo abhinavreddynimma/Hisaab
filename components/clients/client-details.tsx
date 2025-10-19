@@ -33,7 +33,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Pencil } from "lucide-react"
-import { formatEuro } from "@/lib/utils"
+import { formatForeignCurrency } from "@/lib/utils"
+import { getCurrencySymbol } from "@/lib/constants"
 import type { Client, Project } from "@/lib/types"
 
 interface ClientDetailsProps {
@@ -93,6 +94,9 @@ export function ClientDetails({ client, projects }: ClientDetailsProps) {
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
               <CardTitle className="text-xl">{client.name}</CardTitle>
+              <Badge variant="outline" className="text-xs font-mono">
+                {getCurrencySymbol(client.currency)} {client.currency}
+              </Badge>
               {client.isActive ? (
                 <Badge className="bg-green-500/15 text-green-700 hover:bg-green-500/25 border-green-500/20">
                   Active
@@ -179,6 +183,7 @@ export function ClientDetails({ client, projects }: ClientDetailsProps) {
           </div>
           <ProjectForm
             clientId={client.id}
+            clientCurrency={client.currency}
             onSuccess={() => router.refresh()}
           />
         </CardHeader>
@@ -206,7 +211,7 @@ export function ClientDetails({ client, projects }: ClientDetailsProps) {
                       {project.name}
                     </TableCell>
                     <TableCell>
-                      {formatEuro(project.defaultDailyRate)}
+                      {formatForeignCurrency(project.defaultDailyRate, project.currency)}
                     </TableCell>
                     <TableCell>
                       {project.isActive ? (

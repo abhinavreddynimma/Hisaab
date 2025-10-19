@@ -6,6 +6,7 @@ import { createProject } from "@/actions/projects"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -16,21 +17,25 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Plus } from "lucide-react"
+import { SUPPORTED_CURRENCIES, getCurrencySymbol } from "@/lib/constants"
 
 interface ProjectFormProps {
   clientId: number
+  clientCurrency?: string
   onSuccess?: () => void
 }
 
-export function ProjectForm({ clientId, onSuccess }: ProjectFormProps) {
+export function ProjectForm({ clientId, clientCurrency = "EUR", onSuccess }: ProjectFormProps) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [name, setName] = useState("")
   const [defaultDailyRate, setDefaultDailyRate] = useState("")
+  const [currency, setCurrency] = useState(clientCurrency)
 
   function resetForm() {
     setName("")
     setDefaultDailyRate("")
+    setCurrency(clientCurrency)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -54,6 +59,7 @@ export function ProjectForm({ clientId, onSuccess }: ProjectFormProps) {
         clientId,
         name: name.trim(),
         defaultDailyRate: rate,
+        currency,
       })
       toast.success("Project created successfully")
       resetForm()
@@ -94,7 +100,23 @@ export function ProjectForm({ clientId, onSuccess }: ProjectFormProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="defaultDailyRate">Default Daily Rate *</Label>
+            <Label htmlFor="currency">Currency</Label>
+            <Select value={currency} onValueChange={setCurrency}>
+              <SelectTrigger id="currency">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SUPPORTED_CURRENCIES.map((c) => (
+                  <SelectItem key={c.code} value={c.code}>
+                    {c.symbol} {c.code}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="defaultDailyRate">Default Daily Rate ({getCurrencySymbol(currency)}) *</Label>
             <Input
               id="defaultDailyRate"
               type="number"
