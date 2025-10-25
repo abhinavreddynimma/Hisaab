@@ -60,6 +60,17 @@ export async function getExpenseAccountsGrouped(): Promise<{
     expense: "Expense Categories", investment: "Investments", savings: "Savings",
   };
 
+  // Helper to sum balance for an account + all descendants
+  function getAggregateBalance(accountId: number): number {
+    let total = balances.get(accountId) ?? 0;
+    for (const acc of activeAccounts) {
+      if (acc.parentId === accountId) {
+        total += getAggregateBalance(acc.id);
+      }
+    }
+    return total;
+  }
+
   return typeOrder.map(type => {
     const topLevel = activeAccounts.filter(a => a.type === type && !a.parentId);
     const accounts = topLevel.map(acc => {
@@ -67,7 +78,7 @@ export async function getExpenseAccountsGrouped(): Promise<{
         const grandchildren = activeAccounts.filter(a => a.parentId === child.id);
         return { ...child, children: grandchildren };
       });
-      const balance = balances.get(acc.id) ?? 0;
+      const balance = getAggregateBalance(acc.id);
       return { ...acc, children, balance };
     });
     const totalBalance = accounts.reduce((sum, a) => sum + a.balance, 0);
