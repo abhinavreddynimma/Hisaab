@@ -1,5 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { formatCurrency, formatEuro } from "@/lib/utils";
+import { formatCurrency, formatForeignCurrency } from "@/lib/utils";
+import { getCurrencySymbol } from "@/lib/constants";
 import type { DashboardStats } from "@/lib/types";
 
 interface StatsCardsProps {
@@ -33,7 +34,12 @@ export function StatsCards({ stats }: StatsCardsProps) {
             <>
               <p className="text-sm text-muted-foreground mb-1">Outstanding</p>
               <p className="text-3xl font-light tabular-nums tracking-tight">
-                {formatEuro(stats.outstandingEur)}
+                {stats.outstandingByCurrency.map((item, i) => (
+                  <span key={item.currency}>
+                    {i > 0 && <span className="text-lg text-muted-foreground"> + </span>}
+                    {formatForeignCurrency(item.amount, item.currency)}
+                  </span>
+                ))}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
                 {stats.openInvoices} open invoice{stats.openInvoices !== 1 ? "s" : ""}
@@ -46,14 +52,14 @@ export function StatsCards({ stats }: StatsCardsProps) {
                 {formatCurrency(stats.nextMonthProjection.estimatedInr)}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                {stats.nextMonthProjection.workingDays} days · ₹{stats.nextMonthProjection.avgRate.toFixed(0)}/€
+                {stats.nextMonthProjection.workingDays} days · ₹{stats.nextMonthProjection.avgRate.toFixed(0)}/{getCurrencySymbol(stats.nextMonthProjection.currency)}
               </p>
             </>
           ) : (
             <>
               <p className="text-sm text-muted-foreground mb-1">Outstanding</p>
               <p className="text-3xl font-light tabular-nums tracking-tight">
-                {formatEuro(0)}
+                {formatForeignCurrency(0, "EUR")}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
                 No open invoices

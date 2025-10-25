@@ -49,7 +49,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { updateInvoiceStatus, deleteInvoice } from "@/actions/invoices";
 import { INVOICE_STATUSES } from "@/lib/constants";
 import type { Invoice } from "@/lib/types";
-import { formatEuro, formatCurrency, formatDate } from "@/lib/utils";
+import { formatForeignCurrency, formatCurrency, formatDate } from "@/lib/utils";
 
 interface InvoiceListProps {
   invoices: (Invoice & { clientName: string })[];
@@ -88,7 +88,7 @@ export function InvoiceList({ invoices }: InvoiceListProps) {
   async function handleMarkAsPaid() {
     if (!paidInvoice) return;
     if (!rate || rate <= 0) {
-      toast.error("Please enter a valid EUR to INR conversion rate");
+      toast.error(`Please enter a valid ${paidInvoice.currency} to INR conversion rate`);
       return;
     }
     if (!paidDate) {
@@ -185,7 +185,7 @@ export function InvoiceList({ invoices }: InvoiceListProps) {
                   {formatDate(invoice.billingPeriodEnd)}
                 </TableCell>
                 <TableCell className="text-right">
-                  {formatEuro(invoice.total)}
+                  {formatForeignCurrency(invoice.total, invoice.currency)}
                 </TableCell>
                 <TableCell className="text-muted-foreground">
                   {invoice.paidDate ? formatDate(invoice.paidDate) : "—"}
@@ -268,8 +268,13 @@ export function InvoiceList({ invoices }: InvoiceListProps) {
           })}
         </TableBody>
         {(() => {
-          const totalEur = items.reduce((sum, inv) => sum + inv.total, 0);
           const paidItems = items.filter((inv) => inv.status === "paid");
+          // Group totals by currency
+          const byCurrency = items.reduce<Record<string, number>>((acc, inv) => {
+            acc[inv.currency] = (acc[inv.currency] ?? 0) + inv.total;
+            return acc;
+          }, {});
+          const currencyKeys = Object.keys(byCurrency);
           return (
             <TableFooter>
               <TableRow>
@@ -280,7 +285,12 @@ export function InvoiceList({ invoices }: InvoiceListProps) {
                   )}
                 </TableCell>
                 <TableCell className="text-right font-semibold">
-                  {formatEuro(totalEur)}
+                  {currencyKeys.map((cur, i) => (
+                    <span key={cur}>
+                      {i > 0 && " + "}
+                      {formatForeignCurrency(byCurrency[cur], cur)}
+                    </span>
+                  ))}
                 </TableCell>
                 <TableCell colSpan={3} />
               </TableRow>
@@ -322,7 +332,7 @@ export function InvoiceList({ invoices }: InvoiceListProps) {
           <DialogHeader>
             <DialogTitle>Mark as Paid</DialogTitle>
             <DialogDescription>
-              Enter the EUR to INR conversion details for invoice{" "}
+              Enter the {paidInvoice?.currency ?? "EUR"} to INR conversion details for invoice{" "}
               <strong>{paidInvoice?.invoiceNumber}</strong>.
             </DialogDescription>
           </DialogHeader>
@@ -330,7 +340,7 @@ export function InvoiceList({ invoices }: InvoiceListProps) {
             <div className="space-y-4">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Invoice Total</span>
-                <span className="font-medium">{formatEuro(paidInvoice.total)}</span>
+                <span className="font-medium">{formatForeignCurrency(paidInvoice.total, paidInvoice.currency)}</span>
               </div>
               <Separator />
               <div className="space-y-2">
@@ -343,7 +353,7 @@ export function InvoiceList({ invoices }: InvoiceListProps) {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="eurToInrRate">EUR to INR Rate</Label>
+                <Label htmlFor="eurToInrRate">{paidInvoice.currency} to INR Rate</Label>
                 <Input
                   id="eurToInrRate"
                   type="number"

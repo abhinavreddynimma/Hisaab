@@ -12,7 +12,7 @@ import {
   TableRow,
   TableFooter,
 } from "@/components/ui/table";
-import { formatEuro } from "@/lib/utils";
+import { formatForeignCurrency } from "@/lib/utils";
 
 export interface LineItem {
   description: string;
@@ -25,9 +25,10 @@ export interface LineItem {
 interface LineItemsEditorProps {
   items: LineItem[];
   onChange: (items: LineItem[]) => void;
+  currency?: string;
 }
 
-export function LineItemsEditor({ items, onChange }: LineItemsEditorProps) {
+export function LineItemsEditor({ items, onChange, currency = "EUR" }: LineItemsEditorProps) {
   function updateItem(index: number, field: keyof LineItem, value: string | number) {
     const updated = [...items];
     const item = { ...updated[index] };
@@ -124,7 +125,7 @@ export function LineItemsEditor({ items, onChange }: LineItemsEditorProps) {
                   />
                 </TableCell>
                 <TableCell className="text-right font-medium">
-                  {formatEuro(item.amount)}
+                  {formatForeignCurrency(item.amount, currency)}
                 </TableCell>
                 <TableCell>
                   <Button
@@ -149,7 +150,7 @@ export function LineItemsEditor({ items, onChange }: LineItemsEditorProps) {
                 Subtotal
               </TableCell>
               <TableCell className="text-right font-semibold">
-                {formatEuro(total)}
+                {formatForeignCurrency(total, currency)}
               </TableCell>
               <TableCell />
             </TableRow>
