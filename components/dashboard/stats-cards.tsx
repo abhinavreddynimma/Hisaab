@@ -37,15 +37,13 @@ export function StatsCards({ stats, monthlyEarnings }: StatsCardsProps) {
             <>
               <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">Outstanding</p>
               <p className="text-2xl font-semibold tabular-nums tracking-tight">
-                {stats.outstandingByCurrency.map((item, i) => (
-                  <span key={item.currency}>
-                    {i > 0 && <span className="text-base text-muted-foreground"> + </span>}
-                    {formatForeignCurrency(item.amount, item.currency)}
-                  </span>
-                ))}
+                {formatCurrency(stats.outstandingInr)}
               </p>
               <p className="text-xs text-muted-foreground mt-1.5">
                 {stats.openInvoices} open invoice{stats.openInvoices !== 1 ? "s" : ""}
+                {stats.outstandingByCurrency.length > 0 && (
+                  <span> · {stats.outstandingByCurrency.map(item => formatForeignCurrency(item.amount, item.currency)).join(" + ")}</span>
+                )}
               </p>
             </>
           ) : stats.nextMonthProjection ? (

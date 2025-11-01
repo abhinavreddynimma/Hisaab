@@ -227,6 +227,7 @@ export interface DashboardStats {
   leaveBalance: number;
   openInvoices: number;
   outstandingByCurrency: { currency: string; amount: number }[];
+  outstandingInr: number;
   avgPaymentDelay: number | null;
   nextMonthProjection: {
     estimatedInr: number;
