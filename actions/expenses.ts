@@ -565,6 +565,94 @@ export async function getExpenseFYOverview(financialYear: string): Promise<{
   return { months, totalIncome, totalExpenses };
 }
 
+export async function getBudgetMonthlyTrend(budgetId: number, financialYear: string): Promise<{
+  months: { month: string; amount: number }[];
+  average: number;
+  categoryBreakdown: { name: string; amount: number; color: string | null }[];
+}> {
+  await assertAdminAccess();
+
+  const allAccounts = db.select().from(expenseAccounts).all();
+  const accountMap = new Map(allAccounts.map(a => [a.id, a]));
+
+  // Get budget's linked category IDs
+  const links = db.select().from(expenseBudgetCategories).where(eq(expenseBudgetCategories.budgetId, budgetId)).all();
+  const categoryIds = links.map(l => l.categoryId);
+
+  // Recursively expand to all descendants
+  const allCategoryIds = new Set(categoryIds);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const acc of allAccounts) {
+      if (acc.parentId && allCategoryIds.has(acc.parentId) && !allCategoryIds.has(acc.id)) {
+        allCategoryIds.add(acc.id);
+        changed = true;
+      }
+    }
+  }
+
+  // Get all expense transactions for the FY that match these categories
+  const { start: fyStart, end: fyEnd } = getFYDateRange(financialYear);
+  const txns = db.select().from(expenseTransactions)
+    .where(and(
+      eq(expenseTransactions.type, "expense"),
+      sql`${expenseTransactions.date} >= ${fyStart}`,
+      sql`${expenseTransactions.date} <= ${fyEnd}`,
+    ))
+    .all()
+    .filter(t => t.categoryId && allCategoryIds.has(t.categoryId));
+
+  // Build monthly trend (Apr → Mar)
+  const startYear = parseInt(financialYear.split("-")[0]);
+  const months: { month: string; amount: number }[] = [];
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  for (let i = 0; i < 12; i++) {
+    const calMonth = ((3 + i) % 12) + 1;
+    const calYear = calMonth >= 4 ? startYear : startYear + 1;
+    const mStart = `${calYear}-${String(calMonth).padStart(2, "0")}-01`;
+    const lastDay = new Date(calYear, calMonth, 0).getDate();
+    const mEnd = `${calYear}-${String(calMonth).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+
+    let amount = 0;
+    for (const txn of txns) {
+      if (txn.date >= mStart && txn.date <= mEnd) {
+        amount += txn.amount;
+      }
+    }
+    months.push({ month: `${monthNames[calMonth - 1]}`, amount });
+  }
+
+  const nonZero = months.filter(m => m.amount > 0);
+  const average = nonZero.length > 0 ? nonZero.reduce((s, m) => s + m.amount, 0) / nonZero.length : 0;
+
+  // Category breakdown (roll up to direct linked categories)
+  const catMap = new Map<number, number>();
+  for (const txn of txns) {
+    if (!txn.categoryId) continue;
+    // Find the closest ancestor that's in the linked categoryIds
+    let rollupId = txn.categoryId;
+    let current = txn.categoryId;
+    while (current) {
+      if (categoryIds.includes(current)) { rollupId = current; break; }
+      const parent = accountMap.get(current)?.parentId;
+      if (!parent) break;
+      current = parent;
+    }
+    catMap.set(rollupId, (catMap.get(rollupId) ?? 0) + txn.amount);
+  }
+
+  const categoryBreakdown = Array.from(catMap.entries())
+    .map(([id, amount]) => {
+      const acc = accountMap.get(id);
+      return { name: acc?.name ?? "Unknown", amount, color: acc?.color ?? null };
+    })
+    .sort((a, b) => b.amount - a.amount);
+
+  return { months, average, categoryBreakdown };
+}
+
 // ============================================================
 // BUDGETS
 // ============================================================
