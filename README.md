@@ -12,6 +12,29 @@ A freelancer payroll management app for tracking income, clients, invoices, work
 - **Tax Tracking** — Track quarterly advance tax payments by financial year
 - **Settings** — Configure invoice numbering, tax rates, leave policies, and user profile
 
+## Screenshots
+
+### Dashboard
+![Dashboard](docs/screenshots/dashboard.png)
+
+### Calendar
+![Calendar](docs/screenshots/calendar.png)
+
+### Invoices
+![Invoices](docs/screenshots/invoices.png)
+
+### Invoice Detail
+![Invoice Detail](docs/screenshots/invoice-detail.png)
+
+### Client Management
+![Clients](docs/screenshots/clients.png)
+
+### Tax Tracking
+![Tax](docs/screenshots/tax.png)
+
+### Settings
+![Settings](docs/screenshots/settings.png)
+
 ## Tech Stack
 
 - **Framework:** Next.js 16 (App Router, Server Actions, Turbopack)
@@ -47,7 +70,7 @@ A freelancer payroll management app for tracking income, clients, invoices, work
    npm run dev
    ```
 
-4. Open [http://localhost:3000](http://localhost:3000)
+4. Open [http://localhost:3000/hisaab](http://localhost:3000/hisaab)
 
 ## Production Build
 
