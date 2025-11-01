@@ -132,6 +132,25 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     ([currency, amount]) => ({ currency, amount })
   );
 
+  // Compute outstanding in INR using average EUR-INR rate from paid invoices
+  const paidForRate = db
+    .select({ total: invoices.total, eurToInrRate: invoices.eurToInrRate })
+    .from(invoices)
+    .where(and(eq(invoices.status, "paid"), sql`${invoices.eurToInrRate} IS NOT NULL`))
+    .all();
+  const totalPaidEur = paidForRate.reduce((s, i) => s + (i.total ?? 0), 0);
+  const avgEurInrRate = totalPaidEur > 0
+    ? paidForRate.reduce((s, i) => s + (i.eurToInrRate ?? 0) * (i.total ?? 0), 0) / totalPaidEur
+    : 90; // fallback
+  let outstandingInr = 0;
+  for (const item of outstandingByCurrency) {
+    if (item.currency === "INR") {
+      outstandingInr += item.amount;
+    } else {
+      outstandingInr += item.amount * avgEurInrRate;
+    }
+  }
+
   // Average payment delay (days between issue date and paid date)
   const paidWithDates = db
     .select({ issueDate: invoices.issueDate, paidDate: invoices.paidDate })
@@ -228,6 +247,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     leaveBalance,
     openInvoices: openCount,
     outstandingByCurrency,
+    outstandingInr,
     avgPaymentDelay,
     nextMonthProjection,
   };
