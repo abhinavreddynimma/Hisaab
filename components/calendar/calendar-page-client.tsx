@@ -67,7 +67,7 @@ export function CalendarPageClient({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Calendar</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Calendar</h1>
         <div className="flex items-center gap-2">
           <AlertDialog>
             <AlertDialogTrigger asChild>
