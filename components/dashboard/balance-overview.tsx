@@ -1,11 +1,15 @@
 "use client";
 
 import {
+  AreaChart,
+  Area,
   LineChart,
   Line,
   XAxis,
   YAxis,
   Tooltip,
+  ReferenceLine,
+  Label,
   ResponsiveContainer,
 } from "recharts";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -246,28 +250,44 @@ interface CumulativeEntry {
   cumExtra: number;
   cumLeaves: number;
   cumHalfDays: number;
+  mWorking: number;
+  mExtra: number;
+  mLeaves: number;
+  pace: number;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function CumulativeTooltip({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) {
   if (!active || !payload?.length) return null;
   const d = payload[0]?.payload as CumulativeEntry;
-  const rows = [
-    { label: "Working", value: d.cumWorking, color: "#6366f1" },
-    { label: "Extra", value: d.cumExtra, color: "#10b981" },
-    { label: "Leaves", value: d.cumLeaves, color: "#fb7185" },
-  ].filter((r) => r.value > 0);
 
   return (
-    <div className="rounded-xl border border-black/[0.06] bg-white px-3 py-2.5 shadow-lg shadow-black/[0.08]">
-      <p className="mb-1.5 text-sm font-semibold text-gray-900">{label}</p>
-      {rows.map((r) => (
-        <div key={r.label} className="flex items-center gap-2 text-xs">
-          <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: r.color }} />
-          <span className="text-gray-600">{r.label}</span>
-          <span className="ml-auto font-medium tabular-nums">{r.value}</span>
+    <div className="rounded-xl border border-black/[0.06] bg-white px-3 py-2.5 shadow-lg shadow-black/[0.08] dark:bg-gray-900 dark:border-white/10">
+      <p className="mb-1.5 text-sm font-semibold text-gray-900 dark:text-gray-100">{label}</p>
+      <div className="space-y-0.5 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="inline-block h-2 w-2 rounded-full bg-indigo-500" />
+          <span className="text-gray-600 dark:text-gray-400">Working</span>
+          <span className="ml-auto font-medium tabular-nums">+{d.mWorking}</span>
+          <span className="text-gray-400 tabular-nums">({d.cumWorking})</span>
         </div>
-      ))}
+        {d.mExtra > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+            <span className="text-gray-600 dark:text-gray-400">Extra</span>
+            <span className="ml-auto font-medium tabular-nums">+{d.mExtra}</span>
+            <span className="text-gray-400 tabular-nums">({d.cumExtra})</span>
+          </div>
+        )}
+        {d.mLeaves > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="inline-block h-2 w-2 rounded-full bg-rose-400" />
+            <span className="text-gray-600 dark:text-gray-400">Leaves</span>
+            <span className="ml-auto font-medium tabular-nums">+{d.mLeaves}</span>
+            <span className="text-gray-400 tabular-nums">({d.cumLeaves})</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -424,14 +444,23 @@ export function BalanceOverview({ balanceData, monthlyData, financialYear }: Bal
         </CardHeader>
         <CardContent>
           {hasData ? (() => {
-            // Build cumulative data
+            const cmp = balanceData.fyWorkingDaysComparison;
+            const totalWeekdays = cmp.totalWeekdaysInFY;
+            const frenchAvg = cmp.frenchEmployeeWorkingDays;
+
+            // Build cumulative data with monthly values for tooltip
             let cumW = 0, cumE = 0, cumL = 0, cumH = 0;
-            const cumulativeData: CumulativeEntry[] = monthlyData.map((m) => {
-              cumW += m.working + m.halfDays * 0.5;
-              cumE += m.extraWorking;
-              cumL += m.leaves + m.halfDays * 0.5;
+            const cumulativeData: CumulativeEntry[] = monthlyData.map((m, idx) => {
+              const mW = m.working + m.halfDays * 0.5;
+              const mE = m.extraWorking;
+              const mL = m.leaves + m.halfDays * 0.5;
+              cumW += mW;
+              cumE += mE;
+              cumL += mL;
               cumH += m.halfDays;
-              return { month: m.month, cumWorking: cumW, cumExtra: cumE, cumLeaves: cumL, cumHalfDays: cumH };
+              // Pace: even distribution across months
+              const pace = Math.round((totalWeekdays / monthlyData.length) * (idx + 1));
+              return { month: m.month, cumWorking: cumW, cumExtra: cumE, cumLeaves: cumL, cumHalfDays: cumH, mWorking: mW, mExtra: mE, mLeaves: mL, pace };
             });
 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -446,22 +475,60 @@ export function BalanceOverview({ balanceData, monthlyData, financialYear }: Bal
             };
 
             return (
-              <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={cumulativeData} margin={{ top: 20, right: 40, left: 10, bottom: 0 }}>
-                  <XAxis
-                    dataKey="month"
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fontSize: 12, fill: "#9ca3af" }}
-                  />
-                  <YAxis yAxisId="left" hide />
-                  <YAxis yAxisId="right" orientation="right" hide />
-                  <Tooltip content={<CumulativeTooltip />} />
-                  <Line yAxisId="left" type="monotone" dataKey="cumWorking" stroke="#6366f1" strokeWidth={2.5} dot={{ r: 4, fill: "#6366f1" }} name="Working" label={renderLabel("#6366f1")} />
-                  <Line yAxisId="right" type="monotone" dataKey="cumExtra" stroke="#10b981" strokeWidth={2} strokeDasharray="4 4" dot={{ r: 3, fill: "#10b981" }} name="Extra" label={renderLabel("#10b981")} />
-                  <Line yAxisId="right" type="monotone" dataKey="cumLeaves" stroke="#fb7185" strokeWidth={2} dot={{ r: 4, fill: "#fb7185" }} name="Leaves" label={renderLabel("#fb7185")} />
-                </LineChart>
-              </ResponsiveContainer>
+              <div className="space-y-4">
+                {/* Main chart: Working days area + pace line + reference lines */}
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Cumulative Working Days</p>
+                  <ResponsiveContainer width="100%" height={240}>
+                    <AreaChart data={cumulativeData} margin={{ top: 20, right: 15, left: 15, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="workingGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2} />
+                          <stop offset="95%" stopColor="#6366f1" stopOpacity={0.02} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#9ca3af" }} />
+                      <Tooltip content={<CumulativeTooltip />} />
+
+                      {/* French avg reference */}
+                      <ReferenceLine y={frenchAvg} stroke="#94a3b8" strokeDasharray="4 4" strokeWidth={1}>
+                        <Label value={`French avg: ${frenchAvg}`} position="insideTopLeft" className="fill-muted-foreground" fontSize={9} />
+                      </ReferenceLine>
+
+                      {/* Pace line (even distribution) */}
+                      <Area type="monotone" dataKey="pace" stroke="#d1d5db" strokeWidth={1} strokeDasharray="3 3" fill="none" dot={false} name="Pace" />
+
+                      {/* Working days filled area */}
+                      <Area
+                        type="monotone"
+                        dataKey="cumWorking"
+                        stroke="#6366f1"
+                        strokeWidth={2.5}
+                        fill="url(#workingGradient)"
+                        dot={{ r: 4, fill: "#6366f1", strokeWidth: 0 }}
+                        activeDot={{ r: 6, strokeWidth: 2, stroke: "#fff" }}
+                        name="Working"
+                        label={renderLabel("#6366f1")}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Mini chart: Leaves + Extra */}
+                {(cumulativeData[cumulativeData.length - 1]?.cumExtra > 0 || cumulativeData[cumulativeData.length - 1]?.cumLeaves > 0) && (
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Leaves & Extra Working</p>
+                    <ResponsiveContainer width="100%" height={120}>
+                      <LineChart data={cumulativeData} margin={{ top: 15, right: 15, left: 15, bottom: 0 }}>
+                        <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#9ca3af" }} />
+                        <Tooltip content={<CumulativeTooltip />} />
+                        <Line type="monotone" dataKey="cumExtra" stroke="#10b981" strokeWidth={2} strokeDasharray="4 4" dot={{ r: 3, fill: "#10b981" }} name="Extra" label={renderLabel("#10b981")} />
+                        <Line type="monotone" dataKey="cumLeaves" stroke="#fb7185" strokeWidth={2} dot={{ r: 3, fill: "#fb7185" }} name="Leaves" label={renderLabel("#fb7185")} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
             );
           })() : (
             <div className="flex h-[280px] items-center justify-center text-muted-foreground">
