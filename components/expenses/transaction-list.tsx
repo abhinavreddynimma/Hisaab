@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Trash2, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Plus, Link2, Check, Repeat } from "lucide-react";
+import { Trash2, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Plus, Link2, Check, Repeat, Pencil } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -165,15 +165,26 @@ export function TransactionList({ transactions, totalIncome, totalExpenses, onEd
                         {txn.source === "tax_payment" ? (
                           <span className="text-[10px] text-muted-foreground">auto</span>
                         ) : txn.source === "recurring" && txn.status === "estimated" ? (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
-                            onClick={() => handleConfirm(txn.id)}
-                            title="Confirm this expense"
-                          >
-                            <Check className="h-3.5 w-3.5" />
-                          </Button>
+                          <div className="flex items-center gap-0.5">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                              onClick={() => onEdit(txn)}
+                              title="Edit before confirming"
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                              onClick={() => handleConfirm(txn.id)}
+                              title="Confirm this expense"
+                            >
+                              <Check className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         ) : txn.source === "invoice" || (txn.source === "recurring" && txn.status === "confirmed") ? (
                           <span className="text-[10px] text-muted-foreground">auto</span>
                         ) : (
