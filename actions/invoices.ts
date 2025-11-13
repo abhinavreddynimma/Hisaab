@@ -124,6 +124,16 @@ export async function generateInvoiceNumber(): Promise<string> {
   return `${settings.prefix}-${number}`;
 }
 
+async function generateAndIncrementInvoiceNumber(): Promise<string> {
+  const settings = await getInvoiceSettings();
+  const number = String(settings.nextNumber).padStart(4, "0");
+  const invoiceNumber = `${settings.prefix}-${number}`;
+  // Immediately increment to prevent race condition
+  const { saveInvoiceSettings } = await import("./settings");
+  await saveInvoiceSettings({ ...settings, nextNumber: settings.nextNumber + 1 });
+  return invoiceNumber;
+}
+
 export async function getAutoPopulatedLineItems(
   projectId: number,
   startDate: string,
@@ -233,7 +243,7 @@ export async function createInvoice(data: {
   }[];
 }): Promise<{ success: boolean; id?: number }> {
   await assertAdminAccess();
-  const invoiceNumber = await generateInvoiceNumber();
+  const invoiceNumber = await generateAndIncrementInvoiceNumber();
   const profile = await getUserProfile();
   const client = await getClient(data.clientId);
 
@@ -256,78 +266,77 @@ export async function createInvoice(data: {
     .filter(Boolean)
     .join(", ");
 
-  const result = db
-    .insert(invoices)
-    .values({
-      invoiceNumber,
-      clientId: data.clientId,
-      projectId: data.projectId ?? null,
-      billingPeriodStart: data.billingPeriodStart,
-      billingPeriodEnd: data.billingPeriodEnd,
-      issueDate: data.issueDate,
-      dueDate: data.dueDate || null,
-      fromName: profile.name || null,
-      fromCompany: profile.company || null,
-      fromAddress: fromAddress || null,
-      fromGstin: profile.gstin || null,
-      fromPan: profile.pan || null,
-      fromEmail: profile.email || null,
-      fromPhone: profile.phone || null,
-      fromBankName: profile.bankName || null,
-      fromBankAccount: profile.bankAccount || null,
-      fromBankIfsc: profile.bankIfsc || null,
-      fromBankBranch: profile.bankBranch || null,
-      fromBankIban: profile.bankIban || null,
-      fromBankBic: profile.bankBic || null,
-      fromSepaAccountName: profile.sepaAccountName || null,
-      fromSepaIban: profile.sepaIban || null,
-      fromSepaBic: profile.sepaBic || null,
-      fromSepaBank: profile.sepaBank || null,
-      fromSepaAccountType: profile.sepaAccountType || null,
-      fromSepaAddress: profile.sepaAddress || null,
-      fromSwiftAccountName: profile.swiftAccountName || null,
-      fromSwiftIban: profile.swiftIban || null,
-      fromSwiftBic: profile.swiftBic || null,
-      fromSwiftBank: profile.swiftBank || null,
-      fromSwiftAccountType: profile.swiftAccountType || null,
-      toName: client.name || null,
-      toCompany: client.company || null,
-      toAddress: toAddress || null,
-      toGstin: client.gstin || null,
-      toEmail: client.email || null,
-      subtotal,
-      cgstRate,
-      cgstAmount,
-      sgstRate,
-      sgstAmount,
-      igstRate,
-      igstAmount,
-      total,
-      currency,
-      status: "draft",
-      notes: data.notes || null,
-    })
-    .run();
-
-  const invoiceId = Number(result.lastInsertRowid);
-
-  for (const item of data.lineItems) {
-    db.insert(invoiceLineItems)
+  const invoiceId = await db.transaction(async (tx) => {
+    const result = tx
+      .insert(invoices)
       .values({
-        invoiceId,
-        description: item.description,
-        hsnSac: item.hsnSac || null,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        amount: item.amount,
+        invoiceNumber,
+        clientId: data.clientId,
+        projectId: data.projectId ?? null,
+        billingPeriodStart: data.billingPeriodStart,
+        billingPeriodEnd: data.billingPeriodEnd,
+        issueDate: data.issueDate,
+        dueDate: data.dueDate || null,
+        fromName: profile.name || null,
+        fromCompany: profile.company || null,
+        fromAddress: fromAddress || null,
+        fromGstin: profile.gstin || null,
+        fromPan: profile.pan || null,
+        fromEmail: profile.email || null,
+        fromPhone: profile.phone || null,
+        fromBankName: profile.bankName || null,
+        fromBankAccount: profile.bankAccount || null,
+        fromBankIfsc: profile.bankIfsc || null,
+        fromBankBranch: profile.bankBranch || null,
+        fromBankIban: profile.bankIban || null,
+        fromBankBic: profile.bankBic || null,
+        fromSepaAccountName: profile.sepaAccountName || null,
+        fromSepaIban: profile.sepaIban || null,
+        fromSepaBic: profile.sepaBic || null,
+        fromSepaBank: profile.sepaBank || null,
+        fromSepaAccountType: profile.sepaAccountType || null,
+        fromSepaAddress: profile.sepaAddress || null,
+        fromSwiftAccountName: profile.swiftAccountName || null,
+        fromSwiftIban: profile.swiftIban || null,
+        fromSwiftBic: profile.swiftBic || null,
+        fromSwiftBank: profile.swiftBank || null,
+        fromSwiftAccountType: profile.swiftAccountType || null,
+        toName: client.name || null,
+        toCompany: client.company || null,
+        toAddress: toAddress || null,
+        toGstin: client.gstin || null,
+        toEmail: client.email || null,
+        subtotal,
+        cgstRate,
+        cgstAmount,
+        sgstRate,
+        sgstAmount,
+        igstRate,
+        igstAmount,
+        total,
+        currency,
+        status: "draft",
+        notes: data.notes || null,
       })
       .run();
-  }
 
-  // Increment next invoice number
-  const settings = await getInvoiceSettings();
-  const { saveInvoiceSettings } = await import("./settings");
-  await saveInvoiceSettings({ ...settings, nextNumber: settings.nextNumber + 1 });
+    const id = Number(result.lastInsertRowid);
+
+    for (const item of data.lineItems) {
+      tx.insert(invoiceLineItems)
+        .values({
+          invoiceId: id,
+          description: item.description,
+          hsnSac: item.hsnSac || null,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          amount: item.amount,
+        })
+        .run();
+    }
+
+    return id;
+  });
 
   return { success: true, id: invoiceId };
 }
