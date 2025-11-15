@@ -48,7 +48,7 @@ export function EarningsChart({ data }: EarningsChartProps) {
                   formatCurrency(value ?? 0),
                   "Earnings",
                 ]}
-                contentStyle={{ borderRadius: 8, border: "1px solid #e5e7eb", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
+                contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 8px 24px rgba(0,0,0,0.08)", fontSize: 13 }}
               />
               <Bar dataKey="earnings" fill="url(#earningsGradient)" radius={[6, 6, 0, 0]} />
               <ReferenceLine
