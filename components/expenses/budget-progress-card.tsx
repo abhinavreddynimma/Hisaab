@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { Pencil, ChevronDown, ChevronUp } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +29,13 @@ export function BudgetProgressCard({ budget, financialYear, onEdit }: BudgetProg
     categoryBreakdown: { name: string; amount: number; color: string | null }[];
   } | null>(null);
   const [loading, startTransition] = useTransition();
+
+  // Auto-load trend data on mount for average
+  useEffect(() => {
+    if (!trendData) {
+      getBudgetMonthlyTrend(budget.id, financialYear).then(setTrendData);
+    }
+  }, [budget.id, financialYear]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const percentage = budget.monthlyAmount > 0 ? (budget.spent / budget.monthlyAmount) * 100 : 0;
   const remaining = budget.monthlyAmount - budget.spent;
@@ -105,6 +112,9 @@ export function BudgetProgressCard({ budget, financialYear, onEdit }: BudgetProg
         <div className="flex justify-between text-xs">
           <span className="tabular-nums">
             {formatCurrency(budget.spent)} <span className="text-muted-foreground">of {formatCurrency(budget.monthlyAmount)}</span>
+            {trendData && trendData.average > 0 && (
+              <span className="text-muted-foreground ml-2">· avg {formatCurrency(trendData.average)}/mo</span>
+            )}
           </span>
           <span className={cn("font-medium tabular-nums", isOver ? "text-red-600" : "text-muted-foreground")}>
             {isOver ? `${percentage.toFixed(0)}%` : `${formatCurrency(remaining)} left`}
