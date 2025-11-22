@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+.gitignore
+.env
+.env.*
+.vscode
+.idea
+.claude
+*.md
+docs/
+data/
+drizzle/
+tweet-drafts.txt
