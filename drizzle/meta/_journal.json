@@ -64,6 +64,13 @@
       "when": 1774742400000,
       "tag": "0008_add_performance_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1776192000000,
+      "tag": "0009_bank_statement_entries",
+      "breakpoints": true
     }
   ]
 }
