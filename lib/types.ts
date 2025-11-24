@@ -303,6 +303,35 @@ export interface ExpenseTarget {
   fyAverage?: number;
 }
 
+// Bank Statement types
+export interface BankStatementEntry {
+  id: number;
+  date: string;
+  description: string;
+  refNo: string | null;
+  debit: number | null;
+  credit: number | null;
+  balance: number | null;
+  accountNumber: string | null;
+  bankName: string | null;
+  expenseName: string | null;
+  expenseType: ExpenseTransactionType | null;
+  categoryId: number | null;
+  accountId: number | null;
+  fromAccountId: number | null;
+  toAccountId: number | null;
+  note: string | null;
+  tags: string | null;
+  isClassified: boolean;
+  expenseTransactionId: number | null;
+  createdAt: string;
+  // Joined fields
+  categoryName?: string;
+  accountName?: string;
+  fromAccountName?: string;
+  toAccountName?: string;
+}
+
 export type RecurringFrequency = "monthly" | "quarterly" | "yearly";
 
 export interface ExpenseRecurring {
