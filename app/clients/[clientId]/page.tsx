@@ -5,12 +5,15 @@ import { getProjectsByClient } from "@/actions/projects"
 import { ClientDetails } from "@/components/clients/client-details"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft } from "lucide-react"
+import { requirePageAccess } from "@/lib/auth"
 
 interface ClientPageProps {
   params: Promise<{ clientId: string }>
 }
 
 export default async function ClientPage({ params }: ClientPageProps) {
+  await requirePageAccess()
+
   const { clientId } = await params
   const id = parseInt(clientId, 10)
 

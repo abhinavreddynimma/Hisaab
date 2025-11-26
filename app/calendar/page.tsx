@@ -3,12 +3,15 @@ import { getActiveProjects } from "@/actions/projects";
 import { getLeavePolicy, getDefaultProjectId } from "@/actions/settings";
 import { calculateLeaveBalance } from "@/lib/calculations";
 import { CalendarPageClient } from "@/components/calendar/calendar-page-client";
+import { requirePageAccess } from "@/lib/auth";
 
 interface CalendarPageProps {
   searchParams: Promise<{ year?: string; month?: string }>;
 }
 
 export default async function CalendarPage({ searchParams }: CalendarPageProps) {
+  await requirePageAccess();
+
   const params = await searchParams;
   const now = new Date();
   const year = params.year ? parseInt(params.year, 10) : now.getFullYear();
