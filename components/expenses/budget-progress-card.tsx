@@ -117,7 +117,10 @@ export function BudgetProgressCard({ budget, financialYear, onEdit }: BudgetProg
             )}
           </span>
           <span className={cn("font-medium tabular-nums", isOver ? "text-amber-600" : "text-muted-foreground")}>
-            {isOver ? `${percentage.toFixed(0)}%` : `${formatCurrency(remaining)} left`}
+            {trendData && trendData.average > 0
+              ? `${(budget.monthlyAmount > 0 ? (trendData.average / budget.monthlyAmount) * 100 : 0).toFixed(0)}% avg`
+              : isOver ? `${percentage.toFixed(0)}%` : `${formatCurrency(remaining)} left`
+            }
           </span>
         </div>
 
