@@ -23,7 +23,7 @@ export default async function NewClientPage() {
             <span className="sr-only">Back to clients</span>
           </Link>
         </Button>
-        <h1 className="text-2xl font-bold tracking-tight">New Client</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">New Client</h1>
       </div>
 
       <Card>
