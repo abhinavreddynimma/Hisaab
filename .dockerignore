@@ -10,5 +10,4 @@ node_modules
 *.md
 docs/
 data/
-drizzle/
 tweet-drafts.txt
