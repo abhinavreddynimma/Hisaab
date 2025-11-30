@@ -41,8 +41,7 @@ next-env.d.ts
 /data/*.db-wal
 /db/*.db
 
-# drizzle migrations
-/drizzle/
+# drizzle migrations (tracked for reproducible deploys)
 
 # attachments (may contain sensitive documents)
 /data/attachments/
