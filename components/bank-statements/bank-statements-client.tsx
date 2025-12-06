@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { extractTitle } from "./utils";
 import { ClassifyDialog } from "./classify-dialog";
 import type { BankStatementEntry, ExpenseAccount } from "@/lib/types";
 
@@ -163,7 +164,8 @@ export function BankStatementsClient({
                     </TableCell>
                     <TableCell className="text-sm tabular-nums">{formatDate(entry.date)}</TableCell>
                     <TableCell>
-                      <p className="text-sm leading-tight line-clamp-2">
+                      <p className="text-sm font-medium">{extractTitle(entry.description)}</p>
+                      <p className="text-[11px] font-light text-muted-foreground/60 leading-tight line-clamp-1 mt-0.5">
                         {entry.description.replace(/\n/g, " ").trim()}
                       </p>
                     </TableCell>
