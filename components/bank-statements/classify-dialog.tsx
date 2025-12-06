@@ -13,6 +13,28 @@ import { classifyBankStatementEntry, unclassifyBankStatementEntry } from "@/acti
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { BankStatementEntry, ExpenseAccount, ExpenseTransactionType } from "@/lib/types";
 
+function extractTitle(desc: string): string {
+  const clean = desc.replace(/\n/g, " ").trim();
+  // NEFT credit: extract sender name
+  const neftMatch = clean.match(/NEFT\*[^*]+\*[^*]+\*([^*]+)\*/);
+  if (neftMatch) return neftMatch[1].trim();
+  // UPI: extract payee name
+  const upiMatch = clean.match(/UPI\/DR\/\d+\/([^/]+)\//);
+  if (upiMatch) return upiMatch[1].trim();
+  // IMPS: extract recipient name
+  const impsMatch = clean.match(/IMPS\/\d+\/[^-]+-\w+-([^/]+)\//);
+  if (impsMatch) return impsMatch[1].trim();
+  // SBI internal transfer: extract recipient
+  const sbiMatch = clean.match(/Transfer to (.+?) \d/);
+  if (sbiMatch) return sbiMatch[1].trim();
+  // ACH debit: extract description
+  const achMatch = clean.match(/ACHDr\s+\S+\s+\d+\s+(.+)/);
+  if (achMatch) return achMatch[1].trim();
+  // Fallback: first meaningful chunk
+  const parts = clean.replace(/^(DEP TFR|WDL TFR|DEBIT)\s+/, "").split(/\s{2,}/);
+  return parts[0].substring(0, 60);
+}
+
 interface ClassifyDialogProps {
   open: boolean;
   onClose: () => void;
@@ -42,7 +64,7 @@ export function ClassifyDialog({ open, onClose, entry, accounts }: ClassifyDialo
         setToAccountId(entry.toAccountId ? String(entry.toAccountId) : "");
         setNote(entry.note || "");
       } else {
-        setExpenseName("");
+        setExpenseName(extractTitle(entry.description));
         setType(entry.credit ? "income" : "expense");
         setCategoryId("");
         setAccountId("");
@@ -121,30 +143,19 @@ export function ClassifyDialog({ open, onClose, entry, accounts }: ClassifyDialo
           <DialogTitle>Classify Transaction</DialogTitle>
         </DialogHeader>
 
-        {/* Bank statement details */}
-        <div className="rounded-lg border bg-muted/30 p-3 space-y-1.5 text-sm">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Date</span>
-            <span className="font-medium">{formatDate(entry.date)}</span>
+        {/* Bank statement summary */}
+        <div className="rounded-lg border bg-muted/30 px-3 py-2 flex items-center justify-between text-sm">
+          <div className="flex items-center gap-3">
+            <span className="text-muted-foreground">{formatDate(entry.date)}</span>
+            {entry.refNo && <span className="text-[10px] font-mono text-muted-foreground/60">{entry.refNo}</span>}
           </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Amount</span>
+          <div className="flex items-center gap-3">
             <span className={`font-bold tabular-nums ${entry.credit ? "text-emerald-600" : "text-rose-600"}`}>
               {entry.credit ? "+" : "-"}{formatCurrency(amount)}
             </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Balance</span>
-            <span className="font-medium tabular-nums">{entry.balance ? formatCurrency(entry.balance) : "—"}</span>
-          </div>
-          {entry.refNo && (
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Ref</span>
-              <span className="text-xs font-mono">{entry.refNo}</span>
-            </div>
-          )}
-          <div className="pt-1 border-t">
-            <p className="text-xs text-muted-foreground leading-relaxed">{entry.description}</p>
+            {entry.balance != null && (
+              <span className="text-xs text-muted-foreground tabular-nums">Bal: {formatCurrency(entry.balance)}</span>
+            )}
           </div>
         </div>
 
@@ -177,6 +188,9 @@ export function ClassifyDialog({ open, onClose, entry, accounts }: ClassifyDialo
               onChange={(e) => setExpenseName(e.target.value)}
               autoFocus
             />
+            <p className="text-[11px] font-light text-muted-foreground/70 leading-relaxed">
+              {entry.description.replace(/\n/g, " ").trim()}
+            </p>
           </div>
 
           {type !== "transfer" && (
