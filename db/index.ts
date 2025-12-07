@@ -1,15 +1,16 @@
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
+import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import * as schema from "./schema";
 import path from "path";
 import fs from "fs";
 
-const dataDir = path.join(process.cwd(), "data");
+const dbPath = process.env.DATABASE_PATH || path.join(process.cwd(), "data", "payroll.db");
+const dataDir = path.dirname(dbPath);
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
-const dbPath = path.join(dataDir, "payroll.db");
 const sqlite = new Database(dbPath);
 
 // Enable WAL mode for better performance
@@ -17,199 +18,48 @@ sqlite.pragma("journal_mode = WAL");
 sqlite.pragma("foreign_keys = ON");
 sqlite.pragma("busy_timeout = 5000");
 
-// Create tables if they don't exist
-sqlite.exec(`
-  CREATE TABLE IF NOT EXISTS settings (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL
-  );
+// Handle legacy DBs created before Drizzle migrations were introduced.
+// If tables exist but __drizzle_migrations doesn't, this is a pre-migration DB.
+// We add any missing columns and mark the initial migration as already applied.
+const hasLegacyDb = (() => {
+  const hasTables = sqlite.prepare(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name='settings'"
+  ).get();
+  const hasMigrations = sqlite.prepare(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name='__drizzle_migrations'"
+  ).get();
+  return hasTables && !hasMigrations;
+})();
 
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    email TEXT NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL,
-    role TEXT NOT NULL DEFAULT 'viewer',
-    is_active INTEGER NOT NULL DEFAULT 1,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS sessions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL REFERENCES users(id),
-    token_hash TEXT NOT NULL UNIQUE,
-    expires_at TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-  CREATE UNIQUE INDEX IF NOT EXISTS users_email_idx ON users(email);
-  CREATE UNIQUE INDEX IF NOT EXISTS sessions_token_hash_idx ON sessions(token_hash);
-
-  CREATE TABLE IF NOT EXISTS clients (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    company TEXT,
-    gstin TEXT,
-    address_line_1 TEXT,
-    address_line_2 TEXT,
-    city TEXT,
-    state TEXT,
-    pincode TEXT,
-    email TEXT,
-    phone TEXT,
-    country TEXT,
-    currency TEXT NOT NULL DEFAULT 'EUR',
-    is_active INTEGER NOT NULL DEFAULT 1,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS projects (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_id INTEGER NOT NULL REFERENCES clients(id),
-    name TEXT NOT NULL,
-    default_daily_rate REAL NOT NULL,
-    currency TEXT NOT NULL DEFAULT 'EUR',
-    is_active INTEGER NOT NULL DEFAULT 1,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS project_rates (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    project_id INTEGER NOT NULL REFERENCES projects(id),
-    month_key TEXT NOT NULL,
-    daily_rate REAL NOT NULL
-  );
-  CREATE UNIQUE INDEX IF NOT EXISTS project_month_idx ON project_rates(project_id, month_key);
-
-  CREATE TABLE IF NOT EXISTS day_entries (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    date TEXT NOT NULL UNIQUE,
-    day_type TEXT NOT NULL,
-    project_id INTEGER REFERENCES projects(id),
-    notes TEXT
-  );
-
-  CREATE TABLE IF NOT EXISTS invoices (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    invoice_number TEXT NOT NULL UNIQUE,
-    client_id INTEGER NOT NULL REFERENCES clients(id),
-    project_id INTEGER REFERENCES projects(id),
-    billing_period_start TEXT NOT NULL,
-    billing_period_end TEXT NOT NULL,
-    issue_date TEXT NOT NULL,
-    due_date TEXT,
-    from_name TEXT,
-    from_company TEXT,
-    from_address TEXT,
-    from_gstin TEXT,
-    from_pan TEXT,
-    from_email TEXT,
-    from_phone TEXT,
-    from_bank_name TEXT,
-    from_bank_account TEXT,
-    from_bank_ifsc TEXT,
-    from_bank_branch TEXT,
-    from_bank_iban TEXT,
-    from_bank_bic TEXT,
-    from_sepa_account_name TEXT,
-    from_sepa_iban TEXT,
-    from_sepa_bic TEXT,
-    from_sepa_bank TEXT,
-    from_sepa_account_type TEXT,
-    from_sepa_address TEXT,
-    from_swift_account_name TEXT,
-    from_swift_iban TEXT,
-    from_swift_bic TEXT,
-    from_swift_bank TEXT,
-    from_swift_account_type TEXT,
-    to_name TEXT,
-    to_company TEXT,
-    to_address TEXT,
-    to_gstin TEXT,
-    to_email TEXT,
-    subtotal REAL NOT NULL DEFAULT 0,
-    cgst_rate REAL DEFAULT 0,
-    cgst_amount REAL DEFAULT 0,
-    sgst_rate REAL DEFAULT 0,
-    sgst_amount REAL DEFAULT 0,
-    igst_rate REAL DEFAULT 0,
-    igst_amount REAL DEFAULT 0,
-    total REAL NOT NULL DEFAULT 0,
-    currency TEXT NOT NULL DEFAULT 'EUR',
-    status TEXT NOT NULL DEFAULT 'draft',
-    notes TEXT,
-    paid_date TEXT,
-    eur_to_inr_rate REAL,
-    platform_charges REAL,
-    bank_charges REAL,
-    net_inr_amount REAL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS invoice_attachments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    invoice_id INTEGER NOT NULL REFERENCES invoices(id),
-    file_name TEXT NOT NULL,
-    original_name TEXT NOT NULL,
-    mime_type TEXT NOT NULL,
-    file_size INTEGER NOT NULL,
-    label TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS tax_payments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    financial_year TEXT NOT NULL,
-    quarter TEXT NOT NULL,
-    amount REAL NOT NULL,
-    payment_date TEXT NOT NULL,
-    challan_no TEXT,
-    notes TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS invoice_line_items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    invoice_id INTEGER NOT NULL REFERENCES invoices(id),
-    description TEXT NOT NULL,
-    hsn_sac TEXT,
-    quantity REAL NOT NULL,
-    unit_price REAL NOT NULL,
-    amount REAL NOT NULL
-  );
-`);
-
-// Migrate: add new columns to existing tables
-const newColumns = [
-  { name: "country", sql: "ALTER TABLE clients ADD COLUMN country TEXT" },
-  { name: "currency", sql: "ALTER TABLE clients ADD COLUMN currency TEXT NOT NULL DEFAULT 'EUR'" },
-  { name: "currency", sql: "ALTER TABLE projects ADD COLUMN currency TEXT NOT NULL DEFAULT 'EUR'" },
-  { name: "currency", sql: "ALTER TABLE invoices ADD COLUMN currency TEXT NOT NULL DEFAULT 'EUR'" },
-  { name: "from_bank_iban", sql: "ALTER TABLE invoices ADD COLUMN from_bank_iban TEXT" },
-  { name: "from_bank_bic", sql: "ALTER TABLE invoices ADD COLUMN from_bank_bic TEXT" },
-  { name: "eur_to_inr_rate", sql: "ALTER TABLE invoices ADD COLUMN eur_to_inr_rate REAL" },
-  { name: "platform_charges", sql: "ALTER TABLE invoices ADD COLUMN platform_charges REAL" },
-  { name: "bank_charges", sql: "ALTER TABLE invoices ADD COLUMN bank_charges REAL" },
-  { name: "net_inr_amount", sql: "ALTER TABLE invoices ADD COLUMN net_inr_amount REAL" },
-  { name: "paid_date", sql: "ALTER TABLE invoices ADD COLUMN paid_date TEXT" },
-  { name: "from_sepa_account_name", sql: "ALTER TABLE invoices ADD COLUMN from_sepa_account_name TEXT" },
-  { name: "from_sepa_iban", sql: "ALTER TABLE invoices ADD COLUMN from_sepa_iban TEXT" },
-  { name: "from_sepa_bic", sql: "ALTER TABLE invoices ADD COLUMN from_sepa_bic TEXT" },
-  { name: "from_sepa_bank", sql: "ALTER TABLE invoices ADD COLUMN from_sepa_bank TEXT" },
-  { name: "from_sepa_account_type", sql: "ALTER TABLE invoices ADD COLUMN from_sepa_account_type TEXT" },
-  { name: "from_sepa_address", sql: "ALTER TABLE invoices ADD COLUMN from_sepa_address TEXT" },
-  { name: "from_swift_account_name", sql: "ALTER TABLE invoices ADD COLUMN from_swift_account_name TEXT" },
-  { name: "from_swift_iban", sql: "ALTER TABLE invoices ADD COLUMN from_swift_iban TEXT" },
-  { name: "from_swift_bic", sql: "ALTER TABLE invoices ADD COLUMN from_swift_bic TEXT" },
-  { name: "from_swift_bank", sql: "ALTER TABLE invoices ADD COLUMN from_swift_bank TEXT" },
-  { name: "from_swift_account_type", sql: "ALTER TABLE invoices ADD COLUMN from_swift_account_type TEXT" },
-];
-
-for (const col of newColumns) {
-  try {
-    sqlite.exec(col.sql);
-  } catch {
-    // Column already exists, ignore
+if (hasLegacyDb) {
+  // Add columns that exist in the Drizzle schema but were missing from the old raw SQL
+  const missingColumns = [
+    "ALTER TABLE clients ADD COLUMN currency TEXT NOT NULL DEFAULT 'EUR'",
+    "ALTER TABLE projects ADD COLUMN currency TEXT NOT NULL DEFAULT 'EUR'",
+    "ALTER TABLE invoices ADD COLUMN currency TEXT NOT NULL DEFAULT 'EUR'",
+  ];
+  for (const sql of missingColumns) {
+    try {
+      sqlite.exec(sql);
+    } catch {
+      // Column already exists
+    }
   }
+
+  // Create the migrations tracking table and mark the initial migration as applied
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS __drizzle_migrations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      hash TEXT NOT NULL UNIQUE,
+      created_at NUMERIC
+    );
+  `);
+  sqlite.prepare(
+    "INSERT OR IGNORE INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)"
+  ).run("0000_married_shinobi_shaw", Date.now());
 }
 
 export const db = drizzle(sqlite, { schema });
+
+// Run migrations on startup (no-op for legacy DBs since 0000 is already marked as applied)
+migrate(db, { migrationsFolder: path.join(process.cwd(), "drizzle") });
