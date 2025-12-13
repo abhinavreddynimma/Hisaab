@@ -179,7 +179,12 @@ export function BankStatementsClient({
                         </div>
                       )}
                     </TableCell>
-                    <TableCell className="text-sm tabular-nums">{formatDate(entry.date)}</TableCell>
+                    <TableCell className="text-sm tabular-nums">
+                      {formatDate(entry.date)}
+                      {entry.time && (
+                        <p className="text-[10px] font-light text-muted-foreground/60 mt-0.5">{entry.time}</p>
+                      )}
+                    </TableCell>
                     <TableCell>
                       {entry.isClassified && entry.expenseName ? (
                         <>
