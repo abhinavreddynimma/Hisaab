@@ -16,6 +16,7 @@ const sqlite = new Database(dbPath);
 // Enable WAL mode for better performance
 sqlite.pragma("journal_mode = WAL");
 sqlite.pragma("foreign_keys = ON");
+sqlite.pragma("busy_timeout = 5000");
 
 // Handle legacy DBs created before Drizzle migrations were introduced.
 // If tables exist but __drizzle_migrations doesn't, this is a pre-migration DB.

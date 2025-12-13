@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { settings } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import type { UserProfile, LeavePolicy, InvoiceSettings } from "@/lib/types";
+import { assertAdminAccess, assertAuthenticatedAccess } from "@/lib/auth";
 
 export async function getSetting<T>(key: string): Promise<T | null> {
   const row = db.select().from(settings).where(eq(settings.key, key)).get();
@@ -22,6 +23,7 @@ export async function setSetting(key: string, value: unknown): Promise<void> {
 }
 
 export async function getUserProfile(): Promise<UserProfile> {
+  await assertAuthenticatedAccess();
   const profile = await getSetting<UserProfile>("user_profile");
   return profile ?? {
     name: "",
@@ -57,11 +59,13 @@ export async function getUserProfile(): Promise<UserProfile> {
 }
 
 export async function saveUserProfile(profile: UserProfile): Promise<{ success: boolean }> {
+  await assertAdminAccess();
   await setSetting("user_profile", profile);
   return { success: true };
 }
 
 export async function getLeavePolicy(): Promise<LeavePolicy> {
+  await assertAuthenticatedAccess();
   const policy = await getSetting<LeavePolicy>("leave_policy");
   return policy ?? {
     leavesPerMonth: 1,
@@ -71,11 +75,13 @@ export async function getLeavePolicy(): Promise<LeavePolicy> {
 }
 
 export async function saveLeavePolicy(policy: LeavePolicy): Promise<{ success: boolean }> {
+  await assertAdminAccess();
   await setSetting("leave_policy", policy);
   return { success: true };
 }
 
 export async function getInvoiceSettings(): Promise<InvoiceSettings> {
+  await assertAuthenticatedAccess();
   const invoiceSettings = await getSetting<InvoiceSettings>("invoice_settings");
   return invoiceSettings ?? {
     prefix: "INV",
@@ -87,16 +93,19 @@ export async function getInvoiceSettings(): Promise<InvoiceSettings> {
 }
 
 export async function saveInvoiceSettings(invoiceSettingsData: InvoiceSettings): Promise<{ success: boolean }> {
+  await assertAdminAccess();
   await setSetting("invoice_settings", invoiceSettingsData);
   return { success: true };
 }
 
 export async function getDefaultProjectId(): Promise<number | null> {
+  await assertAuthenticatedAccess();
   const setting = await getSetting<{ projectId: number | null }>("default_project");
   return setting?.projectId ?? null;
 }
 
 export async function saveDefaultProjectId(projectId: number | null): Promise<{ success: boolean }> {
+  await assertAdminAccess();
   await setSetting("default_project", { projectId });
   return { success: true };
 }
