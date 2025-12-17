@@ -14,9 +14,10 @@ import type { Invoice } from "@/lib/types";
 
 interface PaymentDetailsProps {
   invoice: Invoice;
+  canEdit?: boolean;
 }
 
-export function PaymentDetails({ invoice }: PaymentDetailsProps) {
+export function PaymentDetails({ invoice, canEdit = true }: PaymentDetailsProps) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -73,7 +74,7 @@ export function PaymentDetails({ invoice }: PaymentDetailsProps) {
           <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
             Payment Details
           </h3>
-          {!editing && (
+          {!editing && canEdit && (
             <Button
               variant="ghost"
               size="sm"

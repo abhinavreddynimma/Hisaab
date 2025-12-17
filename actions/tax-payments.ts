@@ -9,8 +9,10 @@ import { getDefaultProjectId } from "./settings";
 import { getEffectiveRate } from "./projects";
 import { calculateMonthSummary, withImplicitWorkingDays } from "@/lib/calculations";
 import { getFrenchHolidays } from "@/lib/constants";
+import { assertAdminAccess } from "@/lib/auth";
 
 export async function getTaxPayments(financialYear?: string): Promise<TaxPayment[]> {
+  await assertAdminAccess();
   if (financialYear) {
     return db
       .select()
@@ -27,6 +29,7 @@ export async function getTaxPayments(financialYear?: string): Promise<TaxPayment
 }
 
 export async function getTaxPayment(id: number): Promise<TaxPayment | null> {
+  await assertAdminAccess();
   const result = db
     .select()
     .from(taxPayments)
@@ -43,6 +46,7 @@ export async function createTaxPayment(data: {
   challanNo?: string;
   notes?: string;
 }): Promise<{ success: boolean; id?: number }> {
+  await assertAdminAccess();
   const result = db
     .insert(taxPayments)
     .values({
@@ -68,6 +72,7 @@ export async function updateTaxPayment(
     notes?: string;
   }
 ): Promise<{ success: boolean }> {
+  await assertAdminAccess();
   db.update(taxPayments)
     .set({
       financialYear: data.financialYear,
@@ -83,6 +88,7 @@ export async function updateTaxPayment(
 }
 
 export async function deleteTaxPayment(id: number): Promise<{ success: boolean }> {
+  await assertAdminAccess();
   db.delete(taxPayments).where(eq(taxPayments.id, id)).run();
   return { success: true };
 }
@@ -131,6 +137,7 @@ export async function getTaxComputation(financialYear: string): Promise<{
   totalPaid: number;
   balance: number;
 }> {
+  await assertAdminAccess();
   // FY "2025-26" → April 2025 to March 2026
   const [startYear] = financialYear.split("-").map(Number);
   const fyStart = `${startYear}-04-01`;
@@ -202,6 +209,7 @@ export async function getTaxProjection(financialYear: string): Promise<{
   totalPaid: number;
   projectedBalance: number;
 }> {
+  await assertAdminAccess();
   const [startYear] = financialYear.split("-").map(Number);
   const fyStart = `${startYear}-04-01`;
   const fyEnd = `${startYear + 1}-03-31`;
@@ -340,6 +348,7 @@ export async function getTaxSummaryForFY(financialYear: string): Promise<{
   byQuarter: Record<TaxQuarter, number>;
   total: number;
 }> {
+  await assertAdminAccess();
   const payments = await getTaxPayments(financialYear);
   const byQuarter: Record<TaxQuarter, number> = { Q1: 0, Q2: 0, Q3: 0, Q4: 0 };
   let total = 0;
