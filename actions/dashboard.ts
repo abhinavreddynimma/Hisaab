@@ -357,6 +357,14 @@ export async function getBalanceData(): Promise<{
   leavesTakenToDate: number;
   publicHolidaysOffToDate: number;
   daysOffStatus: "burnout_risk" | "on_track" | "above_target";
+  fyWorkingDaysComparison: {
+    totalWeekdaysInFY: number;
+    yourWorkingDays: number;
+    frenchEmployeeWorkingDays: number;
+    leavesTaken: number;
+    holidaysTaken: number;
+    extraWorkingDays: number;
+  };
 }> {
   await assertAdminAccess();
   const policy = await getLeavePolicy();
@@ -432,6 +440,44 @@ export async function getBalanceData(): Promise<{
         ? "above_target"
         : "on_track";
 
+  // Calculate FY working days comparison
+  // Count total weekdays in FY
+  let totalWeekdaysInFY = 0;
+  const fyStartDate = new Date(fyStartYear, 3, 1); // April 1
+  const fyEndDate = new Date(fyEndYear, 2, 31); // March 31
+  for (let d = new Date(fyStartDate); d <= fyEndDate; d.setDate(d.getDate() + 1)) {
+    const day = d.getDay();
+    if (day !== 0 && day !== 6) totalWeekdaysInFY++;
+  }
+
+  // Count actual working days in FY (from entries + implicit weekdays up to today)
+  const actualWorkingDays = fyEntries.reduce((sum, e) => {
+    if (e.dayType === "working") return sum + 1;
+    if (e.dayType === "extra_working") return sum + 1;
+    if (e.dayType === "half_day") return sum + 0.5;
+    return sum;
+  }, 0);
+
+  // Count implicit working days (weekdays without entries, excluding holidays)
+  const holidaySet = new Set([
+    ...Array.from(getFrenchHolidays(fyStartYear).keys()),
+    ...Array.from(getFrenchHolidays(fyEndYear).keys()),
+  ]);
+  let implicitWorkingDays = 0;
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  for (let d = new Date(fyStartDate); d <= fyEndDate && `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` <= todayStr; d.setDate(d.getDate() + 1)) {
+    const day = d.getDay();
+    if (day === 0 || day === 6) continue;
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    if (entryByDate.has(dateStr)) continue;
+    if (holidaySet.has(dateStr)) continue;
+    implicitWorkingDays++;
+  }
+
+  const totalActualWorkingDays = actualWorkingDays + implicitWorkingDays;
+  const frenchEmployeeWorkingDays = 210; // avg French employee with RTT + leaves + holidays
+
   return {
     leaveBalance,
     totalExtraWorking,
@@ -445,6 +491,14 @@ export async function getBalanceData(): Promise<{
     leavesTakenToDate,
     publicHolidaysOffToDate,
     daysOffStatus,
+    fyWorkingDaysComparison: {
+      totalWeekdaysInFY,
+      yourWorkingDays: Math.round(totalActualWorkingDays),
+      frenchEmployeeWorkingDays,
+      leavesTaken: leavesTakenToDate,
+      holidaysTaken: publicHolidaysOffToDate,
+      extraWorkingDays: fyEntries.filter(e => e.dayType === "extra_working").length,
+    },
   };
 }
 
