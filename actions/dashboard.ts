@@ -344,7 +344,7 @@ export async function getMonthlyBreakdownData(months: number = 6): Promise<
   return result;
 }
 
-export async function getBalanceData(): Promise<{
+export async function getBalanceData(financialYear?: string): Promise<{
   leaveBalance: number;
   totalExtraWorking: number;
   extraBalance: number;
@@ -372,8 +372,10 @@ export async function getBalanceData(): Promise<{
   const { year: currentYear, month: currentMonth, monthEndStr } = getCurrentMonthWindow();
   const entriesUpToMonthEnd = allEntries.filter((entry) => entry.date <= monthEndStr);
 
-  // Scope all balances to current FY (April → March)
-  const fyStartYear = currentMonth >= 4 ? currentYear : currentYear - 1;
+  // Scope all balances to the requested FY (or current FY)
+  const fyStartYear = financialYear
+    ? parseInt(financialYear.split("-")[0])
+    : (currentMonth >= 4 ? currentYear : currentYear - 1);
   const fyEndYear = fyStartYear + 1;
   const fyStart = `${fyStartYear}-04-01`;
   const fyEnd = `${fyEndYear}-03-31`;

@@ -43,6 +43,7 @@ interface BalanceOverviewProps {
     extraWorking: number;
     halfDays: number;
   }[];
+  financialYear?: string;
 }
 
 interface BalanceDetail {
@@ -271,7 +272,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
   );
 }
 
-export function BalanceOverview({ balanceData, monthlyData }: BalanceOverviewProps) {
+export function BalanceOverview({ balanceData, monthlyData, financialYear }: BalanceOverviewProps) {
   const hasData = monthlyData.length > 0;
   const daysOffStatusMeta = {
     burnout_risk: {
@@ -346,90 +347,77 @@ export function BalanceOverview({ balanceData, monthlyData }: BalanceOverviewPro
       </div>
 
       {/* FY Working Days Comparison */}
-      <Card>
-        <CardContent className="p-4 space-y-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">FY Working Days</p>
+      {(() => {
+        const cmp = balanceData.fyWorkingDaysComparison;
+        const effectiveDays = cmp.yourWorkingDays + cmp.extraWorkingDays - cmp.leavesTaken;
+        const frenchPct = (cmp.frenchEmployeeWorkingDays / cmp.totalWeekdaysInFY) * 100;
+        const yourPct = Math.min((effectiveDays / cmp.totalWeekdaysInFY) * 100, 100);
+        const diff = effectiveDays - cmp.frenchEmployeeWorkingDays;
 
-          {/* Your working days bar */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span className="font-medium">You (Freelancer)</span>
-              <span className="tabular-nums font-semibold">{balanceData.fyWorkingDaysComparison.yourWorkingDays} days</span>
-            </div>
-            <div className="relative h-6 rounded-full bg-muted overflow-hidden">
-              <div
-                className="absolute inset-y-0 left-0 bg-indigo-500 rounded-full transition-all"
-                style={{ width: `${(balanceData.fyWorkingDaysComparison.yourWorkingDays / balanceData.fyWorkingDaysComparison.totalWeekdaysInFY) * 100}%` }}
-              />
-              {/* Leaves carved out */}
-              {balanceData.fyWorkingDaysComparison.leavesTaken > 0 && (
-                <div
-                  className="absolute inset-y-0 bg-rose-400 rounded-r-full"
-                  style={{
-                    left: `${(balanceData.fyWorkingDaysComparison.yourWorkingDays / balanceData.fyWorkingDaysComparison.totalWeekdaysInFY) * 100}%`,
-                    width: `${(balanceData.fyWorkingDaysComparison.leavesTaken / balanceData.fyWorkingDaysComparison.totalWeekdaysInFY) * 100}%`,
-                  }}
-                />
-              )}
-              {/* Holidays carved out */}
-              {balanceData.fyWorkingDaysComparison.holidaysTaken > 0 && (
-                <div
-                  className="absolute inset-y-0 bg-emerald-400 rounded-r-full"
-                  style={{
-                    left: `${((balanceData.fyWorkingDaysComparison.yourWorkingDays + balanceData.fyWorkingDaysComparison.leavesTaken) / balanceData.fyWorkingDaysComparison.totalWeekdaysInFY) * 100}%`,
-                    width: `${(balanceData.fyWorkingDaysComparison.holidaysTaken / balanceData.fyWorkingDaysComparison.totalWeekdaysInFY) * 100}%`,
-                  }}
-                />
-              )}
-            </div>
+        return (
+          <Card>
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">FY Working Days</p>
+                <span className="text-xs text-muted-foreground tabular-nums">{cmp.totalWeekdaysInFY} weekdays in FY</span>
+              </div>
 
-            {/* French employee bar */}
-            <div className="flex items-center justify-between text-sm">
-              <span className="font-medium text-muted-foreground">French Employee (avg)</span>
-              <span className="tabular-nums text-muted-foreground">{balanceData.fyWorkingDaysComparison.frenchEmployeeWorkingDays} days</span>
-            </div>
-            <div className="relative h-6 rounded-full bg-muted overflow-hidden">
-              <div
-                className="absolute inset-y-0 left-0 bg-slate-400 rounded-full"
-                style={{ width: `${(balanceData.fyWorkingDaysComparison.frenchEmployeeWorkingDays / balanceData.fyWorkingDaysComparison.totalWeekdaysInFY) * 100}%` }}
-              />
-              {/* RTT + Leaves + Holidays = ~41 days */}
-              <div
-                className="absolute inset-y-0 bg-slate-300 rounded-r-full"
-                style={{
-                  left: `${(balanceData.fyWorkingDaysComparison.frenchEmployeeWorkingDays / balanceData.fyWorkingDaysComparison.totalWeekdaysInFY) * 100}%`,
-                  width: `${(41 / balanceData.fyWorkingDaysComparison.totalWeekdaysInFY) * 100}%`,
-                }}
-              />
-            </div>
+              {/* Single bar with French employee marker */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium">{effectiveDays} effective days</span>
+                  <span className={cn("text-xs font-semibold tabular-nums", diff > 0 ? "text-indigo-600" : "text-emerald-600")}>
+                    {diff > 0 ? `+${diff}` : diff} vs French employee
+                  </span>
+                </div>
+                <div className="relative h-7 rounded-full bg-muted overflow-hidden">
+                  {/* Working days (indigo) */}
+                  <div
+                    className="absolute inset-y-0 left-0 bg-indigo-500 transition-all"
+                    style={{ width: `${yourPct}%` }}
+                  />
+                  {/* Extra working days overlay (violet, stacked on right edge) */}
+                  {cmp.extraWorkingDays > 0 && (
+                    <div
+                      className="absolute inset-y-0 bg-violet-500 transition-all"
+                      style={{
+                        left: `${Math.min(((effectiveDays - cmp.extraWorkingDays) / cmp.totalWeekdaysInFY) * 100, 100)}%`,
+                        width: `${(cmp.extraWorkingDays / cmp.totalWeekdaysInFY) * 100}%`,
+                      }}
+                    />
+                  )}
+                  {/* French employee marker — black vertical line at 210 */}
+                  <div
+                    className="absolute inset-y-[-4px] w-0.5 bg-foreground z-10"
+                    style={{ left: `${frenchPct}%` }}
+                    title={`French employee avg: ${cmp.frenchEmployeeWorkingDays} days`}
+                  />
+                  <span
+                    className="absolute text-[9px] font-semibold text-foreground z-10"
+                    style={{ left: `${frenchPct}%`, top: "-14px", transform: "translateX(-50%)" }}
+                  >
+                    {cmp.frenchEmployeeWorkingDays}
+                  </span>
+                </div>
+              </div>
 
-            {/* Total weekdays reference */}
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>Total weekdays in FY: {balanceData.fyWorkingDaysComparison.totalWeekdaysInFY}</span>
-              <span className={cn(
-                "font-semibold",
-                balanceData.fyWorkingDaysComparison.yourWorkingDays > balanceData.fyWorkingDaysComparison.frenchEmployeeWorkingDays ? "text-indigo-600" : "text-emerald-600"
-              )}>
-                {balanceData.fyWorkingDaysComparison.yourWorkingDays > balanceData.fyWorkingDaysComparison.frenchEmployeeWorkingDays
-                  ? `+${balanceData.fyWorkingDaysComparison.yourWorkingDays - balanceData.fyWorkingDaysComparison.frenchEmployeeWorkingDays} more days than French employee`
-                  : `${balanceData.fyWorkingDaysComparison.frenchEmployeeWorkingDays - balanceData.fyWorkingDaysComparison.yourWorkingDays} fewer days`
-                }
-              </span>
-            </div>
-          </div>
-
-          {/* Legend */}
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
-            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-indigo-500" /> Working ({balanceData.fyWorkingDaysComparison.yourWorkingDays})</span>
-            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-rose-400" /> Leaves ({balanceData.fyWorkingDaysComparison.leavesTaken})</span>
-            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-400" /> Holidays ({balanceData.fyWorkingDaysComparison.holidaysTaken})</span>
-            {balanceData.fyWorkingDaysComparison.extraWorkingDays > 0 && (
-              <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-violet-500" /> Extra ({balanceData.fyWorkingDaysComparison.extraWorkingDays})</span>
-            )}
-            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-slate-400" /> French avg (210)</span>
-          </div>
-        </CardContent>
-      </Card>
+              {/* Breakdown */}
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground tabular-nums">
+                <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-indigo-500" /> Working: {cmp.yourWorkingDays}</span>
+                {cmp.extraWorkingDays > 0 && (
+                  <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-violet-500" /> +Extra: {cmp.extraWorkingDays}</span>
+                )}
+                {cmp.leavesTaken > 0 && (
+                  <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-rose-400" /> −Leaves: {cmp.leavesTaken}</span>
+                )}
+                <span className="inline-flex items-center gap-1">
+                  <span className="h-0.5 w-3 bg-foreground" /> French avg: {cmp.frenchEmployeeWorkingDays}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       <Card>
         <CardHeader>
