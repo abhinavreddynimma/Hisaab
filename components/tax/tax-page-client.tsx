@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Printer, TrendingUp, ChevronLeft, ChevronRight, FileText } from "lucide-react";
+import { Plus, Pencil, Trash2, Printer, TrendingUp, ChevronLeft, ChevronRight, FileText, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -54,10 +54,24 @@ interface TaxComputation {
 }
 
 interface TaxProjection {
-  monthlyBreakdown: { month: string; actual: number; projected: boolean; workingDays?: number; invoiceBased?: boolean }[];
+  monthlyBreakdown: {
+    month: string;
+    actual: number;
+    projected: boolean;
+    workingDays?: number;
+    invoiceBased?: boolean;
+    calendarBreakdown?: {
+      weekdayWorkingDays: number;
+      publicHolidayWorkingDays: number;
+      weekendWorkingDays: number;
+    };
+  }[];
   monthsElapsed: number;
   monthsRemaining: number;
   avgRate: number;
+  mode: "auto" | "invoice" | "calendar";
+  modeSummary: string;
+  rateSourceLabel: string;
   projectedGrossReceipts: number;
   projectedPresumptiveIncome: number;
   projectedTaxableIncome: number;
@@ -76,13 +90,31 @@ interface TaxPageClientProps {
   initialFY: string;
   computation: TaxComputation;
   projection: TaxProjection;
+  initialProjectionMode: "auto" | "invoice" | "calendar";
   attachmentsByPaymentId: Record<number, TaxPaymentAttachment[]>;
 }
 
-export function TaxPageClient({ initialPayments, initialSummary, initialFY, computation, projection, attachmentsByPaymentId }: TaxPageClientProps) {
+export function TaxPageClient({
+  initialPayments,
+  initialSummary,
+  initialFY,
+  computation,
+  projection,
+  initialProjectionMode,
+  attachmentsByPaymentId,
+}: TaxPageClientProps) {
   const router = useRouter();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPayment, setEditingPayment] = useState<TaxPayment | null>(null);
+
+  function setProjectionMode(mode: "auto" | "invoice" | "calendar") {
+    const params = new URLSearchParams();
+    params.set("fy", initialFY);
+    if (mode !== "auto") {
+      params.set("pm", mode);
+    }
+    router.push(`/tax?${params.toString()}`);
+  }
 
   function handleAdd() {
     setEditingPayment(null);
@@ -113,6 +145,43 @@ export function TaxPageClient({ initialPayments, initialSummary, initialFY, comp
   }
 
   const quarters = (["Q1", "Q2", "Q3", "Q4"] as const);
+
+  function formatDayCount(days: number) {
+    return Number.isInteger(days) ? String(days) : days.toFixed(1);
+  }
+
+  const presumptiveLimit = 7500000;
+  const actualExceeds44AdaLimit = computation.grossReceipts > presumptiveLimit;
+  const projectedExceeds44AdaLimit = projection.projectedGrossReceipts > presumptiveLimit;
+  const yearlyCalendarBreakdown = projection.monthlyBreakdown.reduce(
+    (totals, month) => {
+      if (!month.calendarBreakdown) return totals;
+      totals.weekdayWorkingDays += month.calendarBreakdown.weekdayWorkingDays;
+      totals.publicHolidayWorkingDays += month.calendarBreakdown.publicHolidayWorkingDays;
+      totals.weekendWorkingDays += month.calendarBreakdown.weekendWorkingDays;
+      return totals;
+    },
+    {
+      weekdayWorkingDays: 0,
+      publicHolidayWorkingDays: 0,
+      weekendWorkingDays: 0,
+    }
+  );
+  const hasYearlyCalendarBreakdown =
+    yearlyCalendarBreakdown.weekdayWorkingDays > 0 ||
+    yearlyCalendarBreakdown.publicHolidayWorkingDays > 0 ||
+    yearlyCalendarBreakdown.weekendWorkingDays > 0;
+  const yearlyCalendarWorkingDays =
+    yearlyCalendarBreakdown.weekdayWorkingDays +
+    yearlyCalendarBreakdown.publicHolidayWorkingDays +
+    yearlyCalendarBreakdown.weekendWorkingDays;
+  const excessOver44AdaLimit = Math.max(0, projection.projectedGrossReceipts - presumptiveLimit);
+  const estimatedReceiptsPerDay =
+    yearlyCalendarWorkingDays > 0 ? projection.projectedGrossReceipts / yearlyCalendarWorkingDays : 0;
+  const daysToTrimFor44Ada =
+    excessOver44AdaLimit > 0 && estimatedReceiptsPerDay > 0
+      ? Math.ceil((excessOver44AdaLimit / estimatedReceiptsPerDay) * 2) / 2
+      : 0;
 
   return (
     <div className="space-y-6">
@@ -173,6 +242,18 @@ export function TaxPageClient({ initialPayments, initialSummary, initialFY, comp
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6 mt-4">
+          {actualExceeds44AdaLimit && (
+            <div className="rounded-lg border border-red-500/40 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-950/30 dark:text-red-300">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <p>
+                  Gross receipts have crossed ₹75 lakh for FY {initialFY}. Section 44ADA does not apply above this threshold.
+                  The ₹75 lakh limit itself applies only when cash receipts are at most 5%; otherwise the limit is ₹50 lakh.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Tax Computation */}
           <Card>
             <CardHeader>
@@ -386,6 +467,51 @@ export function TaxPageClient({ initialPayments, initialSummary, initialFY, comp
         </TabsContent>
 
         <TabsContent value="projection" className="space-y-6 mt-4">
+          {projectedExceeds44AdaLimit && (
+            <div className="rounded-lg border border-red-500/40 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-950/30 dark:text-red-300">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <p>
+                  Projected gross receipts have crossed ₹75 lakh for FY {initialFY}. Section 44ADA does not apply above this threshold.
+                  The ₹75 lakh limit itself applies only when cash receipts are at most 5%; otherwise the limit is ₹50 lakh.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Projection Source</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { value: "auto", label: "Auto" },
+                  { value: "invoice", label: "Invoice-based" },
+                  { value: "calendar", label: "Calendar-based" },
+                ].map((option) => (
+                  <Button
+                    key={option.value}
+                    variant={initialProjectionMode === option.value ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setProjectionMode(option.value as "auto" | "invoice" | "calendar")}
+                  >
+                    {option.label}
+                  </Button>
+                ))}
+              </div>
+
+              <div className="space-y-1 text-sm">
+                <p className="text-muted-foreground">{projection.modeSummary}</p>
+                <p className="text-muted-foreground">
+                  {projection.mode === "calendar"
+                    ? `${projection.rateSourceLabel}. Calendar mode projects from the default project's daily rate and current working days.`
+                    : projection.rateSourceLabel}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Monthly Income Breakdown */}
           <Card>
             <CardHeader>
@@ -412,15 +538,65 @@ export function TaxPageClient({ initialPayments, initialSummary, initialFY, comp
                       <p className="text-[10px] text-muted-foreground mt-0.5">Invoice sent</p>
                     )}
                     {m.projected && !m.invoiceBased && m.workingDays !== undefined && (
-                      <p className="text-[10px] text-muted-foreground mt-0.5">{m.workingDays} days / ₹{projection.avgRate.toFixed(2)}</p>
+                      <div className="mt-0.5 space-y-0.5">
+                        <p className="text-[10px] text-muted-foreground">
+                          {formatDayCount(m.workingDays)} days / ₹{projection.avgRate.toFixed(2)}
+                        </p>
+                        {m.calendarBreakdown && (
+                          <div className="flex items-center justify-center gap-1.5 text-[10px] font-medium tabular-nums leading-tight">
+                            <span className="text-slate-600 dark:text-slate-300">
+                              {formatDayCount(m.calendarBreakdown.weekdayWorkingDays)}
+                            </span>
+                            <span className="text-violet-600 dark:text-violet-400">
+                              {formatDayCount(m.calendarBreakdown.publicHolidayWorkingDays)}
+                            </span>
+                            <span className="text-emerald-600 dark:text-emerald-400">
+                              {formatDayCount(m.calendarBreakdown.weekendWorkingDays)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                 ))}
               </div>
+              {hasYearlyCalendarBreakdown && (
+                <div className="mt-5 rounded-xl border bg-muted/20 p-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-medium">Financial Year Total</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatDayCount(yearlyCalendarWorkingDays)} total working days from calendar mode
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 text-sm font-semibold tabular-nums">
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                      {formatDayCount(yearlyCalendarBreakdown.weekdayWorkingDays)}
+                    </span>
+                    <span className="rounded-full bg-violet-100 px-2.5 py-1 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300">
+                      {formatDayCount(yearlyCalendarBreakdown.publicHolidayWorkingDays)}
+                    </span>
+                    <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                      {formatDayCount(yearlyCalendarBreakdown.weekendWorkingDays)}
+                    </span>
+                    </div>
+                  </div>
+                  {projection.mode === "calendar" && daysToTrimFor44Ada > 0 && (
+                    <p className="mt-3 text-xs text-red-600 dark:text-red-400">
+                      To come under the ₹75 lakh limit at the current projection, you need to remove about{" "}
+                      {formatDayCount(daysToTrimFor44Ada)} working day{daysToTrimFor44Ada === 1 ? "" : "s"} or take the same number of additional leave day{daysToTrimFor44Ada === 1 ? "" : "s"}.
+                    </p>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
 
-          {projection.monthsRemaining > 0 && (() => {
+          {projection.mode === "calendar" ? (
+            <p className="text-xs text-muted-foreground">
+              * Calendar mode models the full FY from calendar days and the active project rate, so the day split is shown for the whole year.
+            </p>
+          ) : projection.monthsRemaining > 0 && (() => {
             const invoiceCount = projection.monthlyBreakdown.filter((m) => m.invoiceBased).length;
             const workingDaysCount = projection.monthsRemaining - invoiceCount;
             const parts: string[] = [];
@@ -428,7 +604,7 @@ export function TaxPageClient({ initialPayments, initialSummary, initialFY, comp
             if (workingDaysCount > 0) parts.push(`${workingDaysCount} from calendar working days`);
             return (
               <p className="text-xs text-muted-foreground">
-                * Based on {projection.monthsElapsed} month{projection.monthsElapsed !== 1 ? "s" : ""} of actual data, projecting {projection.monthsRemaining} remaining month{projection.monthsRemaining !== 1 ? "s" : ""} ({parts.join(", ")}).
+                * Based on {projection.monthsElapsed} month{projection.monthsElapsed !== 1 ? "s" : ""} of actual data, projecting {projection.monthsRemaining} remaining month{projection.monthsRemaining !== 1 ? "s" : ""}{parts.length > 0 ? ` (${parts.join(", ")})` : ""}.
               </p>
             );
           })()}
