@@ -11,13 +11,10 @@ import type { AuthRole, AuthUser } from "@/lib/types";
 const SESSION_COOKIE_NAME = "hisaab_session";
 const ACCESS_CONTROL_KEY = "access_control";
 const SESSION_DURATION_DAYS = 30;
-const SETUP_LINK_DURATION_HOURS = 24;
 const PASSWORD_ALGO = "scrypt-v1";
 
 interface AccessControlConfig {
   sessionsEnabled: boolean;
-  setupTokenHash: string | null;
-  setupTokenExpiresAt: string | null;
 }
 
 interface RequirePageAccessOptions {
@@ -26,8 +23,6 @@ interface RequirePageAccessOptions {
 
 const DEFAULT_ACCESS_CONTROL_CONFIG: AccessControlConfig = {
   sessionsEnabled: false,
-  setupTokenHash: null,
-  setupTokenExpiresAt: null,
 };
 
 function parseAccessControlConfig(value: string | undefined): AccessControlConfig {
@@ -36,8 +31,6 @@ function parseAccessControlConfig(value: string | undefined): AccessControlConfi
     const parsed = JSON.parse(value) as Partial<AccessControlConfig>;
     return {
       sessionsEnabled: Boolean(parsed.sessionsEnabled),
-      setupTokenHash: parsed.setupTokenHash ?? null,
-      setupTokenExpiresAt: parsed.setupTokenExpiresAt ?? null,
     };
   } catch {
     return DEFAULT_ACCESS_CONTROL_CONFIG;
@@ -85,6 +78,7 @@ function toAuthUser(row: {
   name: string;
   email: string;
   role: AuthRole;
+  tag: string | null;
   isActive: boolean;
   createdAt: string;
 }): AuthUser {
@@ -93,6 +87,7 @@ function toAuthUser(row: {
     name: row.name,
     email: row.email,
     role: row.role,
+    tag: row.tag,
     isActive: row.isActive,
     createdAt: row.createdAt,
   };
@@ -132,6 +127,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       name: users.name,
       email: users.email,
       role: users.role,
+      tag: users.tag,
       isActive: users.isActive,
       createdAt: users.createdAt,
     })
@@ -199,8 +195,6 @@ export async function requirePageAccess(
 
 export async function getAccessControlStatus(): Promise<{
   sessionsEnabled: boolean;
-  hasPendingSetupLink: boolean;
-  setupLinkExpiresAt: string | null;
   hasAdminUser: boolean;
 }> {
   const config = await getAccessControlConfig();
@@ -210,60 +204,18 @@ export async function getAccessControlStatus(): Promise<{
     .where(and(eq(users.role, "admin"), eq(users.isActive, true)))
     .get();
 
-  const hasPendingSetupLink = Boolean(
-    !config.sessionsEnabled &&
-      config.setupTokenHash &&
-      config.setupTokenExpiresAt &&
-      config.setupTokenExpiresAt > nowIso()
-  );
-
   return {
     sessionsEnabled: config.sessionsEnabled,
-    hasPendingSetupLink,
-    setupLinkExpiresAt: hasPendingSetupLink ? config.setupTokenExpiresAt : null,
     hasAdminUser: Boolean(adminRow),
   };
 }
 
-export async function createSetupToken(): Promise<{ token: string; expiresAt: string }> {
-  const config = await getAccessControlConfig();
-  if (config.sessionsEnabled) {
-    throw new Error("Sessions are already enabled");
-  }
-  const adminRow = db
-    .select({ id: users.id })
-    .from(users)
-    .where(and(eq(users.role, "admin"), eq(users.isActive, true)))
-    .get();
-  if (adminRow) {
-    throw new Error("Admin account already exists");
-  }
-
-  const token = createRandomToken();
-  const expiresAt = addDurationToNow(0, SETUP_LINK_DURATION_HOURS).toISOString();
-  await upsertAccessControlConfig({
-    sessionsEnabled: false,
-    setupTokenHash: hashToken(token),
-    setupTokenExpiresAt: expiresAt,
-  });
-  return { token, expiresAt };
-}
-
-export async function isSetupTokenValid(token: string): Promise<boolean> {
-  const config = await getAccessControlConfig();
-  if (config.sessionsEnabled) return false;
-  if (!config.setupTokenHash || !config.setupTokenExpiresAt) return false;
-  if (config.setupTokenExpiresAt <= nowIso()) return false;
-  return hashToken(token) === config.setupTokenHash;
-}
-
-export async function createInitialAdminFromSetupToken(input: {
-  token: string;
+export async function createAdminAccount(input: {
   name: string;
   email: string;
   password: string;
 }): Promise<AuthUser> {
-  const { token, name, email, password } = input;
+  const { name, email, password } = input;
   const trimmedName = name.trim();
   const normalizedEmail = normalizeEmail(email);
 
@@ -276,10 +228,7 @@ export async function createInitialAdminFromSetupToken(input: {
   if (password.length < 8) {
     throw new Error("Password must be at least 8 characters");
   }
-  const validToken = await isSetupTokenValid(token);
-  if (!validToken) {
-    throw new Error("Invalid or expired setup link");
-  }
+
   const existingAdmin = db
     .select({ id: users.id })
     .from(users)
@@ -288,6 +237,7 @@ export async function createInitialAdminFromSetupToken(input: {
   if (existingAdmin) {
     throw new Error("Admin account already exists");
   }
+
   const existingUser = db
     .select({ id: users.id })
     .from(users)
@@ -309,11 +259,7 @@ export async function createInitialAdminFromSetupToken(input: {
     })
     .run();
 
-  await upsertAccessControlConfig({
-    sessionsEnabled: true,
-    setupTokenHash: null,
-    setupTokenExpiresAt: null,
-  });
+  await upsertAccessControlConfig({ sessionsEnabled: true });
 
   const created = db
     .select({
@@ -321,6 +267,7 @@ export async function createInitialAdminFromSetupToken(input: {
       name: users.name,
       email: users.email,
       role: users.role,
+      tag: users.tag,
       isActive: users.isActive,
       createdAt: users.createdAt,
     })
@@ -350,6 +297,7 @@ export async function authenticateWithCredentials(input: {
       name: users.name,
       email: users.email,
       role: users.role,
+      tag: users.tag,
       isActive: users.isActive,
       createdAt: users.createdAt,
       passwordHash: users.passwordHash,
@@ -411,6 +359,7 @@ export async function listViewerAccounts(): Promise<AuthUser[]> {
       name: users.name,
       email: users.email,
       role: users.role,
+      tag: users.tag,
       isActive: users.isActive,
       createdAt: users.createdAt,
     })
@@ -425,6 +374,7 @@ export async function createViewerAccount(input: {
   name: string;
   email: string;
   password: string;
+  tag?: string;
 }): Promise<AuthUser> {
   const config = await getAccessControlConfig();
   if (!config.sessionsEnabled) {
@@ -459,6 +409,7 @@ export async function createViewerAccount(input: {
       email: normalizedEmail,
       passwordHash: hashPassword(input.password),
       role: "viewer",
+      tag: input.tag?.trim() || null,
       isActive: true,
       createdAt: nowIso(),
     })
@@ -470,6 +421,7 @@ export async function createViewerAccount(input: {
       name: users.name,
       email: users.email,
       role: users.role,
+      tag: users.tag,
       isActive: users.isActive,
       createdAt: users.createdAt,
     })

@@ -53,7 +53,7 @@ export default async function SettingsPage() {
         <TabsContent value="access-control">
           <AccessControlForm
             sessionsEnabled={accessControlStatus.sessionsEnabled}
-            setupLinkExpiresAt={accessControlStatus.setupLinkExpiresAt}
+            hasAdminUser={accessControlStatus.hasAdminUser}
             initialViewers={viewerAccounts}
           />
         </TabsContent>
