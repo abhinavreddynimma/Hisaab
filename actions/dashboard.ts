@@ -467,22 +467,42 @@ export async function getBalanceData(financialYear?: string): Promise<{
     ...Array.from(getFrenchHolidays(fyStartYear).keys()),
     ...Array.from(getFrenchHolidays(fyEndYear).keys()),
   ]);
+  // For working days comparison, include ALL FY entries (including future planned ones)
+  const allFyEntries = allEntries.filter((e) => e.date >= fyStart && e.date <= fyEnd);
+  const allFyEntryByDate = new Map(allFyEntries.map((entry) => [entry.date, entry.dayType]));
+
+  // Recalculate working days from all FY entries (not just up to today)
+  const allFyWorkingDays = allFyEntries.reduce((sum, e) => {
+    if (e.dayType === "working") return sum + 1;
+    if (e.dayType === "extra_working") return sum + 1;
+    if (e.dayType === "half_day") return sum + 0.5;
+    return sum;
+  }, 0);
+  const allFyLeavesTaken = allFyEntries.reduce((sum, e) => {
+    if (e.dayType === "leave") return sum + 1;
+    if (e.dayType === "half_day") return sum + 0.5;
+    return sum;
+  }, 0);
+  const allFyExtraWorking = allFyEntries.filter(e => e.dayType === "extra_working").length;
+
+  // Count implicit working days: past (up to today) = assume working, future = only explicit
   let implicitWorkingDays = 0;
   const today = new Date();
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-  // Only count implicit working days from tracking start date (when user actually started working)
   const trackingStart = `${policy.trackingStartDate}-01`;
   const implicitStartDate = new Date(Math.max(fyStartDate.getTime(), new Date(trackingStart).getTime()));
-  for (let d = new Date(implicitStartDate); d <= fyEndDate && `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` <= todayStr; d.setDate(d.getDate() + 1)) {
+  // Only count implicit days up to today (future days need explicit entries)
+  for (let d = new Date(implicitStartDate); d <= fyEndDate; d.setDate(d.getDate() + 1)) {
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    if (dateStr > todayStr) break; // Don't assume future days as working
     const day = d.getDay();
     if (day === 0 || day === 6) continue;
-    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    if (entryByDate.has(dateStr)) continue;
+    if (allFyEntryByDate.has(dateStr)) continue;
     if (holidaySet.has(dateStr)) continue;
     implicitWorkingDays++;
   }
 
-  const totalActualWorkingDays = actualWorkingDays + implicitWorkingDays;
+  const totalActualWorkingDays = allFyWorkingDays + implicitWorkingDays;
   const frenchEmployeeWorkingDays = 210; // avg French employee with RTT + leaves + holidays
 
   return {
@@ -502,9 +522,9 @@ export async function getBalanceData(financialYear?: string): Promise<{
       totalWeekdaysInFY,
       yourWorkingDays: Math.round(totalActualWorkingDays),
       frenchEmployeeWorkingDays,
-      leavesTaken: leavesTakenToDate,
+      leavesTaken: allFyLeavesTaken,
       holidaysTaken: publicHolidaysOffToDate,
-      extraWorkingDays: fyEntries.filter(e => e.dayType === "extra_working").length,
+      extraWorkingDays: allFyExtraWorking,
     },
   };
 }
