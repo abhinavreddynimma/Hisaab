@@ -376,7 +376,7 @@ export function BalanceOverview({ balanceData, monthlyData, financialYear }: Bal
                   {/* Extra working days (violet, stacked after net working) */}
                   {cmp.extraWorkingDays > 0 && (
                     <div
-                      className="absolute inset-y-0 bg-violet-500 transition-all"
+                      className="absolute inset-y-0 bg-emerald-500 transition-all"
                       style={{
                         left: `${Math.min(((cmp.yourWorkingDays - cmp.leavesTaken) / cmp.totalWeekdaysInFY) * 100, 100)}%`,
                         width: `${Math.min((cmp.extraWorkingDays / cmp.totalWeekdaysInFY) * 100, 100 - Math.min(((cmp.yourWorkingDays - cmp.leavesTaken) / cmp.totalWeekdaysInFY) * 100, 100))}%`,
@@ -402,7 +402,7 @@ export function BalanceOverview({ balanceData, monthlyData, financialYear }: Bal
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground tabular-nums">
                 <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-indigo-500" /> Working: {cmp.yourWorkingDays}</span>
                 {cmp.extraWorkingDays > 0 && (
-                  <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-violet-500" /> +Extra: {cmp.extraWorkingDays}</span>
+                  <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" /> +Extra: {cmp.extraWorkingDays}</span>
                 )}
                 {cmp.leavesTaken > 0 && (
                   <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-rose-400" /> −Leaves: {cmp.leavesTaken}</span>
