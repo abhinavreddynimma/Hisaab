@@ -7,7 +7,7 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.join(__dirname, "..");
 const SCREENSHOTS_DIR = path.join(ROOT_DIR, "docs", "screenshots");
-const DB_PATH = path.join(ROOT_DIR, "data", "payroll.db");
+const DB_PATH = path.join(ROOT_DIR, "data", "demo.db");
 const BASE_URL = (process.env.APP_URL || "http://localhost:3003/hisaab").replace(/\/$/, "");
 
 function getRecordIds() {
