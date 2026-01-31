@@ -4,6 +4,7 @@ import {
   LineChart,
   Line,
   XAxis,
+  YAxis,
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
@@ -433,21 +434,49 @@ export function BalanceOverview({ balanceData, monthlyData, financialYear }: Bal
               return { month: m.month, cumWorking: cumW, cumExtra: cumE, cumLeaves: cumL, cumHalfDays: cumH };
             });
 
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const renderLabel = (color: string) => (props: any) => {
+              const { x, y, value } = props;
+              if (!value || value === 0) return null;
+              return (
+                <text x={x} y={y - 10} textAnchor="middle" fontSize={10} fontWeight={600} fill={color}>
+                  {value}
+                </text>
+              );
+            };
+
             return (
               <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={cumulativeData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                <LineChart data={cumulativeData} margin={{ top: 20, right: 40, left: 10, bottom: 0 }}>
                   <XAxis
                     dataKey="month"
                     axisLine={false}
                     tickLine={false}
                     tick={{ fontSize: 12, fill: "#9ca3af" }}
                   />
+                  {/* Left Y axis for working days (large scale) */}
+                  <YAxis
+                    yAxisId="left"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 10, fill: "#10b981" }}
+                    width={35}
+                  />
+                  {/* Right Y axis for leaves/extra (small scale) */}
+                  <YAxis
+                    yAxisId="right"
+                    orientation="right"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 10, fill: "#ef4444" }}
+                    width={30}
+                  />
                   <Tooltip content={<CumulativeTooltip />} />
-                  <Line type="monotone" dataKey="cumWorking" stroke="#10b981" strokeWidth={2.5} dot={{ r: 3, fill: "#10b981" }} name="Working" />
-                  <Line type="monotone" dataKey="cumExtra" stroke="#10b981" strokeWidth={2} strokeDasharray="4 4" dot={{ r: 3, fill: "#10b981" }} name="Extra" />
-                  <Line type="monotone" dataKey="cumLeaves" stroke="#ef4444" strokeWidth={2} dot={{ r: 3, fill: "#ef4444" }} name="Leaves" />
+                  <Line yAxisId="left" type="monotone" dataKey="cumWorking" stroke="#10b981" strokeWidth={2.5} dot={{ r: 4, fill: "#10b981" }} name="Working" label={renderLabel("#10b981")} />
+                  <Line yAxisId="right" type="monotone" dataKey="cumExtra" stroke="#10b981" strokeWidth={2} strokeDasharray="4 4" dot={{ r: 3, fill: "#10b981" }} name="Extra" label={renderLabel("#059669")} />
+                  <Line yAxisId="right" type="monotone" dataKey="cumLeaves" stroke="#ef4444" strokeWidth={2} dot={{ r: 4, fill: "#ef4444" }} name="Leaves" label={renderLabel("#ef4444")} />
                   {cumulativeData.some(d => d.cumHalfDays > 0) && (
-                    <Line type="monotone" dataKey="cumHalfDays" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3, fill: "#f59e0b" }} name="Half Days" />
+                    <Line yAxisId="right" type="monotone" dataKey="cumHalfDays" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3, fill: "#f59e0b" }} name="Half Days" label={renderLabel("#f59e0b")} />
                   )}
                 </LineChart>
               </ResponsiveContainer>
