@@ -1,11 +1,11 @@
-import { getTaxPayments, getTaxSummaryForFY, getTaxComputation, getTaxProjection, getTaxPaymentAttachments, type TaxProjectionMode } from "@/actions/tax-payments";
+import { getTaxPayments, getTaxSummaryForFY, getTaxComputation, getTaxProjection, getTaxPaymentAttachments } from "@/actions/tax-payments";
 import { getCurrentFinancialYear } from "@/lib/constants";
 import { TaxPageClient } from "@/components/tax/tax-page-client";
 import { requirePageAccess } from "@/lib/auth";
 import type { TaxPaymentAttachment } from "@/lib/types";
 
 interface TaxPageProps {
-  searchParams: Promise<{ fy?: string; pm?: string }>;
+  searchParams: Promise<{ fy?: string }>;
 }
 
 export default async function TaxPage({ searchParams }: TaxPageProps) {
@@ -13,13 +13,11 @@ export default async function TaxPage({ searchParams }: TaxPageProps) {
 
   const params = await searchParams;
   const fy = params.fy || getCurrentFinancialYear();
-  const projectionMode: TaxProjectionMode =
-    params.pm === "invoice" || params.pm === "calendar" ? params.pm : "auto";
   const [payments, summary, computation, projection] = await Promise.all([
     getTaxPayments(fy),
     getTaxSummaryForFY(fy),
     getTaxComputation(fy),
-    getTaxProjection(fy, projectionMode),
+    getTaxProjection(fy),
   ]);
 
   // Fetch attachments for all payments
@@ -37,7 +35,6 @@ export default async function TaxPage({ searchParams }: TaxPageProps) {
       initialFY={fy}
       computation={computation}
       projection={projection}
-      initialProjectionMode={projectionMode}
       attachmentsByPaymentId={attachmentsByPaymentId}
     />
   );

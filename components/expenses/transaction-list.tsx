@@ -14,14 +14,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { deleteExpenseTransaction } from "@/actions/expenses";
-import { confirmRecurringTransaction, skipRecurringTransactionForMonth } from "@/actions/recurring-expenses";
+import { confirmRecurringTransaction } from "@/actions/recurring-expenses";
 import type { ExpenseTransaction } from "@/lib/types";
 
 interface TransactionListProps {
   transactions: ExpenseTransaction[];
   totalIncome: number;
   totalExpenses: number;
-  cumulativeBalance?: number;
   onEdit: (txn: ExpenseTransaction) => void;
   onAddNew: () => void;
 }
@@ -32,14 +31,7 @@ const TYPE_CONFIG = {
   transfer: { icon: ArrowLeftRight, color: "text-blue-600", bg: "bg-blue-50", label: "Transfer" },
 };
 
-export function TransactionList({
-  transactions,
-  totalIncome,
-  totalExpenses,
-  cumulativeBalance,
-  onEdit,
-  onAddNew,
-}: TransactionListProps) {
+export function TransactionList({ transactions, totalIncome, totalExpenses, onEdit, onAddNew }: TransactionListProps) {
   const router = useRouter();
 
   async function handleDelete(id: number) {
@@ -49,20 +41,6 @@ export function TransactionList({
       router.refresh();
     } catch {
       toast.error("Failed to delete transaction");
-    }
-  }
-
-  async function handleDeleteRecurring(id: number) {
-    try {
-      const result = await skipRecurringTransactionForMonth(id);
-      if (!result.success) {
-        toast.error("Failed to delete recurring transaction");
-        return;
-      }
-      toast.success("Recurring transaction deleted for this month");
-      router.refresh();
-    } catch {
-      toast.error("Failed to delete recurring transaction");
     }
   }
 
@@ -76,15 +54,11 @@ export function TransactionList({
     }
   }
 
-  function canEditTransaction(txn: ExpenseTransaction) {
-    return txn.source === "manual" || txn.source === "recurring";
-  }
-
   const net = totalIncome - totalExpenses;
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-4 text-center">
             <p className="text-xs text-muted-foreground mb-1">Income</p>
@@ -105,16 +79,6 @@ export function TransactionList({
             </p>
           </CardContent>
         </Card>
-        {cumulativeBalance !== undefined && (
-          <Card>
-            <CardContent className="p-4 text-center">
-              <p className="text-xs text-muted-foreground mb-1">Balance</p>
-              <p className={`text-lg font-bold tabular-nums ${cumulativeBalance >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                {formatCurrency(Math.abs(cumulativeBalance))}
-              </p>
-            </CardContent>
-          </Card>
-        )}
       </div>
 
       <Card>
@@ -146,8 +110,8 @@ export function TransactionList({
                   return (
                     <TableRow
                       key={txn.id}
-                      className={`hover:bg-muted/50 ${canEditTransaction(txn) ? "cursor-pointer" : "opacity-80"}`}
-                      onClick={() => canEditTransaction(txn) && onEdit(txn)}
+                      className={`hover:bg-muted/50 ${txn.status === "estimated" ? "opacity-40" : txn.source !== "manual" ? "opacity-80" : "cursor-pointer"}`}
+                      onClick={() => txn.source === "manual" && onEdit(txn)}
                     >
                       <TableCell className="text-sm tabular-nums">{formatDate(txn.date)}</TableCell>
                       <TableCell>
@@ -220,69 +184,9 @@ export function TransactionList({
                             >
                               <Check className="h-3.5 w-3.5" />
                             </Button>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive">
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete This Month's Recurring Transaction</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    This removes only the current month's generated transaction. The recurring rule will stay active for future months.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => handleDeleteRecurring(txn.id)}
-                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                  >
-                                    Delete
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
                           </div>
-                        ) : txn.source === "invoice" ? (
+                        ) : txn.source === "invoice" || (txn.source === "recurring" && txn.status === "confirmed") ? (
                           <span className="text-[10px] text-muted-foreground">auto</span>
-                        ) : txn.source === "recurring" ? (
-                          <div className="flex items-center gap-0.5">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                              onClick={() => onEdit(txn)}
-                              title="Edit this month's transaction"
-                            >
-                              <Pencil className="h-3 w-3" />
-                            </Button>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive">
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete This Month's Recurring Transaction</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    This removes only the current month's generated transaction. The recurring rule will stay active for future months.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => handleDeleteRecurring(txn.id)}
-                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                  >
-                                    Delete
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </div>
                         ) : (
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
