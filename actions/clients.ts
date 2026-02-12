@@ -34,6 +34,7 @@ export async function createClient(data: {
   country?: string;
   email?: string;
   phone?: string;
+  currency?: string;
 }): Promise<{ success: boolean; id?: number }> {
   const result = db
     .insert(clients)
@@ -49,6 +50,7 @@ export async function createClient(data: {
       country: data.country || null,
       email: data.email || null,
       phone: data.phone || null,
+      currency: data.currency || "EUR",
     })
     .run();
 
@@ -69,6 +71,7 @@ export async function updateClient(
     country?: string;
     email?: string;
     phone?: string;
+    currency?: string;
   }
 ): Promise<{ success: boolean }> {
   db.update(clients)
@@ -84,6 +87,7 @@ export async function updateClient(
       country: data.country || null,
       email: data.email || null,
       phone: data.phone || null,
+      currency: data.currency || "EUR",
     })
     .where(eq(clients.id, id))
     .run();
