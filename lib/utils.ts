@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { getCurrencyName } from "./constants";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -17,6 +18,14 @@ export function formatEuro(amount: number): string {
   return new Intl.NumberFormat("en-IE", {
     style: "currency",
     currency: "EUR",
+    minimumFractionDigits: 2,
+  }).format(amount);
+}
+
+export function formatForeignCurrency(amount: number, currency: string): string {
+  return new Intl.NumberFormat("en-IE", {
+    style: "currency",
+    currency,
     minimumFractionDigits: 2,
   }).format(amount);
 }
@@ -43,12 +52,12 @@ function convertChunk(n: number): string {
   return rem ? `${h} and ${convertChunk(rem)}` : h;
 }
 
-export function numberToWords(amount: number): string {
-  const euros = Math.floor(amount);
-  const cents = Math.round((amount - euros) * 100);
+export function numberToWords(amount: number, currency: string = "EUR"): string {
+  const whole = Math.floor(amount);
+  const cents = Math.round((amount - whole) * 100);
 
   const scales = ["", " Thousand", " Million", " Billion"];
-  let remaining = euros;
+  let remaining = whole;
   const parts: string[] = [];
   let scaleIndex = 0;
 
@@ -65,7 +74,8 @@ export function numberToWords(amount: number): string {
     }
   }
 
-  let result = parts.join(" ") + " Euro" + (euros !== 1 ? "s" : "");
+  const currName = whole !== 1 ? getCurrencyName(currency, true) : getCurrencyName(currency);
+  let result = parts.join(" ") + " " + currName;
   if (cents > 0) {
     result += ` and ${convertChunk(cents)} Cent${cents !== 1 ? "s" : ""}`;
   }

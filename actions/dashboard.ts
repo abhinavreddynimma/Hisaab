@@ -41,13 +41,20 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     .where(sql`${invoices.status} IN ('draft', 'sent')`)
     .get();
 
-  // Outstanding EUR (draft + sent totals)
-  const openInvoices = db
-    .select({ total: invoices.total })
+  // Outstanding by currency (draft + sent totals)
+  const openInvoiceRows = db
+    .select({ total: invoices.total, currency: invoices.currency })
     .from(invoices)
     .where(sql`${invoices.status} IN ('draft', 'sent')`)
     .all();
-  const outstandingEur = openInvoices.reduce((sum, inv) => sum + (inv.total ?? 0), 0);
+  const outstandingMap = new Map<string, number>();
+  for (const inv of openInvoiceRows) {
+    const cur = inv.currency ?? "EUR";
+    outstandingMap.set(cur, (outstandingMap.get(cur) ?? 0) + (inv.total ?? 0));
+  }
+  const outstandingByCurrency = Array.from(outstandingMap.entries()).map(
+    ([currency, amount]) => ({ currency, amount })
+  );
 
   // Average payment delay (days between issue date and paid date)
   const paidWithDates = db
@@ -104,14 +111,23 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       const currentMonthKey = `${currentYear}-${String(currentMonth).padStart(2, "0")}`;
       const dailyRate = defaultProjectId ? await getEffectiveRate(defaultProjectId, currentMonthKey) : 0;
 
-      const eurAmount = summary.effectiveWorkingDays * dailyRate;
-      const grossInr = eurAmount * avgRate;
+      // Get the default project's currency
+      let projectCurrency = "EUR";
+      if (defaultProjectId) {
+        const { getProject } = await import("./projects");
+        const proj = await getProject(defaultProjectId);
+        if (proj?.currency) projectCurrency = proj.currency;
+      }
+
+      const foreignAmount = summary.effectiveWorkingDays * dailyRate;
+      const grossInr = foreignAmount * avgRate;
       const estimatedInr = grossInr * (1 - avgDeductionPct);
 
       nextMonthProjection = {
         estimatedInr: Math.round(estimatedInr),
         workingDays: summary.effectiveWorkingDays,
         avgRate: Math.round(avgRate * 100) / 100,
+        currency: projectCurrency,
       };
     }
   }
@@ -121,7 +137,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     thisMonthEarnings,
     leaveBalance,
     openInvoices: openCount,
-    outstandingEur,
+    outstandingByCurrency,
     avgPaymentDelay,
     nextMonthProjection,
   };
@@ -240,6 +256,29 @@ export async function getBalanceData(): Promise<{
   return { leaveBalance, totalExtraWorking, extraBalance, leavesAllowed, leavesTaken };
 }
 
+export async function getPrimaryCurrency(): Promise<string> {
+  // Determine the most-used currency across paid invoices, fallback to default project
+  const currencies = db
+    .select({ currency: invoices.currency, count: sql<number>`count(*)` })
+    .from(invoices)
+    .where(eq(invoices.status, "paid"))
+    .groupBy(invoices.currency)
+    .orderBy(sql`count(*) DESC`)
+    .limit(1)
+    .all();
+  if (currencies.length > 0 && currencies[0].currency) {
+    return currencies[0].currency;
+  }
+  // Fallback: default project currency
+  const defaultProjectId = await getDefaultProjectId();
+  if (defaultProjectId) {
+    const { getProject } = await import("./projects");
+    const proj = await getProject(defaultProjectId);
+    if (proj?.currency) return proj.currency;
+  }
+  return "EUR";
+}
+
 export async function getMonthlyExchangeRateData(months: number = 12): Promise<
   { month: string; rate: number }[]
 > {
@@ -283,9 +322,9 @@ export async function getCalendarOverviewData(): Promise<{
   return { entries, holidays: Array.from(holidays.entries()) };
 }
 
-export async function getLiveEurInrRate(): Promise<number | null> {
+export async function getLiveRate(currency: string = "EUR"): Promise<number | null> {
   try {
-    const res = await fetch("https://open.er-api.com/v6/latest/EUR", { next: { revalidate: 3600 } });
+    const res = await fetch(`https://open.er-api.com/v6/latest/${currency}`, { next: { revalidate: 3600 } });
     if (!res.ok) return null;
     const data = await res.json();
     return data?.rates?.INR ?? null;
@@ -295,7 +334,7 @@ export async function getLiveEurInrRate(): Promise<number | null> {
 }
 
 export async function getRecentInvoices(limit: number = 5): Promise<
-  { id: number; invoiceNumber: string; clientName: string; total: number; status: string; issueDate: string }[]
+  { id: number; invoiceNumber: string; clientName: string; total: number; currency: string; status: string; issueDate: string }[]
 > {
   return db
     .select({
@@ -303,6 +342,7 @@ export async function getRecentInvoices(limit: number = 5): Promise<
       invoiceNumber: invoices.invoiceNumber,
       clientName: clients.name,
       total: invoices.total,
+      currency: invoices.currency,
       status: invoices.status,
       issueDate: invoices.issueDate,
     })

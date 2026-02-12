@@ -31,7 +31,7 @@ export function PaymentDetails({ invoice }: PaymentDetailsProps) {
 
   async function handleSave() {
     if (!rate || rate <= 0) {
-      toast.error("Please enter a valid EUR to INR rate");
+      toast.error(`Please enter a valid ${invoice.currency} to INR rate`);
       return;
     }
     setSaving(true);
@@ -99,7 +99,7 @@ export function PaymentDetails({ invoice }: PaymentDetailsProps) {
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">EUR to INR Rate</Label>
+                <Label className="text-xs">{invoice.currency} to INR Rate</Label>
                 <Input
                   type="number"
                   min={0}
@@ -160,7 +160,7 @@ export function PaymentDetails({ invoice }: PaymentDetailsProps) {
                 <span className="text-right font-medium">{formatDate(invoice.paidDate)}</span>
               </>
             )}
-            <span className="text-gray-500">EUR to INR Rate</span>
+            <span className="text-gray-500">{invoice.currency} to INR Rate</span>
             <span className="text-right font-medium">{invoice.eurToInrRate}</span>
             <span className="text-gray-500">Gross INR</span>
             <span className="text-right font-medium">
