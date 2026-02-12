@@ -70,12 +70,12 @@ export function MonthCalendar({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-7 gap-2">
+    <div className="space-y-4">
+      <div className="grid grid-cols-7 gap-px">
         {WEEKDAYS.map((day) => (
           <div
             key={day}
-            className="py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+            className="py-2 text-center text-xs font-medium text-muted-foreground"
           >
             {day}
           </div>
