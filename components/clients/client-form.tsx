@@ -7,6 +7,8 @@ import { createClient, updateClient } from "@/actions/clients"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { SUPPORTED_CURRENCIES } from "@/lib/constants"
 import type { Client } from "@/lib/types"
 
 interface ClientFormProps {
@@ -30,6 +32,7 @@ export function ClientForm({ client, onSuccess }: ClientFormProps) {
   const [country, setCountry] = useState(client?.country ?? "")
   const [email, setEmail] = useState(client?.email ?? "")
   const [phone, setPhone] = useState(client?.phone ?? "")
+  const [currency, setCurrency] = useState(client?.currency ?? "EUR")
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -54,6 +57,7 @@ export function ClientForm({ client, onSuccess }: ClientFormProps) {
         country: country.trim(),
         email: email.trim(),
         phone: phone.trim(),
+        currency,
       }
 
       if (isEditing) {
@@ -104,6 +108,22 @@ export function ClientForm({ client, onSuccess }: ClientFormProps) {
             value={gstin}
             onChange={(e) => setGstin(e.target.value)}
           />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="currency">Currency</Label>
+          <Select value={currency} onValueChange={setCurrency}>
+            <SelectTrigger id="currency">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SUPPORTED_CURRENCIES.map((c) => (
+                <SelectItem key={c.code} value={c.code}>
+                  {c.symbol} {c.code} — {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="space-y-2">

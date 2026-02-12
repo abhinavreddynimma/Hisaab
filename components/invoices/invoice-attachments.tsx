@@ -62,7 +62,7 @@ export function InvoiceAttachments({
         formData.append("label", label.trim());
       }
 
-      const response = await fetch(`/api/invoices/${invoiceId}/attachments`, {
+      const response = await fetch(`/hisaab/api/invoices/${invoiceId}/attachments`, {
         method: "POST",
         body: formData,
       });
@@ -100,7 +100,7 @@ export function InvoiceAttachments({
   async function handleDelete(attachmentId: number) {
     setDeletingId(attachmentId);
     try {
-      const response = await fetch(`/api/attachments/${attachmentId}`, {
+      const response = await fetch(`/hisaab/api/attachments/${attachmentId}`, {
         method: "DELETE",
       });
 
@@ -191,7 +191,7 @@ export function InvoiceAttachments({
                     asChild
                   >
                     <a
-                      href={`/api/attachments/${attachment.id}`}
+                      href={`/hisaab/api/attachments/${attachment.id}`}
                       target="_blank"
                       rel="noopener noreferrer"
                     >
