@@ -10,7 +10,7 @@ export default async function InvoicesPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Invoices</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">Invoices</h1>
         <Button asChild>
           <Link href="/invoices/new">
             <Plus className="mr-2 h-4 w-4" />
