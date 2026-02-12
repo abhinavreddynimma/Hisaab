@@ -70,7 +70,7 @@ A freelancer payroll management app for tracking income, clients, invoices, work
    npm run dev
    ```
 
-4. Open [http://localhost:3000](http://localhost:3000)
+4. Open [http://localhost:3000/hisaab](http://localhost:3000/hisaab)
 
 ## Production Build
 
