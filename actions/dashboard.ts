@@ -91,18 +91,18 @@ export async function getDashboardStats(): Promise<DashboardStats> {
           (totalEur * avgRate)
         : 0;
 
-      // Next month's earnings from next month's working days
-      const nextDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-      const nextYear = nextDate.getFullYear();
-      const nextMonth = nextDate.getMonth() + 1;
-      const nextMonthEntries = await getDayEntriesForMonth(nextYear, nextMonth);
-      const nextHolidays = getFrenchHolidays(nextYear);
-      const augmented = withImplicitWorkingDays(nextMonthEntries as DayEntry[], nextYear, nextMonth, nextHolidays);
+      // Next month's earnings based on this month's working days
+      // (invoice for current month gets paid next month)
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth() + 1;
+      const currentMonthEntries = await getDayEntriesForMonth(currentYear, currentMonth);
+      const currentHolidays = getFrenchHolidays(currentYear);
+      const augmented = withImplicitWorkingDays(currentMonthEntries as DayEntry[], currentYear, currentMonth, currentHolidays);
       const summary = calculateMonthSummary(augmented);
 
       const defaultProjectId = await getDefaultProjectId();
-      const nextMonthKey = `${nextYear}-${String(nextMonth).padStart(2, "0")}`;
-      const dailyRate = defaultProjectId ? await getEffectiveRate(defaultProjectId, nextMonthKey) : 0;
+      const currentMonthKey = `${currentYear}-${String(currentMonth).padStart(2, "0")}`;
+      const dailyRate = defaultProjectId ? await getEffectiveRate(defaultProjectId, currentMonthKey) : 0;
 
       const eurAmount = summary.effectiveWorkingDays * dailyRate;
       const grossInr = eurAmount * avgRate;
