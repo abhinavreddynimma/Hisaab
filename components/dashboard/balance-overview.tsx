@@ -255,7 +255,6 @@ function CumulativeTooltip({ active, payload, label }: { active?: boolean; paylo
   const rows = [
     { label: "Working", value: d.cumWorking, color: "#10b981" },
     { label: "Extra", value: d.cumExtra, color: "#10b981" },
-    { label: "Half Days", value: d.cumHalfDays, color: "#f59e0b" },
     { label: "Leaves", value: d.cumLeaves, color: "#ef4444" },
   ].filter((r) => r.value > 0);
 
@@ -475,9 +474,6 @@ export function BalanceOverview({ balanceData, monthlyData, financialYear }: Bal
                   <Line yAxisId="left" type="monotone" dataKey="cumWorking" stroke="#10b981" strokeWidth={2.5} dot={{ r: 4, fill: "#10b981" }} name="Working" label={renderLabel("#10b981")} />
                   <Line yAxisId="right" type="monotone" dataKey="cumExtra" stroke="#10b981" strokeWidth={2} strokeDasharray="4 4" dot={{ r: 3, fill: "#10b981" }} name="Extra" label={renderLabel("#059669")} />
                   <Line yAxisId="right" type="monotone" dataKey="cumLeaves" stroke="#ef4444" strokeWidth={2} dot={{ r: 4, fill: "#ef4444" }} name="Leaves" label={renderLabel("#ef4444")} />
-                  {cumulativeData.some(d => d.cumHalfDays > 0) && (
-                    <Line yAxisId="right" type="monotone" dataKey="cumHalfDays" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3, fill: "#f59e0b" }} name="Half Days" label={renderLabel("#f59e0b")} />
-                  )}
                 </LineChart>
               </ResponsiveContainer>
             );
