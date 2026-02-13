@@ -3,6 +3,7 @@ import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
 import { addInvoiceAttachment } from "@/actions/invoices";
+import { assertAdminAccess } from "@/lib/auth";
 
 const ATTACHMENTS_DIR = path.join(process.cwd(), "data", "attachments");
 
@@ -10,6 +11,12 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ invoiceId: string }> }
 ) {
+  try {
+    await assertAdminAccess();
+  } catch {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const { invoiceId } = await params;
   const id = parseInt(invoiceId);
   if (isNaN(id)) {

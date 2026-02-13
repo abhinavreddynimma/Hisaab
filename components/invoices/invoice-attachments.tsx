@@ -28,6 +28,7 @@ import type { InvoiceAttachment } from "@/lib/types";
 interface InvoiceAttachmentsProps {
   invoiceId: number;
   attachments: InvoiceAttachment[];
+  canEdit?: boolean;
 }
 
 function formatFileSize(bytes: number): string {
@@ -39,6 +40,7 @@ function formatFileSize(bytes: number): string {
 export function InvoiceAttachments({
   invoiceId,
   attachments: initialAttachments,
+  canEdit = true,
 }: InvoiceAttachmentsProps) {
   const [attachments, setAttachments] = useState(initialAttachments);
   const [uploading, setUploading] = useState(false);
@@ -126,38 +128,39 @@ export function InvoiceAttachments({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Upload Form */}
-        <form onSubmit={handleUpload} className="space-y-3">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="space-y-1">
-              <Label htmlFor="attachment-file" className="text-xs">File</Label>
-              <Input
-                id="attachment-file"
-                type="file"
-                ref={fileInputRef}
-                className="text-sm"
-              />
+        {canEdit && (
+          <form onSubmit={handleUpload} className="space-y-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <Label htmlFor="attachment-file" className="text-xs">File</Label>
+                <Input
+                  id="attachment-file"
+                  type="file"
+                  ref={fileInputRef}
+                  className="text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="attachment-label" className="text-xs">Label (optional)</Label>
+                <Input
+                  id="attachment-label"
+                  value={label}
+                  onChange={(e) => setLabel(e.target.value)}
+                  placeholder="e.g. Bank Receipt, FIRA, Statement"
+                  className="text-sm"
+                />
+              </div>
             </div>
-            <div className="space-y-1">
-              <Label htmlFor="attachment-label" className="text-xs">Label (optional)</Label>
-              <Input
-                id="attachment-label"
-                value={label}
-                onChange={(e) => setLabel(e.target.value)}
-                placeholder="e.g. Bank Receipt, FIRA, Statement"
-                className="text-sm"
-              />
-            </div>
-          </div>
-          <Button type="submit" size="sm" disabled={uploading}>
-            {uploading ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Upload className="mr-2 h-4 w-4" />
-            )}
-            {uploading ? "Uploading..." : "Upload"}
-          </Button>
-        </form>
+            <Button type="submit" size="sm" disabled={uploading}>
+              {uploading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="mr-2 h-4 w-4" />
+              )}
+              {uploading ? "Uploading..." : "Upload"}
+            </Button>
+          </form>
+        )}
 
         {/* Attachments List */}
         {attachments.length > 0 && (
@@ -199,40 +202,42 @@ export function InvoiceAttachments({
                       <span className="sr-only">Download</span>
                     </a>
                   </Button>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
-                        disabled={deletingId === attachment.id}
-                      >
-                        {deletingId === attachment.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" />
-                        )}
-                        <span className="sr-only">Delete</span>
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Delete Attachment</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Are you sure you want to delete &quot;{attachment.originalName}&quot;?
-                          This cannot be undone.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={() => handleDelete(attachment.id)}
+                  {canEdit && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          disabled={deletingId === attachment.id}
                         >
-                          Delete
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                          {deletingId === attachment.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                          <span className="sr-only">Delete</span>
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete Attachment</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Are you sure you want to delete &quot;{attachment.originalName}&quot;?
+                            This cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => handleDelete(attachment.id)}
+                          >
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
                 </div>
               </div>
             ))}
