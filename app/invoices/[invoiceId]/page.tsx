@@ -41,7 +41,7 @@ export default async function InvoiceDetailPage({
     <div className="space-y-6">
       <div className="flex items-center justify-between no-print">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold tracking-tight">
+          <h1 className="font-display text-2xl font-bold tracking-tight">
             {invoice.invoiceNumber}
           </h1>
           <Badge variant={statusConfig.variant}>{statusConfig.label}</Badge>
