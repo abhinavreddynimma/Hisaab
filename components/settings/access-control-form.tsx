@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
-  createShareableSetupLink,
+  createAdmin,
   createViewerUser,
   updateViewerStatus,
 } from "@/actions/auth";
@@ -17,27 +17,32 @@ import { Label } from "@/components/ui/label";
 
 interface AccessControlFormProps {
   sessionsEnabled: boolean;
-  setupLinkExpiresAt: string | null;
+  hasAdminUser: boolean;
   initialViewers: AuthUser[];
-}
-
-function formatDateTime(value: string): string {
-  return new Date(value).toLocaleString();
 }
 
 export function AccessControlForm({
   sessionsEnabled,
-  setupLinkExpiresAt,
+  hasAdminUser,
   initialViewers,
 }: AccessControlFormProps) {
   const router = useRouter();
-  const [generatingLink, setGeneratingLink] = useState(false);
-  const [generatedLink, setGeneratedLink] = useState<string | null>(null);
-  const [generatedLinkExpiry, setGeneratedLinkExpiry] = useState<string | null>(setupLinkExpiresAt);
-  const [creatingViewer, setCreatingViewer] = useState(false);
+
+  // Admin creation state
+  const [adminName, setAdminName] = useState("");
+  const [adminEmail, setAdminEmail] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [adminConfirmPassword, setAdminConfirmPassword] = useState("");
+  const [creatingAdmin, setCreatingAdmin] = useState(false);
+
+  // Viewer creation state
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [tag, setTag] = useState("");
+  const [creatingViewer, setCreatingViewer] = useState(false);
+
+  // Viewer list state
   const [updatingUserId, setUpdatingUserId] = useState<number | null>(null);
   const [viewers, setViewers] = useState<AuthUser[]>(initialViewers);
 
@@ -46,42 +51,49 @@ export function AccessControlForm({
     [viewers]
   );
 
-  async function handleGenerateLink() {
-    setGeneratingLink(true);
+  async function handleCreateAdmin(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (adminPassword !== adminConfirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+    setCreatingAdmin(true);
     try {
-      const result = await createShareableSetupLink();
-      if (!result.success || !result.token || !result.expiresAt) {
-        toast.error(result.error ?? "Unable to generate shareable link");
+      const result = await createAdmin({
+        name: adminName,
+        email: adminEmail,
+        password: adminPassword,
+      });
+      if (!result.success) {
+        toast.error(result.error ?? "Unable to create admin account");
         return;
       }
-      const url = `${window.location.origin}/hisaab/setup/${result.token}`;
-      setGeneratedLink(url);
-      setGeneratedLinkExpiry(result.expiresAt);
-      toast.success("Shareable setup link created");
+      toast.success("Admin account created. Sessions are now enabled.");
+      router.refresh();
     } finally {
-      setGeneratingLink(false);
+      setCreatingAdmin(false);
     }
-  }
-
-  async function handleCopyLink() {
-    if (!generatedLink) return;
-    await navigator.clipboard.writeText(generatedLink);
-    toast.success("Link copied");
   }
 
   async function handleCreateViewer(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setCreatingViewer(true);
     try {
-      const result = await createViewerUser({ name, email, password });
+      const result = await createViewerUser({
+        name,
+        email,
+        password,
+        tag: tag || undefined,
+      });
       if (!result.success) {
-        toast.error(result.error ?? "Unable to create viewer");
+        toast.error(result.error ?? "Unable to create user");
         return;
       }
-      toast.success("Viewer account created");
+      toast.success("User account created");
       setName("");
       setEmail("");
       setPassword("");
+      setTag("");
       router.refresh();
     } finally {
       setCreatingViewer(false);
@@ -93,7 +105,7 @@ export function AccessControlForm({
     try {
       const result = await updateViewerStatus({ userId, isActive });
       if (!result.success) {
-        toast.error(result.error ?? "Unable to update viewer");
+        toast.error(result.error ?? "Unable to update user");
         return;
       }
       setViewers((current) =>
@@ -101,48 +113,74 @@ export function AccessControlForm({
           viewer.id === userId ? { ...viewer, isActive } : viewer
         )
       );
-      toast.success(isActive ? "Viewer enabled" : "Viewer disabled");
+      toast.success(isActive ? "User enabled" : "User disabled");
     } finally {
       setUpdatingUserId(null);
     }
   }
 
-  if (!sessionsEnabled) {
+  if (!sessionsEnabled && !hasAdminUser) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Enable User Sessions</CardTitle>
+          <CardTitle>Create Admin Account</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Sessions are currently disabled. Generate a shareable setup link to create
-            the first admin account. Once that account is created, sign-in will be required.
+            Create your admin account to enable access control. Once created,
+            sign-in will be required to access the app and you can add users
+            with view-only permissions.
           </p>
-          <Button onClick={handleGenerateLink} disabled={generatingLink}>
-            {generatingLink ? "Generating..." : "Create Shareable Link"}
-          </Button>
-
-          {generatedLink && (
-            <div className="space-y-2 rounded-md border p-3">
-              <Label htmlFor="setup-link">Setup link</Label>
-              <Input id="setup-link" value={generatedLink} readOnly />
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs text-muted-foreground">
-                  Expires on {generatedLinkExpiry ? formatDateTime(generatedLinkExpiry) : "N/A"}
-                </p>
-                <Button size="sm" variant="outline" onClick={handleCopyLink}>
-                  Copy
-                </Button>
+          <form onSubmit={handleCreateAdmin} className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="admin-name">Name</Label>
+                <Input
+                  id="admin-name"
+                  value={adminName}
+                  onChange={(event) => setAdminName(event.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="admin-email">Email</Label>
+                <Input
+                  id="admin-email"
+                  type="email"
+                  value={adminEmail}
+                  onChange={(event) => setAdminEmail(event.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="admin-password">Password</Label>
+                <Input
+                  id="admin-password"
+                  type="password"
+                  minLength={8}
+                  value={adminPassword}
+                  onChange={(event) => setAdminPassword(event.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="admin-confirm-password">Confirm Password</Label>
+                <Input
+                  id="admin-confirm-password"
+                  type="password"
+                  minLength={8}
+                  value={adminConfirmPassword}
+                  onChange={(event) => setAdminConfirmPassword(event.target.value)}
+                  required
+                />
               </div>
             </div>
-          )}
-
-          {!generatedLink && generatedLinkExpiry && (
-            <p className="text-xs text-muted-foreground">
-              A previous setup link exists and expires on {formatDateTime(generatedLinkExpiry)}.
-              Generate a new link if needed.
-            </p>
-          )}
+            <div className="flex justify-end">
+              <Button type="submit" disabled={creatingAdmin}>
+                {creatingAdmin ? "Creating..." : "Create Admin Account"}
+              </Button>
+            </div>
+          </form>
         </CardContent>
       </Card>
     );
@@ -161,7 +199,7 @@ export function AccessControlForm({
           <div className="flex items-center gap-2">
             <Badge variant="default">Enabled</Badge>
             <span className="text-xs text-muted-foreground">
-              {hasActiveViewer ? "Viewer accounts are active." : "No active viewer accounts yet."}
+              {hasActiveViewer ? "User accounts are active." : "No user accounts yet."}
             </span>
           </div>
         </CardContent>
@@ -169,10 +207,10 @@ export function AccessControlForm({
 
       <Card>
         <CardHeader>
-          <CardTitle>Create Viewer Account</CardTitle>
+          <CardTitle>Create User Account</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleCreateViewer} className="grid gap-4 sm:grid-cols-3">
+          <form onSubmit={handleCreateViewer} className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="viewer-name">Name</Label>
               <Input
@@ -203,9 +241,18 @@ export function AccessControlForm({
                 required
               />
             </div>
-            <div className="sm:col-span-3 flex justify-end">
+            <div className="space-y-2">
+              <Label htmlFor="viewer-tag">Tag</Label>
+              <Input
+                id="viewer-tag"
+                placeholder="e.g. accountant, friend, lawyer"
+                value={tag}
+                onChange={(event) => setTag(event.target.value)}
+              />
+            </div>
+            <div className="sm:col-span-2 flex justify-end">
               <Button type="submit" disabled={creatingViewer}>
-                {creatingViewer ? "Creating..." : "Create Viewer"}
+                {creatingViewer ? "Creating..." : "Create User"}
               </Button>
             </div>
           </form>
@@ -214,11 +261,11 @@ export function AccessControlForm({
 
       <Card>
         <CardHeader>
-          <CardTitle>Viewer Accounts</CardTitle>
+          <CardTitle>User Accounts</CardTitle>
         </CardHeader>
         <CardContent>
           {viewers.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No viewer accounts created yet.</p>
+            <p className="text-sm text-muted-foreground">No user accounts created yet.</p>
           ) : (
             <div className="space-y-3">
               {viewers.map((viewer) => (
@@ -227,7 +274,12 @@ export function AccessControlForm({
                   className="flex items-center justify-between rounded-md border p-3"
                 >
                   <div>
-                    <p className="font-medium">{viewer.name}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium">{viewer.name}</p>
+                      {viewer.tag && (
+                        <Badge variant="outline">{viewer.tag}</Badge>
+                      )}
+                    </div>
                     <p className="text-sm text-muted-foreground">{viewer.email}</p>
                   </div>
                   <div className="flex items-center gap-2">
