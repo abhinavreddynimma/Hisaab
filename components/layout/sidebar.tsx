@@ -9,7 +9,6 @@ import {
   FileText,
   Settings,
   IndianRupee,
-  Sparkles,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
@@ -88,7 +87,17 @@ function SidebarBrand() {
   return (
     <div className="flex h-16 items-center gap-2.5 border-b border-sidebar-border px-6">
       <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary/20">
-        <Sparkles className="h-4 w-4 text-sidebar-primary" />
+        <svg
+          className="h-4 w-4 text-sidebar-primary"
+          viewBox="0 0 24 24"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <rect x="5" y="3" width="4" height="18" rx="2" fill="#f43f5e" />
+          <rect x="15" y="3" width="4" height="18" rx="2" fill="#10b981" />
+          <rect x="7" y="8" width="10" height="2.5" rx="1.25" fill="currentColor" />
+          <rect x="7" y="13.5" width="10" height="2.5" rx="1.25" fill="currentColor" />
+        </svg>
       </div>
       <span className="font-display text-base font-bold tracking-tight text-sidebar-accent-foreground">
         Hisaab
