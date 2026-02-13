@@ -9,8 +9,11 @@ import {
 } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft } from "lucide-react"
+import { requirePageAccess } from "@/lib/auth"
 
-export default function NewClientPage() {
+export default async function NewClientPage() {
+  await requirePageAccess()
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
