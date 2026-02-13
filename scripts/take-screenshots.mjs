@@ -114,7 +114,7 @@ async function takeScreenshots() {
   };
 
   let step = 1;
-  const totalSteps = 22;
+  const totalSteps = 23;
   const log = (label) => console.log(`${step++}/${totalSteps} ${label}`);
 
   console.log("Taking screenshots...\n");
@@ -158,8 +158,7 @@ async function takeScreenshots() {
   );
   // Navigate backwards from current month to Aug 2025
   for (let i = 0; i < 20; i++) {
-    const heading = await page.locator("h2, h3, [role='heading']").first().textContent().catch(() => "");
-    if (heading && heading.includes("August") && heading.includes("2025")) break;
+    if (await page.getByText("August 2025").count() > 0) break;
     if (await prevBtn.count()) {
       await prevBtn.first().click();
       await page.waitForTimeout(300);
