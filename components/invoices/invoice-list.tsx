@@ -53,9 +53,10 @@ import { formatForeignCurrency, formatCurrency, formatDate } from "@/lib/utils";
 
 interface InvoiceListProps {
   invoices: (Invoice & { clientName: string })[];
+  canEdit?: boolean;
 }
 
-export function InvoiceList({ invoices }: InvoiceListProps) {
+export function InvoiceList({ invoices, canEdit = true }: InvoiceListProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("all");
 
@@ -146,9 +147,11 @@ export function InvoiceList({ invoices }: InvoiceListProps) {
       return (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <p className="text-muted-foreground">No invoices found.</p>
-          <Button asChild variant="link" className="mt-2">
-            <Link href="/invoices/new">Create your first invoice</Link>
-          </Button>
+          {canEdit && (
+            <Button asChild variant="link" className="mt-2">
+              <Link href="/invoices/new">Create your first invoice</Link>
+            </Button>
+          )}
         </div>
       );
     }
@@ -163,7 +166,7 @@ export function InvoiceList({ invoices }: InvoiceListProps) {
             <TableHead className="text-right">Amount</TableHead>
             <TableHead>Paid Date</TableHead>
             <TableHead>Status</TableHead>
-            <TableHead className="w-[70px]">Actions</TableHead>
+            {canEdit && <TableHead className="w-[70px]">Actions</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -195,74 +198,76 @@ export function InvoiceList({ invoices }: InvoiceListProps) {
                     {statusConfig.label}
                   </Badge>
                 </TableCell>
-                <TableCell>
-                  <AlertDialog>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreHorizontal className="h-4 w-4" />
-                          <span className="sr-only">Open menu</span>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem asChild>
-                          <Link href={`/invoices/${invoice.id}`}>
-                            <Eye className="mr-2 h-4 w-4" />
-                            View
-                          </Link>
-                        </DropdownMenuItem>
-                        {invoice.status !== "sent" && invoice.status !== "cancelled" && (
-                          <DropdownMenuItem
-                            onClick={() =>
-                              handleStatusChange(invoice.id, "sent")
-                            }
-                          >
-                            <Send className="mr-2 h-4 w-4" />
-                            Mark as Sent
+                {canEdit && (
+                  <TableCell>
+                    <AlertDialog>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <MoreHorizontal className="h-4 w-4" />
+                            <span className="sr-only">Open menu</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem asChild>
+                            <Link href={`/invoices/${invoice.id}`}>
+                              <Eye className="mr-2 h-4 w-4" />
+                              View
+                            </Link>
                           </DropdownMenuItem>
-                        )}
-                        {invoice.status !== "paid" && invoice.status !== "cancelled" && (
-                          <DropdownMenuItem
-                            onClick={() => openPaidDialog(invoice)}
+                          {invoice.status !== "sent" && invoice.status !== "cancelled" && (
+                            <DropdownMenuItem
+                              onClick={() =>
+                                handleStatusChange(invoice.id, "sent")
+                              }
+                            >
+                              <Send className="mr-2 h-4 w-4" />
+                              Mark as Sent
+                            </DropdownMenuItem>
+                          )}
+                          {invoice.status !== "paid" && invoice.status !== "cancelled" && (
+                            <DropdownMenuItem
+                              onClick={() => openPaidDialog(invoice)}
+                            >
+                              <CheckCircle className="mr-2 h-4 w-4" />
+                              Mark as Paid
+                            </DropdownMenuItem>
+                          )}
+                          {invoice.status !== "cancelled" && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <AlertDialogTrigger asChild>
+                                <DropdownMenuItem className="text-destructive focus:text-destructive">
+                                  <XCircle className="mr-2 h-4 w-4" />
+                                  Cancel Invoice
+                                </DropdownMenuItem>
+                              </AlertDialogTrigger>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Cancel Invoice</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Are you sure you want to cancel invoice{" "}
+                            <strong>{invoice.invoiceNumber}</strong>? The invoice
+                            will be marked as cancelled and kept for records.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Go Back</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => handleCancel(invoice.id)}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                           >
-                            <CheckCircle className="mr-2 h-4 w-4" />
-                            Mark as Paid
-                          </DropdownMenuItem>
-                        )}
-                        {invoice.status !== "cancelled" && (
-                          <>
-                            <DropdownMenuSeparator />
-                            <AlertDialogTrigger asChild>
-                              <DropdownMenuItem className="text-destructive focus:text-destructive">
-                                <XCircle className="mr-2 h-4 w-4" />
-                                Cancel Invoice
-                              </DropdownMenuItem>
-                            </AlertDialogTrigger>
-                          </>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Cancel Invoice</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Are you sure you want to cancel invoice{" "}
-                          <strong>{invoice.invoiceNumber}</strong>? The invoice
-                          will be marked as cancelled and kept for records.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Go Back</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={() => handleCancel(invoice.id)}
-                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        >
-                          Cancel Invoice
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </TableCell>
+                            Cancel Invoice
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </TableCell>
+                )}
               </TableRow>
             );
           })}
@@ -292,7 +297,7 @@ export function InvoiceList({ invoices }: InvoiceListProps) {
                     </span>
                   ))}
                 </TableCell>
-                <TableCell colSpan={3} />
+                <TableCell colSpan={canEdit ? 3 : 2} />
               </TableRow>
             </TableFooter>
           );
@@ -326,89 +331,90 @@ export function InvoiceList({ invoices }: InvoiceListProps) {
         </TabsContent>
       </Tabs>
 
-      {/* Mark as Paid Dialog */}
-      <Dialog open={paidDialogOpen} onOpenChange={setPaidDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Mark as Paid</DialogTitle>
-            <DialogDescription>
-              Enter the {paidInvoice?.currency ?? "EUR"} to INR conversion details for invoice{" "}
-              <strong>{paidInvoice?.invoiceNumber}</strong>.
-            </DialogDescription>
-          </DialogHeader>
-          {paidInvoice && (
-            <div className="space-y-4">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Invoice Total</span>
-                <span className="font-medium">{formatForeignCurrency(paidInvoice.total, paidInvoice.currency)}</span>
-              </div>
-              <Separator />
-              <div className="space-y-2">
-                <Label htmlFor="paidDate">Payment Date</Label>
-                <Input
-                  id="paidDate"
-                  type="date"
-                  value={paidDate}
-                  onChange={(e) => setPaidDate(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="eurToInrRate">{paidInvoice.currency} to INR Rate</Label>
-                <Input
-                  id="eurToInrRate"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={eurToInrRate}
-                  onChange={(e) => setEurToInrRate(e.target.value)}
-                  placeholder="e.g. 89.50"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+      {canEdit && (
+        <Dialog open={paidDialogOpen} onOpenChange={setPaidDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Mark as Paid</DialogTitle>
+              <DialogDescription>
+                Enter the {paidInvoice?.currency ?? "EUR"} to INR conversion details for invoice{" "}
+                <strong>{paidInvoice?.invoiceNumber}</strong>.
+              </DialogDescription>
+            </DialogHeader>
+            {paidInvoice && (
+              <div className="space-y-4">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Invoice Total</span>
+                  <span className="font-medium">{formatForeignCurrency(paidInvoice.total, paidInvoice.currency)}</span>
+                </div>
+                <Separator />
                 <div className="space-y-2">
-                  <Label htmlFor="platformCharges">Platform Charges (INR)</Label>
+                  <Label htmlFor="paidDate">Payment Date</Label>
                   <Input
-                    id="platformCharges"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={platformCharges}
-                    onChange={(e) => setPlatformCharges(e.target.value)}
+                    id="paidDate"
+                    type="date"
+                    value={paidDate}
+                    onChange={(e) => setPaidDate(e.target.value)}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="bankCharges">Bank Charges (INR)</Label>
+                  <Label htmlFor="eurToInrRate">{paidInvoice.currency} to INR Rate</Label>
                   <Input
-                    id="bankCharges"
+                    id="eurToInrRate"
                     type="number"
                     min={0}
                     step="0.01"
-                    value={bankCharges}
-                    onChange={(e) => setBankCharges(e.target.value)}
+                    value={eurToInrRate}
+                    onChange={(e) => setEurToInrRate(e.target.value)}
+                    placeholder="e.g. 89.50"
                   />
                 </div>
-              </div>
-              <Separator />
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Gross INR</span>
-                  <span className="font-medium">{formatCurrency(grossInr)}</span>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="platformCharges">Platform Charges (INR)</Label>
+                    <Input
+                      id="platformCharges"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={platformCharges}
+                      onChange={(e) => setPlatformCharges(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="bankCharges">Bank Charges (INR)</Label>
+                    <Input
+                      id="bankCharges"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={bankCharges}
+                      onChange={(e) => setBankCharges(e.target.value)}
+                    />
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Net INR Realized</span>
-                  <span className="font-semibold">{formatCurrency(netInr)}</span>
+                <Separator />
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Gross INR</span>
+                    <span className="font-medium">{formatCurrency(grossInr)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Net INR Realized</span>
+                    <span className="font-semibold">{formatCurrency(netInr)}</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPaidDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleMarkAsPaid}>Confirm Payment</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setPaidDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleMarkAsPaid}>Confirm Payment</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </>
   );
 }

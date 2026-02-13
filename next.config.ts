@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   basePath: "/hisaab",
+  output: "standalone",
   serverExternalPackages: ["better-sqlite3"],
 };
 
