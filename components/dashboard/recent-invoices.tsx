@@ -75,7 +75,7 @@ export function RecentInvoices({ invoices }: RecentInvoicesProps) {
                   <TableCell>{formatForeignCurrency(invoice.total, invoice.currency)}</TableCell>
                   <TableCell>
                     {statusConfig ? (
-                      <Badge variant={statusConfig.variant}>
+                      <Badge variant={statusConfig.variant} className={statusConfig.className}>
                         {statusConfig.label}
                       </Badge>
                     ) : (
