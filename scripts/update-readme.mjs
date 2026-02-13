@@ -25,8 +25,11 @@ const screenshots = [
   { title: "Dashboard Charts", file: "dashboard-charts.png" },
   { title: "Calendar", file: "calendar.png" },
   { title: "Calendar Day Entry", file: "calendar-day-entry.png" },
+  { title: "Calendar Snapshot", file: "calendar-snapshot.png" },
   { title: "Client Management", file: "clients.png" },
   { title: "Client Detail", file: "client-detail.png" },
+  { title: "Add Project", file: "client-add-project.png" },
+  { title: "New Client Form", file: "client-new.png" },
   { title: "Invoices", file: "invoices.png" },
   { title: "Invoice Detail", file: "invoice-detail.png" },
   { title: "Invoice Payment Details", file: "invoice-payment.png" },
@@ -34,6 +37,7 @@ const screenshots = [
   { title: "Invoice Create Form", file: "invoice-create.png" },
   { title: "Tax Overview", file: "tax.png" },
   { title: "Tax Projection", file: "tax-projection.png" },
+  { title: "Tax Payment", file: "tax-payment.png" },
   { title: "Settings Overview", file: "settings.png" },
   { title: "Settings - Bank Details", file: "settings-bank.png" },
   { title: "Settings - Leave Policy", file: "settings-leave-policy.png" },
@@ -107,6 +111,94 @@ Use \`docs/DEMO_SCRIPT.md\` as the walkthrough checklist for demos and screensho
 npm run build
 npm start
 \`\`\`
+
+## Self-Hosting with Docker
+
+Host Hisaab on your home server (tested on Beelink Mini S13) so it runs 24/7 and is accessible to your accountant, CA, or anyone on your network.
+
+### Prerequisites
+
+- [Docker](https://docs.docker.com/engine/install/) and [Docker Compose](https://docs.docker.com/compose/install/) installed on your server
+- Git (to clone the repo)
+
+### Quick Start
+
+\`\`\`bash
+# Clone the repo
+git clone https://github.com/your-username/hisaab.git
+cd hisaab
+
+# Build and start (runs in background, restarts automatically)
+docker compose up -d --build
+\`\`\`
+
+Hisaab is now running at **http://your-server-ip:3000**
+
+### Configuration
+
+Create a \`.env\` file to customize settings (all optional):
+
+\`\`\`env
+# Port to expose on the host (default: 3000)
+PORT=3000
+
+# Where to store database and attachments on the host (default: ./data)
+DATA_LOCATION=./data
+\`\`\`
+
+### Commands Reference
+
+\`\`\`bash
+# Start the app (build + run in background)
+docker compose up -d --build
+
+# View logs
+docker compose logs -f
+
+# Stop the app
+docker compose down
+
+# Restart the app
+docker compose restart
+
+# Rebuild after pulling new changes
+git pull
+docker compose up -d --build
+
+# Check health status
+docker inspect --format='{{.State.Health.Status}}' hisaab
+
+# Back up your data (database + attachments)
+cp -r ./data ./data-backup-$(date +%Y%m%d)
+\`\`\`
+
+### Data & Backups
+
+All your data lives in one directory (\`./data\` by default):
+- \`payroll.db\` — SQLite database (clients, invoices, settings, etc.)
+- \`attachments/\` — uploaded invoice attachments
+
+To back up, just copy this directory. To migrate to a new server, copy \`./data\` to the new machine and run \`docker compose up -d --build\`.
+
+### Accessing from Other Devices
+
+Once running, Hisaab is accessible to anyone on your local network at \`http://<server-ip>:3000\`.
+
+To share with people outside your network (your CA, accountant, etc.), you have a few options:
+
+1. **Tailscale / ZeroTier** (recommended) — Create a private network. Install the client on your server and their devices. No port forwarding needed, fully encrypted.
+2. **Cloudflare Tunnel** — Expose your server to the internet securely without opening ports. Free tier available.
+3. **Reverse proxy + port forwarding** — Use Nginx or Caddy as a reverse proxy with a domain name and Let's Encrypt SSL. Forward port 443 on your router to the server.
+
+### Updating
+
+\`\`\`bash
+cd hisaab
+git pull
+docker compose up -d --build
+\`\`\`
+
+The database schema auto-migrates on startup, so updates are safe.
 `;
 
 writeFileSync(readmePath, readmeContent, "utf8");
