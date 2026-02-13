@@ -56,5 +56,8 @@ next-env.d.ts
 # personal notes
 tweet-drafts.txt
 
+# private strategy docs
+/private-research/
+
 # promotion docs
 /docs/
