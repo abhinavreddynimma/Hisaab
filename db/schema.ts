@@ -11,6 +11,7 @@ export const users = sqliteTable("users", {
   email: text("email").notNull(),
   passwordHash: text("password_hash").notNull(),
   role: text("role", { enum: ["admin", "viewer"] }).notNull().default("viewer"),
+  tag: text("tag"),
   isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
   createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
 }, (table) => [

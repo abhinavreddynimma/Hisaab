@@ -3,9 +3,8 @@
 import { revalidatePath } from "next/cache";
 import {
   assertAdminAccess,
-  createInitialAdminFromSetupToken,
+  createAdminAccount,
   createSessionForUser,
-  createSetupToken,
   createViewerAccount,
   authenticateWithCredentials,
   clearCurrentSession,
@@ -29,34 +28,18 @@ export async function logoutUser(): Promise<{ success: boolean }> {
   return { success: true };
 }
 
-export async function createShareableSetupLink(): Promise<{
-  success: boolean;
-  token?: string;
-  expiresAt?: string;
-  error?: string;
-}> {
-  try {
-    const result = await createSetupToken();
-    return { success: true, token: result.token, expiresAt: result.expiresAt };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to create shareable link";
-    return { success: false, error: message };
-  }
-}
-
-export async function completeSetup(input: {
-  token: string;
+export async function createAdmin(input: {
   name: string;
   email: string;
   password: string;
 }): Promise<{ success: boolean; error?: string }> {
   try {
-    const adminUser = await createInitialAdminFromSetupToken(input);
+    const adminUser = await createAdminAccount(input);
     await createSessionForUser(adminUser.id);
     revalidatePath("/");
     return { success: true };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to complete setup";
+    const message = error instanceof Error ? error.message : "Failed to create admin account";
     return { success: false, error: message };
   }
 }
@@ -65,6 +48,7 @@ export async function createViewerUser(input: {
   name: string;
   email: string;
   password: string;
+  tag?: string;
 }): Promise<{ success: boolean; error?: string }> {
   try {
     await assertAdminAccess();
