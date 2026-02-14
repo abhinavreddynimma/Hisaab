@@ -1,13 +1,15 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { formatCurrency, formatForeignCurrency } from "@/lib/utils";
 import { getCurrencySymbol } from "@/lib/constants";
+import { RevenueSparkline } from "./revenue-sparkline";
 import type { DashboardStats } from "@/lib/types";
 
 interface StatsCardsProps {
   stats: DashboardStats;
+  monthlyEarnings?: { month: string; earnings: number }[];
 }
 
-export function StatsCards({ stats }: StatsCardsProps) {
+export function StatsCards({ stats, monthlyEarnings }: StatsCardsProps) {
   return (
     <div className="grid gap-4 grid-cols-3">
       <Card className="relative overflow-hidden">
@@ -16,6 +18,7 @@ export function StatsCards({ stats }: StatsCardsProps) {
           <p className="text-2xl font-semibold tabular-nums tracking-tight">
             {formatCurrency(stats.totalEarnings)}
           </p>
+          {monthlyEarnings && <RevenueSparkline data={monthlyEarnings} />}
         </CardContent>
       </Card>
 
