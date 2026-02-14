@@ -85,6 +85,23 @@ export function LeavePolicyForm({ initialData }: LeavePolicyFormProps) {
                 Standard number of working days in a month (typically 22).
               </p>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="annualDaysOffTarget">Annual Days Off Target</Label>
+              <Input
+                id="annualDaysOffTarget"
+                type="number"
+                min={0}
+                step={0.5}
+                value={formData.annualDaysOffTarget}
+                onChange={(e) =>
+                  handleChange("annualDaysOffTarget", parseFloat(e.target.value) || 0)
+                }
+                placeholder="Target days off per year"
+              />
+              <p className="text-sm text-muted-foreground">
+                Burnout indicator target (leaves + public holidays not worked).
+              </p>
+            </div>
           </div>
           <div className="space-y-2 sm:max-w-xs">
             <Label htmlFor="trackingStartDate">Tracking Start Date</Label>

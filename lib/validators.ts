@@ -38,6 +38,7 @@ export const leavePolicySchema = z.object({
   leavesPerMonth: z.number().min(0).default(1),
   standardWorkingDays: z.number().min(1).max(31).default(22),
   trackingStartDate: z.string().regex(/^\d{4}-\d{2}$/, "Must be YYYY-MM format"),
+  annualDaysOffTarget: z.number().min(0).default(20),
 });
 
 export const invoiceSettingsSchema = z.object({

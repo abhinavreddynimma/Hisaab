@@ -9,6 +9,26 @@ import { getFrenchHolidays } from "@/lib/constants";
 import type { DashboardStats, DayEntry } from "@/lib/types";
 import { assertAdminAccess, assertAuthenticatedAccess } from "@/lib/auth";
 
+function toDateString(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate(),
+  ).padStart(2, "0")}`;
+}
+
+function getCurrentMonthWindow(now: Date = new Date()) {
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const monthStart = new Date(year, month - 1, 1);
+  const monthEnd = new Date(year, month, 0);
+
+  return {
+    year,
+    month,
+    monthStartStr: toDateString(monthStart),
+    monthEndStr: toDateString(monthEnd),
+  };
+}
+
 function getAllDayEntriesInternal(): DayEntry[] {
   return db.select().from(dayEntries).orderBy(dayEntries.date).all() as DayEntry[];
 }
@@ -41,42 +61,55 @@ function getEffectiveRateInternal(projectId: number, monthKey: string): number {
 
 export async function getDashboardStats(): Promise<DashboardStats> {
   await assertAuthenticatedAccess();
+  const { year: currentYear, month: currentMonth, monthStartStr, monthEndStr } = getCurrentMonthWindow();
 
-  // Total earnings from paid invoices (in INR)
+  // Total earnings from paid invoices (in INR), capped at current month-end
   const paidInvoices = db
     .select({ netInrAmount: invoices.netInrAmount })
     .from(invoices)
-    .where(eq(invoices.status, "paid"))
+    .where(
+      and(
+        eq(invoices.status, "paid"),
+        sql`${invoices.paidDate} IS NOT NULL`,
+        sql`${invoices.paidDate} <= ${monthEndStr}`,
+      ),
+    )
     .all();
   const totalEarnings = paidInvoices.reduce((sum, inv) => sum + (inv.netInrAmount ?? 0), 0);
 
-  // This month earnings (in INR) — based on when payment was received
-  const now = new Date();
-  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  // This month earnings (in INR), based on payment date within current month
   const thisMonthInvoices = db
     .select({ netInrAmount: invoices.netInrAmount })
     .from(invoices)
-    .where(and(eq(invoices.status, "paid"), like(invoices.paidDate, `${monthKey}%`)))
+    .where(
+      and(
+        eq(invoices.status, "paid"),
+        sql`${invoices.paidDate} IS NOT NULL`,
+        sql`${invoices.paidDate} >= ${monthStartStr}`,
+        sql`${invoices.paidDate} <= ${monthEndStr}`,
+      ),
+    )
     .all();
   const thisMonthEarnings = thisMonthInvoices.reduce((sum, inv) => sum + (inv.netInrAmount ?? 0), 0);
 
-  // Leave balance
+  // Leave balance, capped at current month-end
   const policy = await getLeavePolicy();
   const allEntries = getAllDayEntriesInternal();
-  const leaveBalance = calculateLeaveBalance(policy, allEntries as DayEntry[]);
+  const dayEntriesUpToMonthEnd = allEntries.filter((entry) => entry.date <= monthEndStr);
+  const leaveBalance = calculateLeaveBalance(policy, dayEntriesUpToMonthEnd, currentYear, currentMonth);
 
-  // Open invoices (draft + sent)
+  // Open invoices (draft + sent), capped at current month-end by issue date
   const openInvoiceCount = db
     .select({ count: sql<number>`count(*)` })
     .from(invoices)
-    .where(sql`${invoices.status} IN ('draft', 'sent')`)
+    .where(and(sql`${invoices.status} IN ('draft', 'sent')`, sql`${invoices.issueDate} <= ${monthEndStr}`))
     .get();
 
-  // Outstanding by currency (draft + sent totals)
+  // Outstanding by currency (draft + sent totals), capped at current month-end by issue date
   const openInvoiceRows = db
     .select({ total: invoices.total, currency: invoices.currency })
     .from(invoices)
-    .where(sql`${invoices.status} IN ('draft', 'sent')`)
+    .where(and(sql`${invoices.status} IN ('draft', 'sent')`, sql`${invoices.issueDate} <= ${monthEndStr}`))
     .all();
   const outstandingMap = new Map<string, number>();
   for (const inv of openInvoiceRows) {
@@ -91,7 +124,13 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const paidWithDates = db
     .select({ issueDate: invoices.issueDate, paidDate: invoices.paidDate })
     .from(invoices)
-    .where(and(eq(invoices.status, "paid"), sql`${invoices.paidDate} IS NOT NULL`))
+    .where(
+      and(
+        eq(invoices.status, "paid"),
+        sql`${invoices.paidDate} IS NOT NULL`,
+        sql`${invoices.paidDate} <= ${monthEndStr}`,
+      ),
+    )
     .all();
   let avgPaymentDelay: number | null = null;
   if (paidWithDates.length > 0) {
@@ -116,7 +155,14 @@ export async function getDashboardStats(): Promise<DashboardStats> {
         bankCharges: invoices.bankCharges,
       })
       .from(invoices)
-      .where(and(eq(invoices.status, "paid"), sql`${invoices.eurToInrRate} IS NOT NULL`))
+      .where(
+        and(
+          eq(invoices.status, "paid"),
+          sql`${invoices.eurToInrRate} IS NOT NULL`,
+          sql`${invoices.paidDate} IS NOT NULL`,
+          sql`${invoices.paidDate} <= ${monthEndStr}`,
+        ),
+      )
       .all();
 
     if (paidFull.length > 0) {
@@ -131,8 +177,6 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 
       // Next month's earnings based on this month's working days
       // (invoice for current month gets paid next month)
-      const currentYear = now.getFullYear();
-      const currentMonth = now.getMonth() + 1;
       const currentMonthEntries = getDayEntriesForMonthInternal(currentYear, currentMonth);
       const currentHolidays = getFrenchHolidays(currentYear);
       const augmented = withImplicitWorkingDays(currentMonthEntries as DayEntry[], currentYear, currentMonth, currentHolidays);
@@ -206,6 +250,7 @@ export async function getClientEarningsData(): Promise<
   { name: string; value: number }[]
 > {
   await assertAdminAccess();
+  const { monthEndStr } = getCurrentMonthWindow();
   const allInvoices = db
     .select({
       clientName: clients.name,
@@ -213,7 +258,13 @@ export async function getClientEarningsData(): Promise<
     })
     .from(invoices)
     .innerJoin(clients, eq(invoices.clientId, clients.id))
-    .where(eq(invoices.status, "paid"))
+    .where(
+      and(
+        eq(invoices.status, "paid"),
+        sql`${invoices.paidDate} IS NOT NULL`,
+        sql`${invoices.paidDate} <= ${monthEndStr}`,
+      ),
+    )
     .all();
 
   const clientMap = new Map<string, number>();
@@ -267,40 +318,118 @@ export async function getBalanceData(): Promise<{
   extraBalance: number;
   leavesAllowed: number;
   leavesTaken: number;
+  annualDaysOffTarget: number;
+  totalDaysOffToDate: number;
+  expectedDaysOffToDate: number;
+  burnoutRiskThreshold: number;
+  leavesTakenToDate: number;
+  publicHolidaysOffToDate: number;
+  daysOffStatus: "burnout_risk" | "on_track" | "above_target";
 }> {
   await assertAdminAccess();
   const policy = await getLeavePolicy();
   const allEntries = getAllDayEntriesInternal();
+  const { year: currentYear, month: currentMonth, monthEndStr } = getCurrentMonthWindow();
+  const entriesUpToMonthEnd = allEntries.filter((entry) => entry.date <= monthEndStr);
 
-  const leaveBalance = calculateLeaveBalance(policy, allEntries);
-  const totalExtraWorking = allEntries.filter((e) => e.dayType === "extra_working").length;
+  const leaveBalance = calculateLeaveBalance(policy, entriesUpToMonthEnd, currentYear, currentMonth);
+  const totalExtraWorking = entriesUpToMonthEnd.filter((e) => e.dayType === "extra_working").length;
   const extraBalance = totalExtraWorking + leaveBalance;
 
   const [startYear, startMonth] = policy.trackingStartDate.split("-").map(Number);
-  const now = new Date();
   let months = 0;
   let year = startYear;
   let month = startMonth;
-  while (year < now.getFullYear() || (year === now.getFullYear() && month <= now.getMonth() + 1)) {
+  while (year < currentYear || (year === currentYear && month <= currentMonth)) {
     months++;
     month++;
     if (month > 12) { month = 1; year++; }
   }
 
   const leavesAllowed = months * policy.leavesPerMonth;
-  const leavesTaken = allEntries.filter((e) => e.dayType === "leave").length +
-    allEntries.filter((e) => e.dayType === "half_day").length * 0.5;
+  const leavesTaken = entriesUpToMonthEnd.filter((e) => e.dayType === "leave").length +
+    entriesUpToMonthEnd.filter((e) => e.dayType === "half_day").length * 0.5;
 
-  return { leaveBalance, totalExtraWorking, extraBalance, leavesAllowed, leavesTaken };
+  const fyStartYear = currentMonth >= 4 ? currentYear : currentYear - 1;
+  const fyEndYear = fyStartYear + 1;
+  const fyStart = `${fyStartYear}-04-01`;
+  const fyEnd = `${fyEndYear}-03-31`;
+  const periodEnd = monthEndStr < fyEnd ? monthEndStr : fyEnd;
+  const fyEntries = entriesUpToMonthEnd.filter((e) => e.date >= fyStart && e.date <= periodEnd);
+
+  const leavesTakenToDate = fyEntries.reduce((sum, entry) => {
+    if (entry.dayType === "leave") return sum + 1;
+    if (entry.dayType === "half_day") return sum + 0.5;
+    return sum;
+  }, 0);
+
+  const entryByDate = new Map(fyEntries.map((entry) => [entry.date, entry.dayType]));
+  const workedTypes = new Set(["working", "extra_working", "half_day"]);
+  const holidayDates = [
+    ...Array.from(getFrenchHolidays(fyStartYear).keys()),
+    ...Array.from(getFrenchHolidays(fyEndYear).keys()),
+  ];
+  const publicHolidaysOffToDate = holidayDates.reduce((sum, dateStr) => {
+    if (dateStr < fyStart || dateStr > periodEnd) return sum;
+
+    const dateObj = new Date(`${dateStr}T00:00:00`);
+    const dayOfWeek = dateObj.getDay();
+    if (dayOfWeek === 0 || dayOfWeek === 6) return sum;
+
+    const dayType = entryByDate.get(dateStr);
+    if (dayType && workedTypes.has(dayType)) return sum;
+    return sum + 1;
+  }, 0);
+
+  const totalDaysOffToDate = leavesTakenToDate + publicHolidaysOffToDate;
+  const fyStartUtc = Date.UTC(fyStartYear, 3, 1);
+  const fyEndUtc = Date.UTC(fyEndYear, 2, 31);
+  const periodEndDate = new Date(`${periodEnd}T00:00:00`);
+  const periodEndUtc = Date.UTC(periodEndDate.getFullYear(), periodEndDate.getMonth(), periodEndDate.getDate());
+  const elapsedDays = Math.floor((periodEndUtc - fyStartUtc) / (1000 * 60 * 60 * 24)) + 1;
+  const daysInFy = Math.floor((fyEndUtc - fyStartUtc) / (1000 * 60 * 60 * 24)) + 1;
+  const elapsedFraction = Math.min(1, elapsedDays / daysInFy);
+
+  const expectedDaysOffToDate = policy.annualDaysOffTarget * elapsedFraction;
+  const burnoutRiskThreshold = expectedDaysOffToDate * 0.75;
+
+  const daysOffStatus: "burnout_risk" | "on_track" | "above_target" =
+    totalDaysOffToDate < burnoutRiskThreshold
+      ? "burnout_risk"
+      : totalDaysOffToDate > expectedDaysOffToDate
+        ? "above_target"
+        : "on_track";
+
+  return {
+    leaveBalance,
+    totalExtraWorking,
+    extraBalance,
+    leavesAllowed,
+    leavesTaken,
+    annualDaysOffTarget: policy.annualDaysOffTarget,
+    totalDaysOffToDate,
+    expectedDaysOffToDate,
+    burnoutRiskThreshold,
+    leavesTakenToDate,
+    publicHolidaysOffToDate,
+    daysOffStatus,
+  };
 }
 
 export async function getPrimaryCurrency(): Promise<string> {
   await assertAdminAccess();
+  const { monthEndStr } = getCurrentMonthWindow();
   // Determine the most-used currency across paid invoices, fallback to default project
   const currencies = db
     .select({ currency: invoices.currency, count: sql<number>`count(*)` })
     .from(invoices)
-    .where(eq(invoices.status, "paid"))
+    .where(
+      and(
+        eq(invoices.status, "paid"),
+        sql`${invoices.paidDate} IS NOT NULL`,
+        sql`${invoices.paidDate} <= ${monthEndStr}`,
+      ),
+    )
     .groupBy(invoices.currency)
     .orderBy(sql`count(*) DESC`)
     .limit(1)
@@ -325,6 +454,7 @@ export async function getMonthlyExchangeRateData(months: number = 12): Promise<
   { month: string; rate: number }[]
 > {
   await assertAdminAccess();
+  const { monthEndStr } = getCurrentMonthWindow();
   const result: { month: string; rate: number }[] = [];
   const now = new Date();
 
@@ -336,7 +466,14 @@ export async function getMonthlyExchangeRateData(months: number = 12): Promise<
     const monthInvoices = db
       .select({ eurToInrRate: invoices.eurToInrRate, total: invoices.total })
       .from(invoices)
-      .where(and(eq(invoices.status, "paid"), like(invoices.billingPeriodStart, `${monthKey}%`)))
+      .where(
+        and(
+          eq(invoices.status, "paid"),
+          like(invoices.billingPeriodStart, `${monthKey}%`),
+          sql`${invoices.paidDate} IS NOT NULL`,
+          sql`${invoices.paidDate} <= ${monthEndStr}`,
+        ),
+      )
       .all();
 
     // Weighted average by invoice total
