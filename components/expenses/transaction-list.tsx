@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Trash2, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Plus, Link2, Check, Repeat, Pencil } from "lucide-react";
+import { Trash2, X, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Plus, Link2, Check, Repeat, Pencil } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -215,6 +215,15 @@ export function TransactionList({ transactions, totalIncome, totalExpenses, onEd
                               title="Confirm this expense"
                             >
                               <Check className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                              onClick={() => handleDelete(txn.id)}
+                              title="Delete this estimated entry"
+                            >
+                              <X className="h-3.5 w-3.5" />
                             </Button>
                           </div>
                         ) : txn.source === "invoice" || (txn.source === "recurring" && txn.status === "confirmed") ? (
