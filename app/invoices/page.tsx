@@ -2,13 +2,16 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { InvoiceList } from "@/components/invoices/invoice-list";
-import { getInvoices } from "@/actions/invoices";
+import { getInvoices, getInvoiceAttachmentCounts } from "@/actions/invoices";
 import { requirePageAccess } from "@/lib/auth";
 
 export default async function InvoicesPage() {
   const access = await requirePageAccess({ allowViewer: true });
   const canEdit = !access.sessionsEnabled || access.user?.role === "admin";
-  const invoices = await getInvoices();
+  const [invoices, attachmentCounts] = await Promise.all([
+    getInvoices(),
+    getInvoiceAttachmentCounts(),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -23,7 +26,7 @@ export default async function InvoicesPage() {
           </Button>
         )}
       </div>
-      <InvoiceList invoices={invoices} canEdit={canEdit} />
+      <InvoiceList invoices={invoices} canEdit={canEdit} attachmentCounts={attachmentCounts} />
     </div>
   );
 }

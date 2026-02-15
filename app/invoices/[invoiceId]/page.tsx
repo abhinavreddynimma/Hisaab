@@ -52,11 +52,13 @@ export default async function InvoiceDetailPage({
       {invoice.status === "paid" && (
         <>
           <PaymentDetails invoice={invoice} canEdit={canEdit} />
-          <InvoiceAttachments
-            invoiceId={invoice.id}
-            attachments={attachments}
-            canEdit={canEdit}
-          />
+          <div id="attachments">
+            <InvoiceAttachments
+              invoiceId={invoice.id}
+              attachments={attachments}
+              canEdit={canEdit}
+            />
+          </div>
         </>
       )}
     </div>
