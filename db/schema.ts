@@ -161,6 +161,17 @@ export const taxPayments = sqliteTable("tax_payments", {
   createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
 });
 
+export const taxPaymentAttachments = sqliteTable("tax_payment_attachments", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  taxPaymentId: integer("tax_payment_id").notNull().references(() => taxPayments.id),
+  fileName: text("file_name").notNull(),
+  originalName: text("original_name").notNull(),
+  mimeType: text("mime_type").notNull(),
+  fileSize: integer("file_size").notNull(),
+  label: text("label"),
+  createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+});
+
 export const invoiceLineItems = sqliteTable("invoice_line_items", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   invoiceId: integer("invoice_id").notNull().references(() => invoices.id),

@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { MoreHorizontal, Eye, Send, CheckCircle, XCircle } from "lucide-react";
+import { MoreHorizontal, Eye, Send, CheckCircle, XCircle, Paperclip } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -54,9 +54,10 @@ import { formatForeignCurrency, formatCurrency, formatDate } from "@/lib/utils";
 interface InvoiceListProps {
   invoices: (Invoice & { clientName: string })[];
   canEdit?: boolean;
+  attachmentCounts?: Record<number, number>;
 }
 
-export function InvoiceList({ invoices, canEdit = true }: InvoiceListProps) {
+export function InvoiceList({ invoices, canEdit = true, attachmentCounts = {} }: InvoiceListProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("all");
 
@@ -166,6 +167,7 @@ export function InvoiceList({ invoices, canEdit = true }: InvoiceListProps) {
             <TableHead className="text-right">Amount</TableHead>
             <TableHead>Paid Date</TableHead>
             <TableHead>Status</TableHead>
+            <TableHead className="w-[50px]"></TableHead>
             {canEdit && <TableHead className="w-[70px]">Actions</TableHead>}
           </TableRow>
         </TableHeader>
@@ -197,6 +199,17 @@ export function InvoiceList({ invoices, canEdit = true }: InvoiceListProps) {
                   <Badge variant={statusConfig.variant} className={statusConfig.className}>
                     {statusConfig.label}
                   </Badge>
+                </TableCell>
+                <TableCell>
+                  {(attachmentCounts[invoice.id] ?? 0) > 0 && (
+                    <Link
+                      href={`/invoices/${invoice.id}#attachments`}
+                      className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary"
+                    >
+                      <Paperclip className="h-3.5 w-3.5" />
+                      {attachmentCounts[invoice.id]}
+                    </Link>
+                  )}
                 </TableCell>
                 {canEdit && (
                   <TableCell>
@@ -297,7 +310,7 @@ export function InvoiceList({ invoices, canEdit = true }: InvoiceListProps) {
                     </span>
                   ))}
                 </TableCell>
-                <TableCell colSpan={canEdit ? 3 : 2} />
+                <TableCell colSpan={canEdit ? 4 : 3} />
               </TableRow>
             </TableFooter>
           );

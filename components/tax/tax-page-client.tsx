@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Printer, TrendingUp, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Pencil, Trash2, Printer, TrendingUp, ChevronLeft, ChevronRight, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,7 +33,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { deleteTaxPayment } from "@/actions/tax-payments";
 import { TaxPaymentDialog } from "./tax-payment-dialog";
 import { getCurrentFinancialYear } from "@/lib/constants";
-import type { TaxPayment, TaxQuarter } from "@/lib/types";
+import type { TaxPayment, TaxPaymentAttachment, TaxQuarter } from "@/lib/types";
 
 function shiftFY(fy: string, direction: -1 | 1): string {
   const startYear = parseInt(fy.split("-")[0]) + direction;
@@ -76,9 +76,10 @@ interface TaxPageClientProps {
   initialFY: string;
   computation: TaxComputation;
   projection: TaxProjection;
+  attachmentsByPaymentId: Record<number, TaxPaymentAttachment[]>;
 }
 
-export function TaxPageClient({ initialPayments, initialSummary, initialFY, computation, projection }: TaxPageClientProps) {
+export function TaxPageClient({ initialPayments, initialSummary, initialFY, computation, projection, attachmentsByPaymentId }: TaxPageClientProps) {
   const router = useRouter();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPayment, setEditingPayment] = useState<TaxPayment | null>(null);
@@ -300,6 +301,7 @@ export function TaxPageClient({ initialPayments, initialSummary, initialFY, comp
                       <TableHead>Quarter</TableHead>
                       <TableHead className="text-right">Amount</TableHead>
                       <TableHead>Challan No</TableHead>
+                      <TableHead>Attachments</TableHead>
                       <TableHead>Notes</TableHead>
                       <TableHead className="w-[80px] no-print">Actions</TableHead>
                     </TableRow>
@@ -314,6 +316,26 @@ export function TaxPageClient({ initialPayments, initialSummary, initialFY, comp
                         </TableCell>
                         <TableCell className="text-muted-foreground">
                           {payment.challanNo || "—"}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {(attachmentsByPaymentId[payment.id]?.length || 0) > 0 ? (
+                            <div className="space-y-0.5">
+                              {attachmentsByPaymentId[payment.id].map((att) => (
+                                <a
+                                  key={att.id}
+                                  href={`/hisaab/api/tax-attachments/${att.id}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1.5 text-sm text-primary hover:underline"
+                                >
+                                  <FileText className="h-3.5 w-3.5 shrink-0" />
+                                  <span className="truncate max-w-[150px]">{att.originalName}</span>
+                                </a>
+                              ))}
+                            </div>
+                          ) : (
+                            "—"
+                          )}
                         </TableCell>
                         <TableCell className="text-muted-foreground max-w-[200px] truncate">
                           {payment.notes || "—"}
@@ -364,10 +386,6 @@ export function TaxPageClient({ initialPayments, initialSummary, initialFY, comp
         </TabsContent>
 
         <TabsContent value="projection" className="space-y-6 mt-4">
-          <p className="text-sm text-muted-foreground">
-            Based on {projection.monthsElapsed} month{projection.monthsElapsed !== 1 ? "s" : ""} of actual data, projecting {projection.monthsRemaining} remaining month{projection.monthsRemaining !== 1 ? "s" : ""} from calendar working days at avg ₹{projection.avgRate.toFixed(0)}/€.
-          </p>
-
           {/* Monthly Income Breakdown */}
           <Card>
             <CardHeader>
@@ -383,7 +401,7 @@ export function TaxPageClient({ initialPayments, initialSummary, initialFY, comp
                       m.projected && "border-dashed bg-muted/30"
                     )}
                   >
-                    <p className="text-xs font-medium text-muted-foreground mb-1">{m.month}</p>
+                    <p className="text-xs font-medium text-muted-foreground mb-1">{m.month}{m.projected ? "*" : ""}</p>
                     <p className={cn(
                       "text-sm font-semibold tabular-nums",
                       m.projected && "text-muted-foreground italic"
@@ -391,17 +409,19 @@ export function TaxPageClient({ initialPayments, initialSummary, initialFY, comp
                       {m.actual > 0 ? formatCurrency(m.actual) : "—"}
                     </p>
                     {m.projected && m.workingDays !== undefined && (
-                      <p className="text-[10px] text-muted-foreground mt-0.5">{m.workingDays} days</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">{m.workingDays} days / ₹{projection.avgRate.toFixed(2)}</p>
                     )}
                   </div>
                 ))}
               </div>
-              <div className="flex items-center gap-4 mt-3 pt-3 border-t text-sm">
-                <span className="text-muted-foreground">Avg EUR/INR Rate:</span>
-                <span className="font-semibold tabular-nums">₹{projection.avgRate.toFixed(2)}</span>
-              </div>
             </CardContent>
           </Card>
+
+          {projection.monthsRemaining > 0 && (
+            <p className="text-xs text-muted-foreground">
+              * Based on {projection.monthsElapsed} month{projection.monthsElapsed !== 1 ? "s" : ""} of actual data, projecting {projection.monthsRemaining} remaining month{projection.monthsRemaining !== 1 ? "s" : ""} from calendar working days.
+            </p>
+          )}
 
           {/* Projected Tax Computation */}
           <Card className="print:break-before-page">
@@ -476,18 +496,39 @@ export function TaxPageClient({ initialPayments, initialSummary, initialFY, comp
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Advance Tax Paid</span>
-                  <span className="font-medium tabular-nums text-green-600">-{formatCurrency(projection.totalPaid)}</span>
+                  <span className="font-medium tabular-nums text-green-600">-{formatCurrency(initialSummary.total)}</span>
                 </div>
                 <Separator />
                 <div className="flex justify-between text-base font-bold">
-                  <span>{projection.projectedBalance >= 0 ? "Estimated Balance Payable" : "Estimated Refund Due"}</span>
-                  <span className={`tabular-nums ${projection.projectedBalance > 0 ? "text-red-600" : "text-green-600"}`}>
-                    {formatCurrency(Math.abs(projection.projectedBalance))}
+                  <span>{projection.projectedTotalTax - initialSummary.total >= 0 ? "Estimated Balance Payable" : "Estimated Refund Due"}</span>
+                  <span className={`tabular-nums ${projection.projectedTotalTax - initialSummary.total > 0 ? "text-red-600" : "text-green-600"}`}>
+                    {formatCurrency(Math.abs(projection.projectedTotalTax - initialSummary.total))}
                   </span>
                 </div>
               </div>
             </CardContent>
           </Card>
+
+          {/* Quarter Summary Cards */}
+          <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+            {quarters.map((q) => {
+              const config = TAX_QUARTERS[q];
+              const paid = initialSummary.byQuarter[q];
+              return (
+                <Card key={q}>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-sm font-medium text-muted-foreground">{config.label}</p>
+                      <span className="text-[10px] text-muted-foreground">Due: {config.dueDate}</span>
+                    </div>
+                    <p className="text-2xl font-bold tabular-nums">
+                      {paid > 0 ? formatCurrency(paid) : "—"}
+                    </p>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
         </TabsContent>
       </Tabs>
 
@@ -496,6 +537,7 @@ export function TaxPageClient({ initialPayments, initialSummary, initialFY, comp
         onClose={handleDialogClose}
         payment={editingPayment}
         financialYear={initialFY}
+        attachments={editingPayment ? attachmentsByPaymentId[editingPayment.id] || [] : []}
       />
     </div>
   );
