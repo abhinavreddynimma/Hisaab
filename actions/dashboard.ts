@@ -434,7 +434,9 @@ export async function getBalanceData(financialYear?: string): Promise<{
     ...Array.from(getFrenchHolidays(fyEndYear).keys()),
   ];
   const publicHolidaysOffToDate = holidayDates.reduce((sum, dateStr) => {
-    if (dateStr < fyStart || dateStr > periodEnd) return sum;
+    const trackStart = `${policy.trackingStartDate}-01`;
+    const effectiveStart = trackStart > fyStart ? trackStart : fyStart;
+    if (dateStr < effectiveStart || dateStr > periodEnd) return sum;
 
     const dateObj = new Date(`${dateStr}T00:00:00`);
     const dayOfWeek = dateObj.getDay();
