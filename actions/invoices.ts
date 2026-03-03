@@ -5,10 +5,10 @@ import { invoices, invoiceLineItems, invoiceAttachments, clients, projects } fro
 import { eq, desc, sql } from "drizzle-orm";
 import { getInvoiceSettings, getUserProfile } from "./settings";
 import { getDayEntriesForRange } from "./day-entries";
-import { getEffectiveRate } from "./projects";
+import { getProjectRateTimeline } from "./projects";
 import { getClient } from "./clients";
 import type { Invoice, InvoiceLineItem, InvoiceAttachment, InvoiceStatus } from "@/lib/types";
-import { calculateMonthSummary, withImplicitWorkingDays } from "@/lib/calculations";
+import { withImplicitWorkingDays } from "@/lib/calculations";
 import { getFrenchHolidays } from "@/lib/constants";
 import { getProject } from "./projects";
 import { getDefaultProjectId } from "./settings";
@@ -150,24 +150,69 @@ export async function getAutoPopulatedLineItems(
 
   if (projectEntries.length === 0) return [];
 
-  const summary = calculateMonthSummary(projectEntries);
-  const monthKey = startDate.substring(0, 7);
-  const rate = await getEffectiveRate(projectId, monthKey);
   const invoiceSettings = await getInvoiceSettings();
   const project = await getProject(projectId);
+  const rateTimeline = await getProjectRateTimeline(projectId);
+  const fallbackRate = project?.defaultDailyRate ?? 0;
+  const baseDescription = `Software Development (${project?.name ?? "Project"})`;
+  const BASE_RATE_KEY = "base";
+  const quantityByRatePoint = new Map<string, { effectiveFrom: string; unitPrice: number; quantity: number }>();
 
-  const quantity = summary.effectiveWorkingDays;
-  const amount = quantity * rate;
+  function quantityForEntry(dayType: "working" | "extra_working" | "half_day"): number {
+    if (dayType === "half_day") return 0.5;
+    return 1;
+  }
 
-  return [
-    {
-      description: `Software Development (${project?.name ?? "Project"})`,
-      hsnSac: invoiceSettings.defaultHsnSac,
-      quantity,
-      unitPrice: rate,
-      amount,
-    },
-  ];
+  function getRatePointForDate(date: string): { effectiveFrom: string; unitPrice: number } {
+    let selected: { effectiveFrom: string; unitPrice: number } = {
+      effectiveFrom: BASE_RATE_KEY,
+      unitPrice: fallbackRate,
+    };
+
+    for (const point of rateTimeline) {
+      if (point.monthKey <= date) {
+        selected = { effectiveFrom: point.monthKey, unitPrice: point.dailyRate };
+        continue;
+      }
+      break;
+    }
+
+    return selected;
+  }
+
+  for (const entry of projectEntries) {
+    const qty = quantityForEntry(entry.dayType as "working" | "extra_working" | "half_day");
+    const ratePoint = getRatePointForDate(entry.date);
+    const key = `${ratePoint.effectiveFrom}|${ratePoint.unitPrice}`;
+    const current = quantityByRatePoint.get(key);
+
+    if (current) {
+      current.quantity += qty;
+    } else {
+      quantityByRatePoint.set(key, {
+        effectiveFrom: ratePoint.effectiveFrom,
+        unitPrice: ratePoint.unitPrice,
+        quantity: qty,
+      });
+    }
+  }
+
+  const buckets = Array.from(quantityByRatePoint.values()).sort((a, b) => {
+    if (a.effectiveFrom === BASE_RATE_KEY) return -1;
+    if (b.effectiveFrom === BASE_RATE_KEY) return 1;
+    return a.effectiveFrom.localeCompare(b.effectiveFrom);
+  });
+
+  const hasMultipleRates = buckets.length > 1;
+  return buckets.map((bucket) => ({
+    description: hasMultipleRates
+      ? `${baseDescription} - Rate from ${bucket.effectiveFrom === BASE_RATE_KEY ? "base contract" : bucket.effectiveFrom}`
+      : baseDescription,
+    hsnSac: invoiceSettings.defaultHsnSac,
+    quantity: bucket.quantity,
+    unitPrice: bucket.unitPrice,
+    amount: bucket.quantity * bucket.unitPrice,
+  }));
 }
 
 export async function createInvoice(data: {

@@ -2,26 +2,66 @@
 
 import { db } from "@/db";
 import { projects, projectRates } from "@/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, lte, desc } from "drizzle-orm";
 import type { Project, ProjectRate } from "@/lib/types";
 import { assertAdminAccess } from "@/lib/auth";
 
+const MONTH_KEY_REGEX = /^\d{4}-\d{2}$/;
+const DATE_KEY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+function normalizeRateEffectiveFrom(value: string): string {
+  const trimmed = value.trim();
+  if (DATE_KEY_REGEX.test(trimmed)) return trimmed;
+  if (MONTH_KEY_REGEX.test(trimmed)) return `${trimmed}-01`;
+  throw new Error("Effective date must be in YYYY-MM-DD format");
+}
+
+function normalizeRateLookupDate(value: string): string {
+  const trimmed = value.trim();
+  if (DATE_KEY_REGEX.test(trimmed)) return trimmed;
+  if (MONTH_KEY_REGEX.test(trimmed)) return `${trimmed}-31`;
+  throw new Error("Rate lookup date must be in YYYY-MM or YYYY-MM-DD format");
+}
+
+function getStoredRateForDate(
+  projectId: number,
+  lookupDate: string,
+): number | null {
+  const row = db
+    .select({ dailyRate: projectRates.dailyRate })
+    .from(projectRates)
+    .where(
+      and(
+        eq(projectRates.projectId, projectId),
+        lte(projectRates.monthKey, lookupDate),
+      ),
+    )
+    .orderBy(desc(projectRates.monthKey))
+    .limit(1)
+    .get();
+
+  return row?.dailyRate ?? null;
+}
+
 export async function getProjectsByClient(clientId: number): Promise<Project[]> {
   await assertAdminAccess();
-  return db
+  const today = new Date().toISOString().split("T")[0];
+  const rows = db
     .select()
     .from(projects)
     .where(eq(projects.clientId, clientId))
     .orderBy(projects.name)
     .all() as Project[];
+
+  return rows.map((project) => ({
+    ...project,
+    currentDailyRate:
+      getStoredRateForDate(project.id, today) ?? project.defaultDailyRate,
+  }));
 }
 
 export async function getActiveProjects(): Promise<(Project & { clientName: string })[]> {
   await assertAdminAccess();
-  const rows = db.query.projects.findMany({
-    where: eq(projects.isActive, true),
-    with: {},
-  });
   // Manual join since we need client name
   const { clients } = await import("@/db/schema");
   const allProjects = db
@@ -72,7 +112,7 @@ export async function createProject(data: {
 
 export async function updateProject(
   id: number,
-  data: { name?: string; defaultDailyRate?: number; currency?: string }
+  data: { name?: string; defaultDailyRate?: number; currency?: string },
 ): Promise<{ success: boolean }> {
   await assertAdminAccess();
   db.update(projects).set(data).where(eq(projects.id, id)).run();
@@ -94,14 +134,18 @@ export async function toggleProjectActive(id: number): Promise<{ success: boolea
 
 export async function getProjectRate(
   projectId: number,
-  monthKey: string
+  effectiveFrom: string,
 ): Promise<number | null> {
   await assertAdminAccess();
+  const normalizedDate = normalizeRateEffectiveFrom(effectiveFrom);
   const rate = db
     .select()
     .from(projectRates)
     .where(
-      and(eq(projectRates.projectId, projectId), eq(projectRates.monthKey, monthKey))
+      and(
+        eq(projectRates.projectId, projectId),
+        eq(projectRates.monthKey, normalizedDate),
+      ),
     )
     .get();
 
@@ -110,15 +154,19 @@ export async function getProjectRate(
 
 export async function setProjectRate(
   projectId: number,
-  monthKey: string,
-  dailyRate: number
+  effectiveFrom: string,
+  dailyRate: number,
 ): Promise<{ success: boolean }> {
   await assertAdminAccess();
+  const normalizedDate = normalizeRateEffectiveFrom(effectiveFrom);
   const existing = db
     .select()
     .from(projectRates)
     .where(
-      and(eq(projectRates.projectId, projectId), eq(projectRates.monthKey, monthKey))
+      and(
+        eq(projectRates.projectId, projectId),
+        eq(projectRates.monthKey, normalizedDate),
+      ),
     )
     .get();
 
@@ -128,10 +176,36 @@ export async function setProjectRate(
       .where(eq(projectRates.id, (existing as ProjectRate).id))
       .run();
   } else {
-    db.insert(projectRates).values({ projectId, monthKey, dailyRate }).run();
+    db.insert(projectRates)
+      .values({ projectId, monthKey: normalizedDate, dailyRate })
+      .run();
   }
 
   return { success: true };
+}
+
+export async function updateProjectDailyRate(
+  projectId: number,
+  dailyRate: number,
+  effectiveFrom: string,
+): Promise<{ success: boolean; error?: string }> {
+  await assertAdminAccess();
+
+  if (!Number.isFinite(dailyRate) || dailyRate <= 0) {
+    return { success: false, error: "Daily rate must be greater than 0" };
+  }
+
+  const project = await getProject(projectId);
+  if (!project) {
+    return { success: false, error: "Project not found" };
+  }
+
+  try {
+    await setProjectRate(projectId, effectiveFrom, dailyRate);
+    return { success: true };
+  } catch {
+    return { success: false, error: "Effective date must be in YYYY-MM-DD format" };
+  }
 }
 
 export async function getProjectRates(projectId: number): Promise<ProjectRate[]> {
@@ -144,6 +218,10 @@ export async function getProjectRates(projectId: number): Promise<ProjectRate[]>
     .all() as ProjectRate[];
 }
 
+export async function getProjectRateTimeline(projectId: number): Promise<ProjectRate[]> {
+  return getProjectRates(projectId);
+}
+
 export async function deleteProjectRate(id: number): Promise<{ success: boolean }> {
   await assertAdminAccess();
   db.delete(projectRates).where(eq(projectRates.id, id)).run();
@@ -152,12 +230,14 @@ export async function deleteProjectRate(id: number): Promise<{ success: boolean 
 
 export async function getEffectiveRate(
   projectId: number,
-  monthKey: string
+  effectiveOn: string,
 ): Promise<number> {
   await assertAdminAccess();
-  const override = await getProjectRate(projectId, monthKey);
-  if (override !== null) return override;
+  const lookupDate = normalizeRateLookupDate(effectiveOn);
 
   const project = await getProject(projectId);
-  return project?.defaultDailyRate ?? 0;
+  if (!project) return 0;
+
+  const storedRate = getStoredRateForDate(projectId, lookupDate);
+  return storedRate ?? project.defaultDailyRate;
 }

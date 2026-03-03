@@ -86,6 +86,7 @@ export interface Project {
   clientId: number;
   name: string;
   defaultDailyRate: number;
+  currentDailyRate?: number;
   currency: string;
   isActive: boolean;
   createdAt: string;
@@ -94,7 +95,7 @@ export interface Project {
 export interface ProjectRate {
   id: number;
   projectId: number;
-  monthKey: string;
+  monthKey: string; // Effective date in YYYY-MM-DD format
   dailyRate: number;
 }
 

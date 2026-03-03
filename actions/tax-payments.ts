@@ -279,7 +279,9 @@ export async function getTaxProjection(financialYear: string): Promise<{
   } else {
     currentIdx = now.getMonth() + 9;
   }
-  const monthsElapsed = Math.min(12, Math.max(1, currentIdx + 1));
+  // Don't count the current month as elapsed — it's still in progress
+  // and we likely haven't received payment yet, so project it instead.
+  const monthsElapsed = Math.min(12, Math.max(1, currentIdx));
   const monthsRemaining = 12 - monthsElapsed;
 
   // Compute average EUR-INR rate and deduction % from paid invoices

@@ -59,7 +59,7 @@ export const projects = sqliteTable("projects", {
 export const projectRates = sqliteTable("project_rates", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   projectId: integer("project_id").notNull().references(() => projects.id),
-  monthKey: text("month_key").notNull(), // "YYYY-MM"
+  monthKey: text("month_key").notNull(), // Effective date: "YYYY-MM-DD"
   dailyRate: real("daily_rate").notNull(),
 }, (table) => [
   uniqueIndex("project_month_idx").on(table.projectId, table.monthKey),
