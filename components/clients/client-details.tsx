@@ -7,6 +7,7 @@ import { toggleClientActive } from "@/actions/clients"
 import { toggleProjectActive } from "@/actions/projects"
 import { ClientForm } from "@/components/clients/client-form"
 import { ProjectForm } from "@/components/clients/project-form"
+import { ProjectRateDialog } from "@/components/clients/project-rate-dialog"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -211,7 +212,7 @@ export function ClientDetails({ client, projects }: ClientDetailsProps) {
                       {project.name}
                     </TableCell>
                     <TableCell>
-                      {formatForeignCurrency(project.defaultDailyRate, project.currency)}
+                      {formatForeignCurrency(project.currentDailyRate ?? project.defaultDailyRate, project.currency)}
                     </TableCell>
                     <TableCell>
                       {project.isActive ? (
@@ -223,13 +224,19 @@ export function ClientDetails({ client, projects }: ClientDetailsProps) {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleToggleProject(project)}
-                      >
-                        {project.isActive ? "Deactivate" : "Activate"}
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <ProjectRateDialog
+                          project={project}
+                          onSuccess={() => router.refresh()}
+                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleToggleProject(project)}
+                        >
+                          {project.isActive ? "Deactivate" : "Activate"}
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
