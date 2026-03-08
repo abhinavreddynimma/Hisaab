@@ -344,7 +344,7 @@ export function BalanceOverview({ balanceData, monthlyData, financialYear }: Bal
           ]}
         />
         <BalanceCard
-          label="Total Days Off (FYTD)"
+          label="Total Days Off (FY)"
           value={balanceData.totalDaysOffToDate}
           showSign={false}
           colorClass={daysOffMeta.colorClass}
