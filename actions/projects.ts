@@ -19,7 +19,11 @@ function normalizeRateEffectiveFrom(value: string): string {
 function normalizeRateLookupDate(value: string): string {
   const trimmed = value.trim();
   if (DATE_KEY_REGEX.test(trimmed)) return trimmed;
-  if (MONTH_KEY_REGEX.test(trimmed)) return `${trimmed}-31`;
+  if (MONTH_KEY_REGEX.test(trimmed)) {
+    const [y, m] = trimmed.split("-").map(Number);
+    const lastDay = new Date(y, m, 0).getDate();
+    return `${trimmed}-${String(lastDay).padStart(2, "0")}`;
+  }
   throw new Error("Rate lookup date must be in YYYY-MM or YYYY-MM-DD format");
 }
 

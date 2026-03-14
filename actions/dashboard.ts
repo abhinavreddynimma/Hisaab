@@ -4,19 +4,13 @@ import { db } from "@/db";
 import { invoices, dayEntries, clients, projects, projectRates } from "@/db/schema";
 import { eq, desc, sql, and, like, lte } from "drizzle-orm";
 import { getLeavePolicy, getDefaultProjectId } from "./settings";
+// Rate lookup uses same logic as projects.ts but kept local to avoid async boundary
 import { calculateLeaveBalance, calculateMonthSummary, withImplicitWorkingDays } from "@/lib/calculations";
 import { getFrenchHolidays } from "@/lib/constants";
 import type { DashboardStats, DayEntry } from "@/lib/types";
 import { assertAdminAccess, assertAuthenticatedAccess } from "@/lib/auth";
 
 const MONTH_KEY_REGEX = /^\d{4}-\d{2}$/;
-const DATE_KEY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
-
-function normalizeRateLookupDate(value: string): string {
-  if (DATE_KEY_REGEX.test(value)) return value;
-  if (MONTH_KEY_REGEX.test(value)) return `${value}-31`;
-  return value;
-}
 
 function toDateString(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
@@ -53,15 +47,15 @@ function getDayEntriesForMonthInternal(year: number, month: number): DayEntry[] 
 }
 
 function getEffectiveRateInternal(projectId: number, effectiveOn: string): number {
-  const lookupDate = normalizeRateLookupDate(effectiveOn);
-  const override = db
+  const lookupDate = MONTH_KEY_REGEX.test(effectiveOn) ? `${effectiveOn}-31` : effectiveOn;
+  const storedRate = db
     .select({ dailyRate: projectRates.dailyRate })
     .from(projectRates)
     .where(and(eq(projectRates.projectId, projectId), lte(projectRates.monthKey, lookupDate)))
     .orderBy(desc(projectRates.monthKey))
     .limit(1)
     .get();
-  if (override?.dailyRate != null) return override.dailyRate;
+  if (storedRate?.dailyRate != null) return storedRate.dailyRate;
 
   const project = db
     .select({ defaultDailyRate: projects.defaultDailyRate })
@@ -257,22 +251,42 @@ export async function getMonthlyEarningsData(months: number = 12): Promise<
   { month: string; earnings: number }[]
 > {
   await assertAdminAccess();
-  const result: { month: string; earnings: number }[] = [];
   const now = new Date();
 
+  // Compute the date range for the entire window
+  const startDate = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1);
+  const startKey = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, "0")}`;
+  const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0); // last day of current month
+  const endKey = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, "0")}-${String(endDate.getDate()).padStart(2, "0")}`;
+
+  // Single query for ALL paid invoices in the range
+  const allPaidInvoices = db
+    .select({ netInrAmount: invoices.netInrAmount, paidDate: invoices.paidDate })
+    .from(invoices)
+    .where(
+      and(
+        eq(invoices.status, "paid"),
+        sql`${invoices.paidDate} >= ${startKey}`,
+        sql`${invoices.paidDate} <= ${endKey}`,
+      ),
+    )
+    .all();
+
+  // Group by month in JavaScript
+  const earningsByMonth = new Map<string, number>();
+  for (const inv of allPaidInvoices) {
+    if (!inv.paidDate) continue;
+    const monthKey = inv.paidDate.substring(0, 7); // "YYYY-MM"
+    earningsByMonth.set(monthKey, (earningsByMonth.get(monthKey) ?? 0) + (inv.netInrAmount ?? 0));
+  }
+
+  // Build result array for each month
+  const result: { month: string; earnings: number }[] = [];
   for (let i = months - 1; i >= 0; i--) {
     const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
     const monthName = date.toLocaleDateString("en-IN", { month: "short", year: "2-digit" });
-
-    const monthInvoices = db
-      .select({ netInrAmount: invoices.netInrAmount })
-      .from(invoices)
-      .where(and(eq(invoices.status, "paid"), like(invoices.paidDate, `${monthKey}%`)))
-      .all();
-
-    const earnings = monthInvoices.reduce((sum, inv) => sum + (inv.netInrAmount ?? 0), 0);
-    result.push({ month: monthName, earnings });
+    result.push({ month: monthName, earnings: earningsByMonth.get(monthKey) ?? 0 });
   }
 
   return result;

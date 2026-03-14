@@ -66,6 +66,8 @@ function estimateNetInr(eurAmount: number): number {
 
 /** Find or create the "Salary" account used for invoice-linked income. */
 async function getOrCreateSalaryCategory(): Promise<number> {
+  // Use INSERT OR IGNORE to avoid TOCTOU race condition
+  db.run(sql`INSERT OR IGNORE INTO expense_accounts (name, type, sort_order, is_active, created_at) VALUES ('Salary', 'income', 0, 1, ${new Date().toISOString()})`);
   const existing = db
     .select()
     .from(expenseAccounts)
@@ -76,19 +78,7 @@ async function getOrCreateSalaryCategory(): Promise<number> {
       ),
     )
     .get();
-
-  if (existing) return existing.id;
-
-  const result = db
-    .insert(expenseAccounts)
-    .values({
-      name: "Salary",
-      type: "income" as ExpenseAccountType,
-      sortOrder: 0,
-    })
-    .run();
-
-  return Number(result.lastInsertRowid);
+  return existing!.id;
 }
 
 /** Find SBI bank account to link invoice income to. */

@@ -34,24 +34,22 @@ export async function getExpenseAccountsGrouped(): Promise<{
   const allAccounts = await getExpenseAccounts();
   const activeAccounts = allAccounts.filter(a => a.isActive);
 
-  // Compute balances from transactions
+  // Compute balances from transactions using SQL aggregation
   const balances = new Map<number, number>();
-  const allTxns = db.select().from(expenseTransactions).all();
-  for (const txn of allTxns) {
-    if (txn.type === "income" && txn.accountId) {
-      balances.set(txn.accountId, (balances.get(txn.accountId) ?? 0) + txn.amount);
-    }
-    if (txn.type === "expense" && txn.accountId) {
-      balances.set(txn.accountId, (balances.get(txn.accountId) ?? 0) - txn.amount);
-    }
-    if (txn.type === "transfer") {
-      if (txn.fromAccountId) {
-        balances.set(txn.fromAccountId, (balances.get(txn.fromAccountId) ?? 0) - txn.amount - (txn.fees ?? 0));
-      }
-      if (txn.toAccountId) {
-        balances.set(txn.toAccountId, (balances.get(txn.toAccountId) ?? 0) + txn.amount);
-      }
-    }
+  const balanceRows = db.all<{ account_id: number; balance: number }>(sql`
+    SELECT account_id, SUM(balance) as balance FROM (
+      SELECT account_id, SUM(CASE WHEN type = 'income' THEN amount WHEN type = 'expense' THEN -amount ELSE 0 END) as balance
+      FROM expense_transactions WHERE account_id IS NOT NULL GROUP BY account_id
+      UNION ALL
+      SELECT from_account_id as account_id, SUM(-amount - COALESCE(fees, 0)) as balance
+      FROM expense_transactions WHERE type = 'transfer' AND from_account_id IS NOT NULL GROUP BY from_account_id
+      UNION ALL
+      SELECT to_account_id as account_id, SUM(amount) as balance
+      FROM expense_transactions WHERE type = 'transfer' AND to_account_id IS NOT NULL GROUP BY to_account_id
+    ) GROUP BY account_id
+  `);
+  for (const row of balanceRows) {
+    balances.set(row.account_id, row.balance);
   }
 
   const typeOrder: ExpenseAccountType[] = ["cash", "bank", "income", "expense", "investment", "savings"];
@@ -144,42 +142,44 @@ export async function seedDefaultAccounts(): Promise<{ success: boolean }> {
   const existing = db.select().from(expenseAccounts).limit(1).all();
   if (existing.length > 0) return { success: true };
 
-  for (const [type, config] of Object.entries(DEFAULT_EXPENSE_CATEGORIES)) {
-    for (const [idx, name] of config.items.entries()) {
-      const result = db.insert(expenseAccounts).values({
-        name,
-        type: type as ExpenseAccountType,
-        sortOrder: idx,
-      }).run();
+  await db.transaction(async (tx) => {
+    for (const [type, config] of Object.entries(DEFAULT_EXPENSE_CATEGORIES)) {
+      for (const [idx, name] of config.items.entries()) {
+        const result = tx.insert(expenseAccounts).values({
+          name,
+          type: type as ExpenseAccountType,
+          sortOrder: idx,
+        }).run();
 
-      const parentId = Number(result.lastInsertRowid);
-      const subCats = config.subCategories?.[name];
-      if (subCats) {
-        for (const [subIdx, subName] of subCats.entries()) {
-          const subResult = db.insert(expenseAccounts).values({
-            name: subName,
-            type: type as ExpenseAccountType,
-            parentId,
-            sortOrder: subIdx,
-          }).run();
+        const parentId = Number(result.lastInsertRowid);
+        const subCats = config.subCategories?.[name];
+        if (subCats) {
+          for (const [subIdx, subName] of subCats.entries()) {
+            const subResult = tx.insert(expenseAccounts).values({
+              name: subName,
+              type: type as ExpenseAccountType,
+              parentId,
+              sortOrder: subIdx,
+            }).run();
 
-          // 3rd level: sub-sub-categories
-          const subSubItems = config.subSubCategories?.[subName];
-          if (subSubItems) {
-            const subParentId = Number(subResult.lastInsertRowid);
-            for (const [ssIdx, ssName] of subSubItems.entries()) {
-              db.insert(expenseAccounts).values({
-                name: ssName,
-                type: type as ExpenseAccountType,
-                parentId: subParentId,
-                sortOrder: ssIdx,
-              }).run();
+            // 3rd level: sub-sub-categories
+            const subSubItems = config.subSubCategories?.[subName];
+            if (subSubItems) {
+              const subParentId = Number(subResult.lastInsertRowid);
+              for (const [ssIdx, ssName] of subSubItems.entries()) {
+                tx.insert(expenseAccounts).values({
+                  name: ssName,
+                  type: type as ExpenseAccountType,
+                  parentId: subParentId,
+                  sortOrder: ssIdx,
+                }).run();
+              }
             }
           }
         }
       }
     }
-  }
+  });
 
   return { success: true };
 }
