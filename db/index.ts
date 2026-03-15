@@ -61,5 +61,7 @@ if (hasLegacyDb) {
 
 export const db = drizzle(sqlite, { schema });
 
-// Run migrations on startup (no-op for legacy DBs since 0000 is already marked as applied)
-migrate(db, { migrationsFolder: path.join(process.cwd(), "drizzle") });
+// Run migrations on startup unless explicitly disabled (e.g. image build stage).
+if (process.env.SKIP_DB_MIGRATIONS !== "true") {
+  migrate(db, { migrationsFolder: path.join(process.cwd(), "drizzle") });
+}

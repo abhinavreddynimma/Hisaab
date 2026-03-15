@@ -235,3 +235,63 @@ export interface DashboardStats {
     currency: string;
   } | null;
 }
+
+// Expense Manager types
+export type ExpenseAccountType = "income" | "expense" | "investment" | "savings" | "bank" | "cash";
+export type ExpenseTransactionType = "income" | "expense" | "transfer";
+
+export interface ExpenseAccount {
+  id: number;
+  name: string;
+  type: ExpenseAccountType;
+  parentId: number | null;
+  icon: string | null;
+  color: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface ExpenseTransaction {
+  id: number;
+  type: ExpenseTransactionType;
+  date: string;
+  amount: number;
+  categoryId: number | null;
+  accountId: number | null;
+  fromAccountId: number | null;
+  toAccountId: number | null;
+  fees: number | null;
+  note: string | null;
+  tags: string | null;
+  createdAt: string;
+  categoryName?: string;
+  accountName?: string;
+  fromAccountName?: string;
+  toAccountName?: string;
+}
+
+export interface ExpenseBudget {
+  id: number;
+  name: string;
+  monthlyAmount: number;
+  financialYear: string;
+  isActive: boolean;
+  createdAt: string;
+  categoryIds?: number[];
+  categoryNames?: string[];
+  spent?: number;
+}
+
+export interface ExpenseTarget {
+  id: number;
+  accountId: number;
+  monthlyAmount: number;
+  financialYear: string;
+  isActive: boolean;
+  createdAt: string;
+  accountName?: string;
+  accountType?: ExpenseAccountType;
+  thisMonthActual?: number;
+  fyAverage?: number;
+}

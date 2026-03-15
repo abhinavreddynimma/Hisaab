@@ -210,7 +210,7 @@ export async function getTaxComputation(financialYear: string): Promise<{
 }
 
 export async function getTaxProjection(financialYear: string): Promise<{
-  monthlyBreakdown: { month: string; actual: number; projected: boolean; workingDays?: number }[];
+  monthlyBreakdown: { month: string; actual: number; projected: boolean; workingDays?: number; invoiceBased?: boolean }[];
   monthsElapsed: number;
   monthsRemaining: number;
   avgRate: number;
@@ -284,7 +284,13 @@ export async function getTaxProjection(financialYear: string): Promise<{
   const monthsElapsed = Math.min(12, Math.max(1, currentIdx));
   const monthsRemaining = 12 - monthsElapsed;
 
-  // Compute average EUR-INR rate and deduction % from paid invoices
+  // Use the most recent paid invoice's EUR-INR rate as current rate for projections
+  const sortedByDate = [...paidInvoices]
+    .filter((i) => i.paidDate && i.eurToInrRate)
+    .sort((a, b) => b.paidDate!.localeCompare(a.paidDate!));
+  const currentRate = sortedByDate.length > 0 ? sortedByDate[0].eurToInrRate! : 0;
+
+  // Compute average deduction % from paid invoices
   const totalEur = paidInvoices.reduce((s, i) => s + (i.total ?? 0), 0);
   const avgRate = totalEur > 0
     ? paidInvoices.reduce((s, i) => s + (i.eurToInrRate ?? 0) * (i.total ?? 0), 0) / totalEur
@@ -293,32 +299,72 @@ export async function getTaxProjection(financialYear: string): Promise<{
   const totalDeductions = paidInvoices.reduce((s, i) => s + (i.platformCharges ?? 0) + (i.bankCharges ?? 0), 0);
   const deductionPct = totalGrossInr > 0 ? totalDeductions / totalGrossInr : 0;
 
-  // Project remaining months using calendar working days
+  // Query sent/draft invoices with due dates in the FY for projection
+  const openInvoices = db
+    .select({
+      total: invoices.total,
+      dueDate: invoices.dueDate,
+      status: invoices.status,
+    })
+    .from(invoices)
+    .where(
+      and(
+        sql`${invoices.status} IN ('sent', 'draft')`,
+        sql`${invoices.dueDate} >= ${fyStart}`,
+        sql`${invoices.dueDate} <= ${fyEnd}`,
+      )
+    )
+    .all();
+
+  // Group open invoice totals by FY month index (based on due date)
+  const invoiceByMonth: number[] = Array(12).fill(0);
+  const hasInvoiceForMonth: boolean[] = Array(12).fill(false);
+  for (const inv of openInvoices) {
+    if (!inv.dueDate) continue;
+    const [y, m] = inv.dueDate.split("-").map(Number);
+    let idx: number;
+    if (y === startYear) {
+      idx = m - 4;
+    } else {
+      idx = m + 8;
+    }
+    if (idx >= 0 && idx < 12) {
+      // Estimate net INR from the invoice EUR total
+      invoiceByMonth[idx] += Math.round((inv.total ?? 0) * currentRate * (1 - deductionPct));
+      hasInvoiceForMonth[idx] = true;
+    }
+  }
+
+  // Project remaining months: prefer sent invoices, fall back to working-days estimate
   const defaultProjectId = await getDefaultProjectId();
   const projectedMonthly: number[] = Array(12).fill(0);
   const projectedWorkingDays: (number | undefined)[] = Array(12).fill(undefined);
 
   for (let i = monthsElapsed; i < 12; i++) {
-    // Income received in month i comes from working in month i-1
-    // (invoice for previous month gets paid this month)
-    const prevIdx = i - 1;
-    const prevCalYear = prevIdx < 9 ? startYear : startYear + 1;
-    const prevCalMonth = prevIdx < 9 ? prevIdx + 4 : prevIdx - 8;
+    if (hasInvoiceForMonth[i]) {
+      // Use actual invoice amount instead of estimating
+      projectedMonthly[i] = invoiceByMonth[i];
+    } else {
+      // Fall back to working-days-based estimate
+      const prevIdx = i - 1;
+      const prevCalYear = prevIdx < 9 ? startYear : startYear + 1;
+      const prevCalMonth = prevIdx < 9 ? prevIdx + 4 : prevIdx - 8;
 
-    const entries = await getDayEntriesForMonth(prevCalYear, prevCalMonth);
-    const holidays = getFrenchHolidays(prevCalYear);
-    const augmented = withImplicitWorkingDays(entries as DayEntry[], prevCalYear, prevCalMonth, holidays);
-    const summary = calculateMonthSummary(augmented);
+      const entries = await getDayEntriesForMonth(prevCalYear, prevCalMonth);
+      const holidays = getFrenchHolidays(prevCalYear);
+      const augmented = withImplicitWorkingDays(entries as DayEntry[], prevCalYear, prevCalMonth, holidays);
+      const summary = calculateMonthSummary(augmented);
 
-    const monthKey = `${prevCalYear}-${String(prevCalMonth).padStart(2, "0")}`;
-    const dailyRate = defaultProjectId ? await getEffectiveRate(defaultProjectId, monthKey) : 0;
+      const monthKey = `${prevCalYear}-${String(prevCalMonth).padStart(2, "0")}`;
+      const dailyRate = defaultProjectId ? await getEffectiveRate(defaultProjectId, monthKey) : 0;
 
-    const eurAmount = summary.effectiveWorkingDays * dailyRate;
-    const grossInr = eurAmount * avgRate;
-    const netInr = grossInr * (1 - deductionPct);
+      const eurAmount = summary.effectiveWorkingDays * dailyRate;
+      const grossInr = eurAmount * currentRate;
+      const netInr = grossInr * (1 - deductionPct);
 
-    projectedMonthly[i] = Math.round(netInr);
-    projectedWorkingDays[i] = summary.effectiveWorkingDays;
+      projectedMonthly[i] = Math.round(netInr);
+      projectedWorkingDays[i] = summary.effectiveWorkingDays;
+    }
   }
 
   const actualTotal = monthlyActual.reduce((a, b) => a + b, 0);
@@ -330,6 +376,7 @@ export async function getTaxProjection(financialYear: string): Promise<{
     actual: i < monthsElapsed ? monthlyActual[i] : projectedMonthly[i],
     projected: i >= monthsElapsed,
     workingDays: projectedWorkingDays[i],
+    invoiceBased: i >= monthsElapsed && hasInvoiceForMonth[i],
   }));
 
   const projectedGrossReceipts = actualTotal + projectedTotal;
@@ -351,7 +398,7 @@ export async function getTaxProjection(financialYear: string): Promise<{
     monthlyBreakdown,
     monthsElapsed,
     monthsRemaining,
-    avgRate: Math.round(avgRate * 100) / 100,
+    avgRate: Math.round(currentRate * 100) / 100,
     projectedGrossReceipts: Math.round(projectedGrossReceipts),
     projectedPresumptiveIncome: Math.round(projectedPresumptiveIncome),
     projectedTaxableIncome: Math.round(projectedTaxableIncome),

@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { MoreHorizontal, Eye, Send, CheckCircle, XCircle, Paperclip } from "lucide-react";
+import { MoreHorizontal, Eye, Send, CheckCircle, XCircle, Paperclip, Download } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -46,6 +46,7 @@ import {
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { updateInvoiceStatus, deleteInvoice } from "@/actions/invoices";
 import { INVOICE_STATUSES } from "@/lib/constants";
 import type { Invoice } from "@/lib/types";
@@ -55,11 +56,18 @@ interface InvoiceListProps {
   invoices: (Invoice & { clientName: string })[];
   canEdit?: boolean;
   attachmentCounts?: Record<number, number>;
+  currentEurToInrRate?: number | null;
 }
 
-export function InvoiceList({ invoices, canEdit = true, attachmentCounts = {} }: InvoiceListProps) {
+export function InvoiceList({
+  invoices,
+  canEdit = true,
+  attachmentCounts = {},
+  currentEurToInrRate = null,
+}: InvoiceListProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("all");
+  const [exportFinancialYear, setExportFinancialYear] = useState("");
 
   // Mark as Paid dialog state
   const [paidDialogOpen, setPaidDialogOpen] = useState(false);
@@ -77,6 +85,117 @@ export function InvoiceList({ invoices, canEdit = true, attachmentCounts = {} }:
   const rate = parseFloat(eurToInrRate) || 0;
   const grossInr = paidInvoice ? paidInvoice.total * rate : 0;
   const netInr = grossInr - (parseFloat(platformCharges) || 0) - (parseFloat(bankCharges) || 0);
+
+  function getFinancialYear(date: string): string {
+    const d = new Date(date);
+    const year = d.getFullYear();
+    const month = d.getMonth() + 1;
+    const startYear = month >= 4 ? year : year - 1;
+    const endYearShort = String((startYear + 1) % 100).padStart(2, "0");
+    return `${startYear}-${endYearShort}`;
+  }
+
+  const financialYearOptions = Array.from(
+    new Set(invoices.map((inv) => getFinancialYear(inv.issueDate)))
+  ).sort((a, b) => b.localeCompare(a));
+
+  useEffect(() => {
+    if (exportFinancialYear || financialYearOptions.length === 0) return;
+    const currentFy = getFinancialYear(new Date().toISOString());
+    if (financialYearOptions.includes(currentFy)) {
+      setExportFinancialYear(currentFy);
+    } else {
+      setExportFinancialYear(financialYearOptions[0]);
+    }
+  }, [exportFinancialYear, financialYearOptions]);
+
+  function getActualInrAmount(invoice: Invoice): { amount: number | null; estimated: boolean } {
+    if (invoice.netInrAmount !== null) return { amount: invoice.netInrAmount, estimated: false };
+    if (invoice.status !== "paid" && invoice.currency === "EUR" && currentEurToInrRate) {
+      return { amount: invoice.total * currentEurToInrRate, estimated: true };
+    }
+    return { amount: null, estimated: false };
+  }
+
+  function escapeHtml(value: string): string {
+    return value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function handleExportExcel() {
+    if (!exportFinancialYear) {
+      toast.error("Please select a financial year");
+      return;
+    }
+
+    const exportRows = filteredInvoices.filter(
+      (inv) => getFinancialYear(inv.issueDate) === exportFinancialYear
+    );
+
+    if (exportRows.length === 0) {
+      toast.error("No invoices found for selected financial year");
+      return;
+    }
+
+    const headers = [
+      "Invoice #",
+      "Client",
+      "Period",
+      "Issue Date",
+      "Amount",
+      "Actual INR",
+      "Paid Date",
+      "Status",
+    ];
+
+    const rows = exportRows.map((invoice) => {
+      const actualInr = getActualInrAmount(invoice);
+      return [
+        invoice.invoiceNumber,
+        invoice.clientName,
+        `${formatDate(invoice.billingPeriodStart)} - ${formatDate(invoice.billingPeriodEnd)}`,
+        formatDate(invoice.issueDate),
+        formatForeignCurrency(invoice.total, invoice.currency),
+        actualInr.amount !== null
+          ? `${formatCurrency(actualInr.amount)}${actualInr.estimated ? "*" : ""}`
+          : "—",
+        invoice.paidDate ? formatDate(invoice.paidDate) : "—",
+        INVOICE_STATUSES[invoice.status].label,
+      ];
+    });
+
+    const tableHtml = `
+      <table border="1">
+        <thead>
+          <tr>${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr>
+        </thead>
+        <tbody>
+          ${rows
+            .map(
+              (row) =>
+                `<tr>${row.map((cell) => `<td>${escapeHtml(String(cell))}</td>`).join("")}</tr>`
+            )
+            .join("")}
+        </tbody>
+      </table>
+    `;
+
+    const blob = new Blob([`\uFEFF${tableHtml}`], {
+      type: "application/vnd.ms-excel;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `invoices-${activeTab}-fy-${exportFinancialYear}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
 
   function openPaidDialog(invoice: Invoice & { clientName: string }) {
     setPaidInvoice(invoice);
@@ -164,7 +283,9 @@ export function InvoiceList({ invoices, canEdit = true, attachmentCounts = {} }:
             <TableHead>Invoice #</TableHead>
             <TableHead>Client</TableHead>
             <TableHead>Period</TableHead>
+            <TableHead>Issue Date</TableHead>
             <TableHead className="text-right">Amount</TableHead>
+            <TableHead className="text-right">Actual INR</TableHead>
             <TableHead>Paid Date</TableHead>
             <TableHead>Status</TableHead>
             <TableHead className="w-[50px]"></TableHead>
@@ -189,8 +310,23 @@ export function InvoiceList({ invoices, canEdit = true, attachmentCounts = {} }:
                   {formatDate(invoice.billingPeriodStart)} &ndash;{" "}
                   {formatDate(invoice.billingPeriodEnd)}
                 </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {formatDate(invoice.issueDate)}
+                </TableCell>
                 <TableCell className="text-right">
                   {formatForeignCurrency(invoice.total, invoice.currency)}
+                </TableCell>
+                <TableCell className="text-right text-muted-foreground">
+                  {(() => {
+                    const { amount, estimated } = getActualInrAmount(invoice);
+                    if (amount === null) return "—";
+                    return (
+                      <span className="inline-flex items-start">
+                        {formatCurrency(amount)}
+                        {estimated && <sup className="ml-0.5 text-[10px]">*</sup>}
+                      </span>
+                    );
+                  })()}
                 </TableCell>
                 <TableCell className="text-muted-foreground">
                   {invoice.paidDate ? formatDate(invoice.paidDate) : "—"}
@@ -292,11 +428,16 @@ export function InvoiceList({ invoices, canEdit = true, attachmentCounts = {} }:
             acc[inv.currency] = (acc[inv.currency] ?? 0) + inv.total;
             return acc;
           }, {});
+          const actualInrValues = items
+            .map((inv) => getActualInrAmount(inv).amount)
+            .filter((v): v is number => v !== null);
+          const hasActualInr = actualInrValues.length > 0;
+          const totalActualInr = actualInrValues.reduce((acc, v) => acc + v, 0);
           const currencyKeys = Object.keys(byCurrency);
           return (
             <TableFooter>
               <TableRow>
-                <TableCell colSpan={3} className="font-medium">
+                <TableCell colSpan={4} className="font-medium">
                   {items.length} invoice{items.length !== 1 ? "s" : ""}
                   {paidItems.length > 0 && paidItems.length < items.length && (
                     <span className="text-muted-foreground font-normal"> ({paidItems.length} paid)</span>
@@ -310,6 +451,9 @@ export function InvoiceList({ invoices, canEdit = true, attachmentCounts = {} }:
                     </span>
                   ))}
                 </TableCell>
+                <TableCell className="text-right font-semibold">
+                  {hasActualInr ? formatCurrency(totalActualInr) : "—"}
+                </TableCell>
                 <TableCell colSpan={canEdit ? 4 : 3} />
               </TableRow>
             </TableFooter>
@@ -322,23 +466,44 @@ export function InvoiceList({ invoices, canEdit = true, attachmentCounts = {} }:
   return (
     <>
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="all">
-            All ({invoices.length})
-          </TabsTrigger>
-          <TabsTrigger value="draft">
-            Draft ({invoices.filter((i) => i.status === "draft").length})
-          </TabsTrigger>
-          <TabsTrigger value="sent">
-            Sent ({invoices.filter((i) => i.status === "sent").length})
-          </TabsTrigger>
-          <TabsTrigger value="paid">
-            Paid ({invoices.filter((i) => i.status === "paid").length})
-          </TabsTrigger>
-          <TabsTrigger value="cancelled">
-            Cancelled ({invoices.filter((i) => i.status === "cancelled").length})
-          </TabsTrigger>
-        </TabsList>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <TabsList>
+            <TabsTrigger value="all">
+              All ({invoices.length})
+            </TabsTrigger>
+            <TabsTrigger value="draft">
+              Draft ({invoices.filter((i) => i.status === "draft").length})
+            </TabsTrigger>
+            <TabsTrigger value="sent">
+              Sent ({invoices.filter((i) => i.status === "sent").length})
+            </TabsTrigger>
+            <TabsTrigger value="paid">
+              Paid ({invoices.filter((i) => i.status === "paid").length})
+            </TabsTrigger>
+            <TabsTrigger value="cancelled">
+              Cancelled ({invoices.filter((i) => i.status === "cancelled").length})
+            </TabsTrigger>
+          </TabsList>
+
+          <div className="flex items-center gap-2">
+            <Select value={exportFinancialYear} onValueChange={setExportFinancialYear}>
+              <SelectTrigger className="h-8 w-[130px]">
+                <SelectValue placeholder="Select FY" />
+              </SelectTrigger>
+              <SelectContent>
+                {financialYearOptions.map((fy) => (
+                  <SelectItem key={fy} value={fy}>
+                    FY {fy}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button size="sm" variant="outline" onClick={handleExportExcel}>
+              <Download className="mr-1.5 h-3.5 w-3.5" />
+              Export
+            </Button>
+          </div>
+        </div>
         <TabsContent value={activeTab} className="mt-4">
           {renderTable(filteredInvoices)}
         </TabsContent>
