@@ -6,16 +6,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LineChart, Line, XAxis, ResponsiveContainer, Tooltip, ReferenceLine, Label } from "recharts";
-import { formatCurrency, cn } from "@/lib/utils";
+import { formatCurrency, formatCompact, cn } from "@/lib/utils";
 import { getTargetMonthlyTrend } from "@/actions/expenses";
 import type { ExpenseTarget } from "@/lib/types";
-
-function formatCompact(v: number): string {
-  if (v >= 10000000) return `₹${(v / 10000000).toFixed(1)}Cr`;
-  if (v >= 100000) return `₹${(v / 100000).toFixed(1)}L`;
-  if (v >= 1000) return `₹${(v / 1000).toFixed(0)}k`;
-  return `₹${v.toFixed(0)}`;
-}
 
 const DEFAULT_COLORS = [
   "#6366f1", "#f43f5e", "#10b981", "#f59e0b", "#8b5cf6",

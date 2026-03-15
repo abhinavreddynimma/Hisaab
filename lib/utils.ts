@@ -104,3 +104,10 @@ export function getCurrentMonthKey(): string {
 export function getMonthKey(year: number, month: number): string {
   return `${year}-${String(month).padStart(2, "0")}`;
 }
+
+export function formatCompact(v: number): string {
+  if (v >= 10000000) return `₹${(v / 10000000).toFixed(1)}Cr`;
+  if (v >= 100000) return `₹${(v / 100000).toFixed(1)}L`;
+  if (v >= 1000) return `₹${(v / 1000).toFixed(0)}k`;
+  return `₹${v.toFixed(0)}`;
+}
