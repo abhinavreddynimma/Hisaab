@@ -19,9 +19,7 @@ import { RecentInvoices } from "@/components/dashboard/recent-invoices";
 import { ExchangeRateChart } from "@/components/dashboard/exchange-rate-chart";
 import { CalendarOverview } from "@/components/dashboard/calendar-overview";
 import { FYNavigator } from "@/components/dashboard/fy-navigator";
-import { ReminderBanner } from "@/components/dashboard/reminder-banner";
 import { requirePageAccess } from "@/lib/auth";
-import { getActiveReminders } from "@/actions/reminders";
 
 interface DashboardPageProps {
   searchParams: Promise<{ fy?: string }>;
@@ -50,7 +48,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const fy = params.fy || getCurrentFinancialYear();
 
   const primaryCurrency = await getPrimaryCurrency();
-  const [stats, monthlyEarnings, clientEarnings, monthlyBreakdown, balanceData, recentInvoices, exchangeRates, calendarData, liveRate, activeReminders] =
+  const [stats, monthlyEarnings, clientEarnings, monthlyBreakdown, balanceData, recentInvoices, exchangeRates, calendarData, liveRate] =
     await Promise.all([
       getDashboardStats(),
       getMonthlyEarningsData(),
@@ -61,7 +59,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       getMonthlyExchangeRateData(),
       getCalendarOverviewData(),
       getLiveRate(primaryCurrency),
-      getActiveReminders(),
     ]);
 
   return (
@@ -70,8 +67,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <h1 className="font-display text-2xl font-bold tracking-tight">Dashboard</h1>
         <FYNavigator financialYear={fy} basePath="/dashboard" />
       </div>
-
-      <ReminderBanner reminders={activeReminders} />
 
       <StatsCards stats={stats} monthlyEarnings={monthlyEarnings} />
 
