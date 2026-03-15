@@ -181,3 +181,57 @@ export const invoiceLineItems = sqliteTable("invoice_line_items", {
   unitPrice: real("unit_price").notNull(),
   amount: real("amount").notNull(),
 });
+
+// Expense Manager tables
+export const expenseAccounts = sqliteTable("expense_accounts", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  type: text("type", { enum: ["income", "expense", "investment", "savings", "bank", "cash"] }).notNull(),
+  parentId: integer("parent_id"),
+  icon: text("icon"),
+  color: text("color"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+});
+
+export const expenseTransactions = sqliteTable("expense_transactions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  type: text("type", { enum: ["income", "expense", "transfer"] }).notNull(),
+  date: text("date").notNull(),
+  amount: real("amount").notNull(),
+  categoryId: integer("category_id").references(() => expenseAccounts.id),
+  accountId: integer("account_id").references(() => expenseAccounts.id),
+  fromAccountId: integer("from_account_id").references(() => expenseAccounts.id),
+  toAccountId: integer("to_account_id").references(() => expenseAccounts.id),
+  fees: real("fees").default(0),
+  note: text("note"),
+  tags: text("tags"),
+  createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+});
+
+export const expenseBudgets = sqliteTable("expense_budgets", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  monthlyAmount: real("monthly_amount").notNull(),
+  financialYear: text("financial_year").notNull(),
+  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+});
+
+export const expenseBudgetCategories = sqliteTable("expense_budget_categories", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  budgetId: integer("budget_id").notNull().references(() => expenseBudgets.id),
+  categoryId: integer("category_id").notNull().references(() => expenseAccounts.id),
+}, (table) => [
+  uniqueIndex("budget_category_idx").on(table.budgetId, table.categoryId),
+]);
+
+export const expenseTargets = sqliteTable("expense_targets", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  accountId: integer("account_id").notNull().references(() => expenseAccounts.id),
+  monthlyAmount: real("monthly_amount").notNull(),
+  financialYear: text("financial_year").notNull(),
+  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+});

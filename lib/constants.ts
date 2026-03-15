@@ -125,3 +125,50 @@ export function getFrenchHolidays(year: number): Map<string, string> {
 
   return holidays;
 }
+
+// Expense Manager constants
+export const EXPENSE_ACCOUNT_TYPES = {
+  income: { label: "Income", color: "#10b981" },
+  expense: { label: "Expense", color: "#f43f5e" },
+  investment: { label: "Investment", color: "#6366f1" },
+  savings: { label: "Savings", color: "#f59e0b" },
+  bank: { label: "Bank Account", color: "#3b82f6" },
+  cash: { label: "Cash", color: "#8b5cf6" },
+} as const;
+
+export const DEFAULT_EXPENSE_TAGS = [
+  "tax-deductible", "work-related", "recurring", "one-time", "reimbursable"
+] as const;
+
+export const DEFAULT_EXPENSE_CATEGORIES: Record<string, { items: string[]; subCategories?: Record<string, string[]> }> = {
+  income: { items: ["Salary", "Freelance", "Interest", "Dividends", "Other Income"] },
+  expense: {
+    items: ["Food", "Transport", "Shopping", "Health", "Entertainment", "Utilities", "Rent", "Education", "Personal Care", "Other"],
+    subCategories: {
+      "Food": ["Eating Out", "Groceries", "Snacks"],
+      "Transport": ["Fuel", "Auto/Cab", "Public Transport"],
+      "Shopping": ["Clothes", "Electronics", "Home"],
+      "Health": ["Doctor", "Pharmacy", "Gym"],
+    }
+  },
+  investment: { items: ["Mutual Funds", "Stocks", "ETFs", "FD", "PPF"] },
+  savings: { items: ["Personal Savings", "Emergency Fund"] },
+  bank: { items: ["Primary Bank"] },
+  cash: { items: ["Cash"] },
+};
+
+export function getFYDateRange(financialYear: string): { start: string; end: string } {
+  const startYear = parseInt(financialYear.split("-")[0]);
+  return {
+    start: `${startYear}-04-01`,
+    end: `${startYear + 1}-03-31`,
+  };
+}
+
+export function getMonthDateRange(year: number, month: number): { start: string; end: string } {
+  const lastDay = new Date(year, month, 0).getDate();
+  return {
+    start: `${year}-${String(month).padStart(2, "0")}-01`,
+    end: `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`,
+  };
+}
