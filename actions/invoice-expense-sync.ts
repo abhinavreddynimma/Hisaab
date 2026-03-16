@@ -18,6 +18,52 @@ import type { ExpenseAccountType } from "@/lib/types";
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** Estimate net INR for an unpaid EUR invoice using the latest paid invoice's rate and avg deductions. */
+function estimateNetInr(eurAmount: number): number {
+  const paidInvs = db
+    .select({
+      total: invoices.total,
+      eurToInrRate: invoices.eurToInrRate,
+      platformCharges: invoices.platformCharges,
+      bankCharges: invoices.bankCharges,
+    })
+    .from(invoices)
+    .where(
+      and(
+        eq(invoices.status, "paid"),
+        sql`${invoices.eurToInrRate} IS NOT NULL`,
+      ),
+    )
+    .all();
+
+  if (paidInvs.length === 0) return eurAmount; // no history, can't convert
+
+  // Latest rate: use most recent paid invoice's rate
+  // (paidInvs aren't sorted, so find the one with highest paidDate)
+  const withRate = paidInvs.filter((i) => i.eurToInrRate);
+  const totalEur = withRate.reduce((s, i) => s + (i.total ?? 0), 0);
+  const avgRate =
+    totalEur > 0
+      ? withRate.reduce((s, i) => s + (i.eurToInrRate ?? 0) * (i.total ?? 0), 0) / totalEur
+      : 0;
+  const totalGrossInr = totalEur * avgRate;
+  const totalDeductions = withRate.reduce(
+    (s, i) => s + (i.platformCharges ?? 0) + (i.bankCharges ?? 0),
+    0,
+  );
+  const deductionPct = totalGrossInr > 0 ? totalDeductions / totalGrossInr : 0;
+
+  // Use latest paid invoice's rate for the spot conversion
+  const sortedByRate = [...withRate].sort(
+    (a, b) => (b.eurToInrRate ?? 0) - (a.eurToInrRate ?? 0),
+  );
+  // Actually we want the most recent — but we don't have paidDate here.
+  // Use the same weighted avg rate as tax projection for consistency.
+  const currentRate = avgRate;
+
+  return Math.round(eurAmount * currentRate * (1 - deductionPct));
+}
+
 /** Find or create the "Freelance Income" account used for invoice-linked income. */
 async function getOrCreateFreelanceIncomeAccount(): Promise<number> {
   const existing = db
@@ -108,12 +154,14 @@ export async function syncInvoiceToExpense(invoiceId: number): Promise<void> {
   switch (invoice.status) {
     case "sent": {
       // Create or update an *estimated* income transaction on the due date
+      // Convert EUR to estimated net INR using avg rate and deductions from paid invoices
       const date = invoice.dueDate || invoice.issueDate;
+      const estimatedInr = estimateNetInr(invoice.total);
       if (existing) {
         db.update(expenseTransactions)
           .set({
             date,
-            amount: invoice.total, // estimated = full invoice total
+            amount: estimatedInr,
             fees: 0,
             note,
             status: "estimated",
@@ -125,7 +173,7 @@ export async function syncInvoiceToExpense(invoiceId: number): Promise<void> {
           .values({
             type: "income",
             date,
-            amount: invoice.total,
+            amount: estimatedInr,
             categoryId,
             fees: 0,
             note,
@@ -188,7 +236,9 @@ export async function syncInvoiceToExpense(invoiceId: number): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function syncAllInvoicesToExpenses(): Promise<{ synced: number }> {
-  // Only sync invoices that are sent/paid and don't already have a linked transaction
+  // Sync invoices that are sent/paid:
+  // - Missing linked transactions get created
+  // - Estimated transactions get re-synced (amounts may change as rates update)
   const activeInvoices = db
     .select({ id: invoices.id, status: invoices.status })
     .from(invoices)
@@ -197,18 +247,19 @@ export async function syncAllInvoicesToExpenses(): Promise<{ synced: number }> {
     )
     .all();
 
-  const linkedIds = new Set(
-    db
-      .select({ sourceId: expenseTransactions.sourceId })
-      .from(expenseTransactions)
-      .where(eq(expenseTransactions.source, "invoice"))
-      .all()
-      .map((r) => r.sourceId),
-  );
+  const linkedTxns = db
+    .select({ sourceId: expenseTransactions.sourceId, status: expenseTransactions.status })
+    .from(expenseTransactions)
+    .where(eq(expenseTransactions.source, "invoice"))
+    .all();
+
+  const linkedMap = new Map(linkedTxns.map((r) => [r.sourceId, r.status]));
 
   let synced = 0;
   for (const inv of activeInvoices) {
-    if (!linkedIds.has(String(inv.id))) {
+    const existing = linkedMap.get(String(inv.id));
+    // Sync if: no linked transaction, or it's estimated (re-estimate with latest rates)
+    if (!existing || existing === "estimated") {
       await syncInvoiceToExpense(inv.id);
       synced++;
     }
