@@ -13,10 +13,11 @@ if (!fs.existsSync(dataDir)) {
 
 const sqlite = new Database(dbPath);
 
+// Set busy timeout FIRST to avoid SQLITE_BUSY during concurrent access
+sqlite.pragma("busy_timeout = 10000");
 // Enable WAL mode for better performance
 sqlite.pragma("journal_mode = WAL");
 sqlite.pragma("foreign_keys = ON");
-sqlite.pragma("busy_timeout = 5000");
 
 // Handle legacy DBs created before Drizzle migrations were introduced.
 // If tables exist but __drizzle_migrations doesn't, this is a pre-migration DB.
