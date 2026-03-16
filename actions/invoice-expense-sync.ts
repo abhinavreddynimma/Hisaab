@@ -64,7 +64,7 @@ function estimateNetInr(eurAmount: number): number {
   return Math.round(eurAmount * currentRate * (1 - deductionPct));
 }
 
-/** Find or create the "Freelance Income" account used for invoice-linked income. */
+/** Find or create the "Salary" account used for invoice-linked income. */
 async function getOrCreateFreelanceIncomeAccount(): Promise<number> {
   const existing = db
     .select()
@@ -72,7 +72,7 @@ async function getOrCreateFreelanceIncomeAccount(): Promise<number> {
     .where(
       and(
         eq(expenseAccounts.type, "income"),
-        eq(expenseAccounts.name, "Freelance Income"),
+        eq(expenseAccounts.name, "Salary"),
       ),
     )
     .get();
@@ -82,7 +82,7 @@ async function getOrCreateFreelanceIncomeAccount(): Promise<number> {
   const result = db
     .insert(expenseAccounts)
     .values({
-      name: "Freelance Income",
+      name: "Salary",
       type: "income" as ExpenseAccountType,
       sortOrder: 0,
     })

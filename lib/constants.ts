@@ -141,7 +141,7 @@ export const DEFAULT_EXPENSE_TAGS = [
 ] as const;
 
 export const DEFAULT_EXPENSE_CATEGORIES: Record<string, { items: string[]; subCategories?: Record<string, string[]> }> = {
-  income: { items: ["Salary", "Freelance Income", "Refunds", "Interest Gained", "Investment Gains", "Other"] },
+  income: { items: ["Salary", "Refunds", "Interest Gained", "Investment Gains", "Other"] },
   expense: {
     items: ["Essential Expenses", "Shopping", "Fitness", "Health & Wellness", "Bills", "Entertainment", "Hobbies", "Travel", "Gifts", "Car", "Tax"],
     subCategories: {

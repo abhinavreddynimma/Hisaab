@@ -29,7 +29,7 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
 
   // One-time migration: check if we need to reset to new account structure
   const existingAccounts = await getExpenseAccounts();
-  const hasOldAccounts = existingAccounts.some(a => a.name === "Primary Bank" || a.name === "Emergency Fund");
+  const hasOldAccounts = existingAccounts.some(a => a.name === "Primary Bank" || a.name === "Emergency Fund" || a.name === "Freelance Income");
   if (hasOldAccounts) {
     await resetExpenseData();
   }
