@@ -146,16 +146,21 @@ export function StatsView({ stats, fyStats, fyOverview, currentMonth, currentYea
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
               Post-Tax Split — {periodLabel}
             </p>
-            <div className="flex h-4 rounded-full overflow-hidden mb-3">
-              {activeStats.topLevelSplit.investments.percentage > 0 && (
-                <div className="bg-indigo-500 transition-all" style={{ width: `${activeStats.topLevelSplit.investments.percentage}%` }} title={`Investments ${activeStats.topLevelSplit.investments.percentage}%`} />
-              )}
-              {activeStats.topLevelSplit.savings.percentage > 0 && (
-                <div className="bg-amber-400 transition-all" style={{ width: `${activeStats.topLevelSplit.savings.percentage}%` }} title={`Savings ${activeStats.topLevelSplit.savings.percentage}%`} />
-              )}
-              {activeStats.topLevelSplit.expenses.percentage > 0 && (
-                <div className="bg-rose-400 transition-all" style={{ width: `${activeStats.topLevelSplit.expenses.percentage}%` }} title={`Expenses ${activeStats.topLevelSplit.expenses.percentage}%`} />
-              )}
+            <div className="relative mb-3">
+              <div className="flex h-4 rounded-full overflow-hidden">
+                {activeStats.topLevelSplit.investments.percentage > 0 && (
+                  <div className="bg-indigo-500 transition-all" style={{ width: `${activeStats.topLevelSplit.investments.percentage}%` }} title={`Investments ${activeStats.topLevelSplit.investments.percentage}%`} />
+                )}
+                {activeStats.topLevelSplit.savings.percentage > 0 && (
+                  <div className="bg-amber-400 transition-all" style={{ width: `${activeStats.topLevelSplit.savings.percentage}%` }} title={`Savings ${activeStats.topLevelSplit.savings.percentage}%`} />
+                )}
+                {activeStats.topLevelSplit.expenses.percentage > 0 && (
+                  <div className="bg-rose-400 transition-all" style={{ width: `${activeStats.topLevelSplit.expenses.percentage}%` }} title={`Expenses ${activeStats.topLevelSplit.expenses.percentage}%`} />
+                )}
+              </div>
+              {/* Target markers at 50%, 70% (50+20), 100% (50+20+30) */}
+              <div className="absolute top-0 h-6 w-0.5 bg-foreground/70 -translate-y-1" style={{ left: "50%" }} title="Investment target: 50%" />
+              <div className="absolute top-0 h-6 w-0.5 bg-foreground/70 -translate-y-1" style={{ left: "70%" }} title="Savings target: 20%" />
             </div>
             <div className="grid grid-cols-3 gap-4 text-center">
               <div>
