@@ -9,7 +9,7 @@ import { TargetDialog } from "./target-dialog";
 import type { ExpenseAccount, ExpenseTarget } from "@/lib/types";
 
 interface TargetsViewProps {
-  targets: ExpenseTarget[];
+  targets: (ExpenseTarget & { accountIds: number[]; accountNames: string[]; thisMonthActual: number; fyAverage: number })[];
   accounts: ExpenseAccount[];
   financialYear: string;
 }
@@ -17,7 +17,7 @@ interface TargetsViewProps {
 export function TargetsView({ targets, accounts, financialYear }: TargetsViewProps) {
   const router = useRouter();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingTarget, setEditingTarget] = useState<ExpenseTarget | null>(null);
+  const [editingTarget, setEditingTarget] = useState<(ExpenseTarget & { accountIds: number[]; accountNames: string[] }) | null>(null);
 
   const investmentSavingsAccounts = accounts.filter(
     a => (a.type === "investment" || a.type === "savings") && a.isActive && !a.parentId
