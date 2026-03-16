@@ -183,7 +183,7 @@ export function StatsView({ stats, fyStats, fyOverview, currentMonth, currentYea
                 </div>
                 <p className="text-sm font-bold tabular-nums">{activeStats.topLevelSplit.expenses.percentage}%</p>
                 <p className="text-xs text-muted-foreground tabular-nums">{formatCurrency(activeStats.topLevelSplit.expenses.amount)}</p>
-                <p className="text-[10px] text-muted-foreground/60">target: 30%</p>
+                <p className="text-[10px] text-muted-foreground/60">budget: 30%</p>
               </div>
             </div>
           </CardContent>
