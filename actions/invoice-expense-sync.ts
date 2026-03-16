@@ -2,7 +2,7 @@
 
 import { db } from "@/db";
 import { expenseTransactions, expenseAccounts, invoices, clients } from "@/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import type { ExpenseAccountType } from "@/lib/types";
 
 /**
@@ -188,13 +188,33 @@ export async function syncInvoiceToExpense(invoiceId: number): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function syncAllInvoicesToExpenses(): Promise<{ synced: number }> {
-  const allInvoices = db.select({ id: invoices.id }).from(invoices).all();
+  // Only sync invoices that are sent/paid and don't already have a linked transaction
+  const activeInvoices = db
+    .select({ id: invoices.id, status: invoices.status })
+    .from(invoices)
+    .where(
+      sql`${invoices.status} IN ('sent', 'paid')`,
+    )
+    .all();
 
-  for (const inv of allInvoices) {
-    await syncInvoiceToExpense(inv.id);
+  const linkedIds = new Set(
+    db
+      .select({ sourceId: expenseTransactions.sourceId })
+      .from(expenseTransactions)
+      .where(eq(expenseTransactions.source, "invoice"))
+      .all()
+      .map((r) => r.sourceId),
+  );
+
+  let synced = 0;
+  for (const inv of activeInvoices) {
+    if (!linkedIds.has(String(inv.id))) {
+      await syncInvoiceToExpense(inv.id);
+      synced++;
+    }
   }
 
-  return { synced: allInvoices.length };
+  return { synced };
 }
 
 // ---------------------------------------------------------------------------
