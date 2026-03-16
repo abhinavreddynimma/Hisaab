@@ -291,6 +291,7 @@ export async function deleteExpenseTransaction(id: number): Promise<{ success: b
 export async function getExpenseStats(startDate: string, endDate: string): Promise<{
   totalIncome: number;
   totalExpenses: number;
+  totalTax: number;
   totalTransfersOut: number;
   net: number;
   incomeByCategory: { id: number; name: string; amount: number; percentage: number; color: string | null }[];
@@ -399,18 +400,27 @@ export async function getExpenseStats(startDate: string, endDate: string): Promi
     })
     .sort((a, b) => b.amount - a.amount);
 
+  // Exclude Tax from expense breakdown — it gets its own section
   const expenseByCategory = Array.from(expenseMap.entries())
+    .filter(([id]) => {
+      const acc = accountMap.get(id);
+      return acc?.name !== "Tax";
+    })
     .map(([id, amount]) => {
       const acc = accountMap.get(id);
-      return { id, name: acc?.name ?? "Unknown", amount, percentage: totalOutflow > 0 ? Math.round((amount / totalOutflow) * 100) : 0, color: acc?.color ?? null };
+      const nonTaxOutflow = nonTaxExpenses + totalTransfersOut;
+      return { id, name: acc?.name ?? "Unknown", amount, percentage: nonTaxOutflow > 0 ? Math.round((amount / nonTaxOutflow) * 100) : 0, color: acc?.color ?? null };
     })
     .sort((a, b) => b.amount - a.amount);
 
   const transfersByType = Array.from(transferTypeMap.entries())
-    .map(([type, amount]) => ({ type, amount, percentage: totalOutflow > 0 ? Math.round((amount / totalOutflow) * 100) : 0 }))
+    .map(([type, amount]) => {
+      const nonTaxOutflow = nonTaxExpenses + totalTransfersOut;
+      return { type, amount, percentage: nonTaxOutflow > 0 ? Math.round((amount / nonTaxOutflow) * 100) : 0 };
+    })
     .sort((a, b) => b.amount - a.amount);
 
-  return { totalIncome, totalExpenses, totalTransfersOut, net: totalIncome - totalExpenses - totalTransfersOut, incomeByCategory, expenseByCategory, transfersByType, topLevelSplit };
+  return { totalIncome, totalExpenses: nonTaxExpenses, totalTax: taxExpenses, totalTransfersOut, net: totalIncome - totalExpenses - totalTransfersOut, incomeByCategory, expenseByCategory, transfersByType, topLevelSplit };
 }
 
 export async function getExpenseMonthlyOverview(year: number, month: number): Promise<{
