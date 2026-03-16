@@ -62,7 +62,7 @@ export function TransactionDialog({ open, onClose, transaction, accounts }: Tran
   const incomeAccounts = accounts.filter(a => a.type === "income" && a.isActive);
   const expenseAccounts = accounts.filter(a => a.type === "expense" && a.isActive);
   const bankCashAccounts = accounts.filter(a => (a.type === "bank" || a.type === "cash") && a.isActive);
-  const allNonExpenseAccounts = accounts.filter(a => a.type !== "expense" && a.type !== "income" && a.isActive);
+  const transferableAccounts = accounts.filter(a => a.type !== "expense" && a.type !== "income" && a.isActive);
 
   // Build 3-level hierarchy for expense categories
   const topLevelExpense = expenseAccounts.filter(a => !a.parentId);
@@ -211,7 +211,7 @@ export function TransactionDialog({ open, onClose, transaction, accounts }: Tran
                 <Select value={fromAccountId} onValueChange={setFromAccountId}>
                   <SelectTrigger><SelectValue placeholder="From account" /></SelectTrigger>
                   <SelectContent>
-                    {[...bankCashAccounts, ...allNonExpenseAccounts].map(a => (
+                    {transferableAccounts.map(a => (
                       <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>
                     ))}
                   </SelectContent>
@@ -222,7 +222,7 @@ export function TransactionDialog({ open, onClose, transaction, accounts }: Tran
                 <Select value={toAccountId} onValueChange={setToAccountId}>
                   <SelectTrigger><SelectValue placeholder="To account" /></SelectTrigger>
                   <SelectContent>
-                    {[...bankCashAccounts, ...allNonExpenseAccounts].map(a => (
+                    {transferableAccounts.map(a => (
                       <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>
                     ))}
                   </SelectContent>
