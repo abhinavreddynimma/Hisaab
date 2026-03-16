@@ -351,7 +351,7 @@ export function BalanceOverview({ balanceData, monthlyData, financialYear }: Bal
           statusLabel={daysOffMeta.label}
           emoji={daysOffMeta.emoji}
           emojiClassName={daysOffMeta.emojiClassName}
-          helperText={`Expected by month end (FY): ${formatNumber(balanceData.expectedDaysOffToDate)} / ${formatNumber(balanceData.annualDaysOffTarget)} · Burnout risk below ${formatNumber(balanceData.burnoutRiskThreshold)}`}
+          helperText={`Planned: ${formatNumber(balanceData.totalDaysOffToDate)} / ${formatNumber(balanceData.annualDaysOffTarget)} target · Risk zone below ${formatNumber(balanceData.burnoutRiskThreshold)}`}
           daysOffProgress={{
             current: balanceData.totalDaysOffToDate,
             burnoutThreshold: balanceData.burnoutRiskThreshold,
