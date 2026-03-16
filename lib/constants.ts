@@ -164,7 +164,7 @@ export const DEFAULT_EXPENSE_CATEGORIES: Record<string, { items: string[]; subCa
       "Kapil ChitFunds": ["Chitti 1", "Chitti 2", "Chitti 3", "Chitti 4", "Mom Chitti"],
     }
   },
-  savings: { items: ["Personal Savings"] },
+  savings: { items: ["Personal Savings", "P2P Lending"] },
   bank: { items: ["SBI", "BOB"] },
   cash: { items: ["Cash"] },
 };
