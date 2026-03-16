@@ -8,9 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { createExpenseTransaction, updateExpenseTransaction } from "@/actions/expenses";
-import { DEFAULT_EXPENSE_TAGS } from "@/lib/constants";
 import type { ExpenseAccount, ExpenseTransaction, ExpenseTransactionType } from "@/lib/types";
 
 interface TransactionDialogProps {
@@ -30,7 +28,7 @@ export function TransactionDialog({ open, onClose, transaction, accounts }: Tran
   const [toAccountId, setToAccountId] = useState("");
   const [fees, setFees] = useState("");
   const [note, setNote] = useState("");
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [selectedTags] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -44,7 +42,6 @@ export function TransactionDialog({ open, onClose, transaction, accounts }: Tran
       setToAccountId(transaction.toAccountId ? String(transaction.toAccountId) : "");
       setFees(transaction.fees ? String(transaction.fees) : "");
       setNote(transaction.note || "");
-      setSelectedTags(transaction.tags ? JSON.parse(transaction.tags) : []);
     } else {
       setType("expense");
       setDate(new Date().toISOString().split("T")[0]);
@@ -55,7 +52,6 @@ export function TransactionDialog({ open, onClose, transaction, accounts }: Tran
       setToAccountId("");
       setFees("");
       setNote("");
-      setSelectedTags([]);
     }
   }, [transaction, open]);
 
@@ -68,12 +64,6 @@ export function TransactionDialog({ open, onClose, transaction, accounts }: Tran
   const topLevelExpense = expenseAccounts.filter(a => !a.parentId);
   const level2Expense = expenseAccounts.filter(a => a.parentId && topLevelExpense.some(p => p.id === a.parentId));
   const level3Expense = expenseAccounts.filter(a => a.parentId && level2Expense.some(p => p.id === a.parentId));
-
-  function toggleTag(tag: string) {
-    setSelectedTags(prev =>
-      prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
-    );
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -169,16 +159,16 @@ export function TransactionDialog({ open, onClose, transaction, accounts }: Tran
                         }
                         return (
                           <SelectGroup key={parent.id}>
-                            <SelectLabel>{parent.name}</SelectLabel>
+                            <SelectItem key={parent.id} value={String(parent.id)} className="font-semibold">{parent.name}</SelectItem>
                             {children.map(child => {
                               const grandchildren = level3Expense.filter(gc => gc.parentId === child.id);
                               if (grandchildren.length === 0) {
-                                return <SelectItem key={child.id} value={String(child.id)}>{child.name}</SelectItem>;
+                                return <SelectItem key={child.id} value={String(child.id)} className="pl-6">{child.name}</SelectItem>;
                               }
                               return [
-                                <SelectItem key={child.id} value={String(child.id)}>{child.name} (General)</SelectItem>,
+                                <SelectItem key={child.id} value={String(child.id)} className="pl-6 font-medium">{child.name}</SelectItem>,
                                 ...grandchildren.map(gc => (
-                                  <SelectItem key={gc.id} value={String(gc.id)}>{"  "}{gc.name}</SelectItem>
+                                  <SelectItem key={gc.id} value={String(gc.id)} className="pl-10 text-muted-foreground">{gc.name}</SelectItem>
                                 ))
                               ];
                             })}
@@ -239,24 +229,6 @@ export function TransactionDialog({ open, onClose, transaction, accounts }: Tran
             <Label>Note</Label>
             <Textarea placeholder="Add a note..." value={note} onChange={(e) => setNote(e.target.value)} rows={2} />
           </div>
-
-          {type !== "transfer" && (
-            <div className="space-y-2">
-              <Label>Tags</Label>
-              <div className="flex flex-wrap gap-1.5">
-                {DEFAULT_EXPENSE_TAGS.map(tag => (
-                  <Badge
-                    key={tag}
-                    variant={selectedTags.includes(tag) ? "default" : "outline"}
-                    className="cursor-pointer text-xs"
-                    onClick={() => toggleTag(tag)}
-                  >
-                    {tag}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          )}
 
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
