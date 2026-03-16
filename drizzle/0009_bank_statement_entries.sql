@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS `bank_statement_entries` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`date` text NOT NULL,
+	`description` text NOT NULL,
+	`ref_no` text,
+	`debit` real,
+	`credit` real,
+	`balance` real,
+	`account_number` text,
+	`bank_name` text,
+	`expense_name` text,
+	`expense_type` text,
+	`category_id` integer REFERENCES `expense_accounts`(`id`),
+	`account_id` integer REFERENCES `expense_accounts`(`id`),
+	`from_account_id` integer REFERENCES `expense_accounts`(`id`),
+	`to_account_id` integer REFERENCES `expense_accounts`(`id`),
+	`note` text,
+	`tags` text,
+	`is_classified` integer DEFAULT false NOT NULL,
+	`expense_transaction_id` integer REFERENCES `expense_transactions`(`id`),
+	`created_at` text NOT NULL
+);

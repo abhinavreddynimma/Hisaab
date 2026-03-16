@@ -265,3 +265,29 @@ export const expenseTargetAccounts = sqliteTable("expense_target_accounts", {
 }, (table) => [
   uniqueIndex("target_account_idx").on(table.targetId, table.accountId),
 ]);
+
+// Bank Statement Entries - raw imported rows from bank statements
+export const bankStatementEntries = sqliteTable("bank_statement_entries", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  date: text("date").notNull(), // "YYYY-MM-DD"
+  description: text("description").notNull(),
+  refNo: text("ref_no"),
+  debit: real("debit"),
+  credit: real("credit"),
+  balance: real("balance"),
+  accountNumber: text("account_number"),
+  bankName: text("bank_name"),
+  // Classification fields (filled when user classifies)
+  expenseName: text("expense_name"),
+  expenseType: text("expense_type", { enum: ["income", "expense", "transfer"] }),
+  categoryId: integer("category_id").references(() => expenseAccounts.id),
+  accountId: integer("account_id").references(() => expenseAccounts.id),
+  fromAccountId: integer("from_account_id").references(() => expenseAccounts.id),
+  toAccountId: integer("to_account_id").references(() => expenseAccounts.id),
+  note: text("note"),
+  tags: text("tags"),
+  isClassified: integer("is_classified", { mode: "boolean" }).notNull().default(false),
+  // Link to expense transaction once synced
+  expenseTransactionId: integer("expense_transaction_id").references(() => expenseTransactions.id),
+  createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+});
