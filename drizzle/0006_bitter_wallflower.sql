@@ -1,0 +1,20 @@
+CREATE TABLE `expense_recurring` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`name` text NOT NULL,
+	`type` text DEFAULT 'expense' NOT NULL,
+	`amount` real NOT NULL,
+	`category_id` integer,
+	`account_id` integer,
+	`from_account_id` integer,
+	`to_account_id` integer,
+	`frequency` text DEFAULT 'monthly' NOT NULL,
+	`day_of_month` integer DEFAULT 1 NOT NULL,
+	`start_date` text NOT NULL,
+	`end_date` text,
+	`is_active` integer DEFAULT true NOT NULL,
+	`created_at` text NOT NULL,
+	FOREIGN KEY (`category_id`) REFERENCES `expense_accounts`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`account_id`) REFERENCES `expense_accounts`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`from_account_id`) REFERENCES `expense_accounts`(`id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`to_account_id`) REFERENCES `expense_accounts`(`id`) ON UPDATE no action ON DELETE no action
+);

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Trash2, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Plus, Link2 } from "lucide-react";
+import { Trash2, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Plus, Link2, Check, Repeat } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { deleteExpenseTransaction } from "@/actions/expenses";
+import { confirmRecurringTransaction } from "@/actions/recurring-expenses";
 import type { ExpenseTransaction } from "@/lib/types";
 
 interface TransactionListProps {
@@ -40,6 +41,16 @@ export function TransactionList({ transactions, totalIncome, totalExpenses, onEd
       router.refresh();
     } catch {
       toast.error("Failed to delete transaction");
+    }
+  }
+
+  async function handleConfirm(id: number) {
+    try {
+      await confirmRecurringTransaction(id);
+      toast.success("Transaction confirmed");
+      router.refresh();
+    } catch {
+      toast.error("Failed to confirm transaction");
     }
   }
 
@@ -99,8 +110,8 @@ export function TransactionList({ transactions, totalIncome, totalExpenses, onEd
                   return (
                     <TableRow
                       key={txn.id}
-                      className={`hover:bg-muted/50 ${txn.source === "invoice" ? "opacity-80" : "cursor-pointer"}`}
-                      onClick={() => txn.source !== "invoice" && onEdit(txn)}
+                      className={`hover:bg-muted/50 ${txn.source === "invoice" || (txn.source === "recurring" && txn.status === "confirmed") ? "opacity-80" : "cursor-pointer"}`}
+                      onClick={() => txn.source === "manual" && onEdit(txn)}
                     >
                       <TableCell className="text-sm tabular-nums">{formatDate(txn.date)}</TableCell>
                       <TableCell>
@@ -113,6 +124,12 @@ export function TransactionList({ transactions, totalIncome, totalExpenses, onEd
                             <div className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${txn.status === "estimated" ? "bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-400" : "bg-sky-50 text-sky-600 dark:bg-sky-950 dark:text-sky-400"}`}>
                               <Link2 className="h-2.5 w-2.5" />
                               {txn.status === "estimated" ? "Est." : "Inv."}
+                            </div>
+                          )}
+                          {txn.source === "recurring" && (
+                            <div className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${txn.status === "estimated" ? "bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-400" : "bg-violet-50 text-violet-600 dark:bg-violet-950 dark:text-violet-400"}`}>
+                              <Repeat className="h-2.5 w-2.5" />
+                              {txn.status === "estimated" ? "Est." : "Rec."}
                             </div>
                           )}
                         </div>
@@ -139,7 +156,17 @@ export function TransactionList({ transactions, totalIncome, totalExpenses, onEd
                         {txn.note || "—"}
                       </TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>
-                        {txn.source === "invoice" ? (
+                        {txn.source === "recurring" && txn.status === "estimated" ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                            onClick={() => handleConfirm(txn.id)}
+                            title="Confirm this expense"
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                          </Button>
+                        ) : txn.source === "invoice" || (txn.source === "recurring" && txn.status === "confirmed") ? (
                           <span className="text-[10px] text-muted-foreground">auto</span>
                         ) : (
                           <AlertDialog>

@@ -11,6 +11,7 @@ import {
 } from "@/actions/expenses";
 import { ExpensesPageClient } from "@/components/expenses/expenses-page-client";
 import { syncAllInvoicesToExpenses } from "@/actions/invoice-expense-sync";
+import { syncRecurringForMonth, getRecurringExpenses } from "@/actions/recurring-expenses";
 
 interface ExpensesPageProps {
   searchParams: Promise<{ fy?: string; month?: string; year?: string; tab?: string }>;
@@ -32,17 +33,21 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
   const currentMonth = params.month ? parseInt(params.month) : now.getMonth() + 1;
   const currentYear = params.year ? parseInt(params.year) : now.getFullYear();
 
+  // Sync recurring expenses for current viewed month
+  await syncRecurringForMonth(currentYear, currentMonth);
+
   const lastDay = new Date(currentYear, currentMonth, 0).getDate();
   const startDate = `${currentYear}-${String(currentMonth).padStart(2, "0")}-01`;
   const endDate = `${currentYear}-${String(currentMonth).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
 
-  const [accounts, accountsGrouped, transactions, stats, budgets, targets] = await Promise.all([
+  const [accounts, accountsGrouped, transactions, stats, budgets, targets, recurringExpenses] = await Promise.all([
     getExpenseAccounts(),
     getExpenseAccountsGrouped(),
     getExpenseTransactions({ startDate, endDate }),
     getExpenseStats(startDate, endDate),
     getExpenseBudgets(fy),
     getExpenseTargets(fy),
+    getRecurringExpenses(),
   ]);
 
   return (
@@ -53,6 +58,7 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
       stats={stats}
       budgets={budgets}
       targets={targets}
+      recurringExpenses={recurringExpenses}
       currentMonth={currentMonth}
       currentYear={currentYear}
       financialYear={fy}
