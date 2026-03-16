@@ -27,6 +27,7 @@ interface ExpensesPageClientProps {
   stats: {
     totalIncome: number;
     totalExpenses: number;
+    totalTax: number;
     totalTransfersOut: number;
     net: number;
     incomeByCategory: { id: number; name: string; amount: number; percentage: number; color: string | null }[];
@@ -40,6 +41,7 @@ interface ExpensesPageClientProps {
   fyStats: {
     totalIncome: number;
     totalExpenses: number;
+    totalTax: number;
     totalTransfersOut: number;
     net: number;
     incomeByCategory: { id: number; name: string; amount: number; percentage: number; color: string | null }[];
