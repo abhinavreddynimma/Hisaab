@@ -252,6 +252,9 @@ export interface ExpenseAccount {
   createdAt: string;
 }
 
+export type ExpenseTransactionSource = "manual" | "invoice" | "bank_statement";
+export type ExpenseTransactionStatus = "confirmed" | "estimated";
+
 export interface ExpenseTransaction {
   id: number;
   type: ExpenseTransactionType;
@@ -264,6 +267,9 @@ export interface ExpenseTransaction {
   fees: number | null;
   note: string | null;
   tags: string | null;
+  source: ExpenseTransactionSource;
+  sourceId: string | null;
+  status: ExpenseTransactionStatus;
   createdAt: string;
   categoryName?: string;
   accountName?: string;

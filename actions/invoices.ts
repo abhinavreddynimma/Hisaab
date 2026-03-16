@@ -13,6 +13,7 @@ import { getFrenchHolidays } from "@/lib/constants";
 import { getProject } from "./projects";
 import { getDefaultProjectId } from "./settings";
 import { assertAdminAccess, assertAuthenticatedAccess } from "@/lib/auth";
+import { syncInvoiceToExpense, removeInvoiceExpenseLink } from "./invoice-expense-sync";
 
 const invoiceSelectFields = {
   id: invoices.id,
@@ -358,6 +359,10 @@ export async function updateInvoiceStatus(
   } else {
     db.update(invoices).set({ status }).where(eq(invoices.id, id)).run();
   }
+
+  // Sync to expense manager
+  await syncInvoiceToExpense(id);
+
   return { success: true };
 }
 
@@ -382,6 +387,10 @@ export async function updatePaymentDetails(
     })
     .where(eq(invoices.id, id))
     .run();
+
+  // Re-sync to expense manager (amount/date may have changed)
+  await syncInvoiceToExpense(id);
+
   return { success: true };
 }
 
@@ -397,6 +406,10 @@ export async function deleteInvoice(id: number): Promise<{ success: boolean }> {
   await assertAdminAccess();
   // Soft-delete: mark as cancelled to preserve invoice number audit trail
   db.update(invoices).set({ status: "cancelled" }).where(eq(invoices.id, id)).run();
+
+  // Remove linked expense transaction
+  await removeInvoiceExpenseLink(id);
+
   return { success: true };
 }
 
