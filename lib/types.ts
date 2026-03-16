@@ -291,13 +291,13 @@ export interface ExpenseBudget {
 
 export interface ExpenseTarget {
   id: number;
-  accountId: number;
+  name: string;
   monthlyAmount: number;
   financialYear: string;
   isActive: boolean;
   createdAt: string;
-  accountName?: string;
-  accountType?: ExpenseAccountType;
+  accountIds?: number[];
+  accountNames?: string[];
   thisMonthActual?: number;
   fyAverage?: number;
 }
