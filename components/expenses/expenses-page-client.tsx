@@ -12,7 +12,8 @@ import { StatsView } from "./stats-view";
 import { BudgetsView } from "./budgets-view";
 import { TargetsView } from "./targets-view";
 import { AccountsList } from "./accounts-list";
-import type { ExpenseAccount, ExpenseTransaction, ExpenseBudget, ExpenseTarget, ExpenseAccountType } from "@/lib/types";
+import { RecurringView } from "./recurring-view";
+import type { ExpenseAccount, ExpenseTransaction, ExpenseBudget, ExpenseTarget, ExpenseRecurring, ExpenseAccountType } from "@/lib/types";
 
 interface ExpensesPageClientProps {
   accounts: ExpenseAccount[];
@@ -34,6 +35,7 @@ interface ExpensesPageClientProps {
   };
   budgets: (ExpenseBudget & { categoryIds: number[]; categoryNames: string[]; spent: number })[];
   targets: ExpenseTarget[];
+  recurringExpenses: ExpenseRecurring[];
   currentMonth: number;
   currentYear: number;
   financialYear: string;
@@ -49,6 +51,7 @@ export function ExpensesPageClient({
   stats,
   budgets,
   targets,
+  recurringExpenses,
   currentMonth,
   currentYear,
   financialYear,
@@ -122,6 +125,7 @@ export function ExpensesPageClient({
           <TabsTrigger value="stats">Stats</TabsTrigger>
           <TabsTrigger value="budgets">Budgets</TabsTrigger>
           <TabsTrigger value="targets">Targets</TabsTrigger>
+          <TabsTrigger value="recurring">Recurring</TabsTrigger>
           <TabsTrigger value="accounts">Accounts</TabsTrigger>
         </TabsList>
 
@@ -150,6 +154,10 @@ export function ExpensesPageClient({
 
         <TabsContent value="targets" className="mt-4">
           <TargetsView targets={targets} accounts={accounts} financialYear={financialYear} />
+        </TabsContent>
+
+        <TabsContent value="recurring" className="mt-4">
+          <RecurringView recurringExpenses={recurringExpenses} accounts={accounts} />
         </TabsContent>
 
         <TabsContent value="accounts" className="mt-4">

@@ -252,7 +252,7 @@ export interface ExpenseAccount {
   createdAt: string;
 }
 
-export type ExpenseTransactionSource = "manual" | "invoice" | "bank_statement";
+export type ExpenseTransactionSource = "manual" | "invoice" | "recurring" | "bank_statement";
 export type ExpenseTransactionStatus = "confirmed" | "estimated";
 
 export interface ExpenseTransaction {
@@ -300,4 +300,25 @@ export interface ExpenseTarget {
   accountType?: ExpenseAccountType;
   thisMonthActual?: number;
   fyAverage?: number;
+}
+
+export type RecurringFrequency = "monthly" | "quarterly" | "yearly";
+
+export interface ExpenseRecurring {
+  id: number;
+  name: string;
+  type: ExpenseTransactionType;
+  amount: number;
+  categoryId: number | null;
+  accountId: number | null;
+  fromAccountId: number | null;
+  toAccountId: number | null;
+  frequency: RecurringFrequency;
+  dayOfMonth: number;
+  startDate: string;
+  endDate: string | null;
+  isActive: boolean;
+  createdAt: string;
+  categoryName?: string;
+  accountName?: string;
 }
