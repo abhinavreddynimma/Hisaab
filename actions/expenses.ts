@@ -63,7 +63,10 @@ export async function getExpenseAccountsGrouped(): Promise<{
   return typeOrder.map(type => {
     const topLevel = activeAccounts.filter(a => a.type === type && !a.parentId);
     const accounts = topLevel.map(acc => {
-      const children = activeAccounts.filter(a => a.parentId === acc.id);
+      const children = activeAccounts.filter(a => a.parentId === acc.id).map(child => {
+        const grandchildren = activeAccounts.filter(a => a.parentId === child.id);
+        return { ...child, children: grandchildren };
+      });
       const balance = balances.get(acc.id) ?? 0;
       return { ...acc, children, balance };
     });
@@ -153,6 +156,18 @@ export async function seedDefaultAccounts(): Promise<{ success: boolean }> {
     }
   }
 
+  return { success: true };
+}
+
+export async function resetExpenseData(): Promise<{ success: boolean }> {
+  await assertAdminAccess();
+  // Delete in order to respect foreign keys
+  db.delete(expenseTargetAccounts).run();
+  db.delete(expenseTargets).run();
+  db.delete(expenseBudgetCategories).run();
+  db.delete(expenseBudgets).run();
+  db.delete(expenseTransactions).run();
+  db.delete(expenseAccounts).run();
   return { success: true };
 }
 
@@ -281,6 +296,12 @@ export async function getExpenseStats(startDate: string, endDate: string): Promi
   incomeByCategory: { id: number; name: string; amount: number; percentage: number; color: string | null }[];
   expenseByCategory: { id: number; name: string; amount: number; percentage: number; color: string | null }[];
   transfersByType: { type: string; amount: number; percentage: number }[];
+  topLevelSplit: {
+    postTaxIncome: number;
+    investments: { amount: number; percentage: number };
+    savings: { amount: number; percentage: number };
+    expenses: { amount: number; percentage: number };
+  };
 }> {
   await assertAdminAccess();
 
@@ -294,6 +315,13 @@ export async function getExpenseStats(startDate: string, endDate: string): Promi
   const allAccounts = db.select().from(expenseAccounts).all();
   const accountMap = new Map(allAccounts.map(a => [a.id, a]));
 
+  // Walk up parentId chain to root ancestor
+  function getRootAncestor(id: number): number {
+    const acc = accountMap.get(id);
+    if (!acc || !acc.parentId) return id;
+    return getRootAncestor(acc.parentId);
+  }
+
   const incomeMap = new Map<number, number>();
   let totalIncome = 0;
   for (const txn of txns) {
@@ -303,31 +331,66 @@ export async function getExpenseStats(startDate: string, endDate: string): Promi
     }
   }
 
+  // Roll up expenses to root ancestor category
   const expenseMap = new Map<number, number>();
   let totalExpenses = 0;
+  let taxExpenses = 0;
   for (const txn of txns) {
     if (txn.type === "expense" && txn.categoryId) {
-      const cat = accountMap.get(txn.categoryId);
-      const rollupId = cat?.parentId ?? txn.categoryId;
-      expenseMap.set(rollupId, (expenseMap.get(rollupId) ?? 0) + txn.amount);
+      const rootId = getRootAncestor(txn.categoryId);
+      expenseMap.set(rootId, (expenseMap.get(rootId) ?? 0) + txn.amount);
       totalExpenses += txn.amount;
+
+      // Check if this is a tax expense
+      const rootAcc = accountMap.get(rootId);
+      if (rootAcc?.name === "Tax") {
+        taxExpenses += txn.amount;
+      }
     }
   }
 
   const transferTypeMap = new Map<string, number>();
   let totalTransfersOut = 0;
+  let investmentTransfers = 0;
+  let savingsTransfers = 0;
   for (const txn of txns) {
     if (txn.type === "transfer" && txn.toAccountId) {
       const toAccount = accountMap.get(txn.toAccountId);
-      if (toAccount && (toAccount.type === "investment" || toAccount.type === "savings")) {
-        const typeLabel = toAccount.type === "investment" ? "Investments" : "Savings";
+      // Walk up to root to determine if it's investment or savings
+      const rootId = txn.toAccountId ? getRootAncestor(txn.toAccountId) : txn.toAccountId;
+      const rootAccount = accountMap.get(rootId);
+      const accountType = rootAccount?.type ?? toAccount?.type;
+
+      if (accountType === "investment" || accountType === "savings") {
+        const typeLabel = accountType === "investment" ? "Investments" : "Savings";
         transferTypeMap.set(typeLabel, (transferTypeMap.get(typeLabel) ?? 0) + txn.amount);
         totalTransfersOut += txn.amount;
+        if (accountType === "investment") investmentTransfers += txn.amount;
+        if (accountType === "savings") savingsTransfers += txn.amount;
       }
     }
   }
 
   const totalOutflow = totalExpenses + totalTransfersOut;
+  const nonTaxExpenses = totalExpenses - taxExpenses;
+
+  // 50:20:30 split (post-tax)
+  const postTaxIncome = totalIncome - taxExpenses;
+  const topLevelSplit = {
+    postTaxIncome,
+    investments: {
+      amount: investmentTransfers,
+      percentage: postTaxIncome > 0 ? Math.round((investmentTransfers / postTaxIncome) * 100) : 0,
+    },
+    savings: {
+      amount: savingsTransfers,
+      percentage: postTaxIncome > 0 ? Math.round((savingsTransfers / postTaxIncome) * 100) : 0,
+    },
+    expenses: {
+      amount: nonTaxExpenses,
+      percentage: postTaxIncome > 0 ? Math.round((nonTaxExpenses / postTaxIncome) * 100) : 0,
+    },
+  };
 
   const incomeByCategory = Array.from(incomeMap.entries())
     .map(([id, amount]) => {
@@ -347,7 +410,7 @@ export async function getExpenseStats(startDate: string, endDate: string): Promi
     .map(([type, amount]) => ({ type, amount, percentage: totalOutflow > 0 ? Math.round((amount / totalOutflow) * 100) : 0 }))
     .sort((a, b) => b.amount - a.amount);
 
-  return { totalIncome, totalExpenses, totalTransfersOut, net: totalIncome - totalExpenses - totalTransfersOut, incomeByCategory, expenseByCategory, transfersByType };
+  return { totalIncome, totalExpenses, totalTransfersOut, net: totalIncome - totalExpenses - totalTransfersOut, incomeByCategory, expenseByCategory, transfersByType, topLevelSplit };
 }
 
 export async function getExpenseMonthlyOverview(year: number, month: number): Promise<{
@@ -470,10 +533,16 @@ export async function getExpenseBudgets(financialYear: string): Promise<(Expense
     const categoryIds = links.map(l => l.categoryId);
     const categoryNames = categoryIds.map(id => accountMap.get(id)?.name ?? "Unknown");
 
+    // Recursively expand to all descendants
     const allCategoryIds = new Set(categoryIds);
-    for (const acc of allAccounts) {
-      if (acc.parentId && allCategoryIds.has(acc.parentId)) {
-        allCategoryIds.add(acc.id);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const acc of allAccounts) {
+        if (acc.parentId && allCategoryIds.has(acc.parentId) && !allCategoryIds.has(acc.id)) {
+          allCategoryIds.add(acc.id);
+          changed = true;
+        }
       }
     }
 
@@ -589,11 +658,16 @@ export async function getExpenseTargets(financialYear: string): Promise<(Expense
     const accountIds = links.map(l => l.accountId);
     const accountNames = accountIds.map(id => accountMap.get(id)?.name ?? "Unknown");
 
-    // Include child accounts for matching
+    // Recursively expand to all descendant accounts
     const allAccountIds = new Set(accountIds);
-    for (const acc of allAccounts) {
-      if (acc.parentId && allAccountIds.has(acc.parentId)) {
-        allAccountIds.add(acc.id);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const acc of allAccounts) {
+        if (acc.parentId && allAccountIds.has(acc.parentId) && !allAccountIds.has(acc.id)) {
+          allAccountIds.add(acc.id);
+          changed = true;
+        }
       }
     }
 
@@ -682,13 +756,20 @@ export async function getAccountDrillDown(accountId: number, startDate: string, 
 
   if (!account) return { account: null, transactions: [], monthlyTrend: [], totalAmount: 0 };
 
-  const childIds = db.select({ id: expenseAccounts.id })
-    .from(expenseAccounts)
-    .where(eq(expenseAccounts.parentId, accountId))
-    .all()
-    .map(r => r.id);
-
-  const allIds = [accountId, ...childIds];
+  // Recursively get all descendant IDs
+  const allAccsForDrillDown = db.select().from(expenseAccounts).all();
+  const descendantIds = new Set([accountId]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const acc of allAccsForDrillDown) {
+      if (acc.parentId && descendantIds.has(acc.parentId) && !descendantIds.has(acc.id)) {
+        descendantIds.add(acc.id);
+        changed = true;
+      }
+    }
+  }
+  const allIds = Array.from(descendantIds);
 
   const allTxns = db.select().from(expenseTransactions)
     .where(and(

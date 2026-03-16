@@ -15,6 +15,12 @@ interface StatsData {
   incomeByCategory: { id: number; name: string; amount: number; percentage: number; color: string | null }[];
   expenseByCategory: { id: number; name: string; amount: number; percentage: number; color: string | null }[];
   transfersByType: { type: string; amount: number; percentage: number }[];
+  topLevelSplit: {
+    postTaxIncome: number;
+    investments: { amount: number; percentage: number };
+    savings: { amount: number; percentage: number };
+    expenses: { amount: number; percentage: number };
+  };
 }
 
 interface StatsViewProps {
@@ -126,6 +132,57 @@ export function StatsView({ stats, fyStats, fyOverview, currentMonth, currentYea
           </CardContent>
         </Card>
       </div>
+
+      {/* 50:20:30 Split (post-tax) */}
+      {activeStats.topLevelSplit.postTaxIncome > 0 && (
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+              Post-Tax Split — {periodLabel}
+            </p>
+            <div className="flex h-4 rounded-full overflow-hidden mb-3">
+              {activeStats.topLevelSplit.investments.percentage > 0 && (
+                <div className="bg-indigo-500 transition-all" style={{ width: `${activeStats.topLevelSplit.investments.percentage}%` }} title={`Investments ${activeStats.topLevelSplit.investments.percentage}%`} />
+              )}
+              {activeStats.topLevelSplit.savings.percentage > 0 && (
+                <div className="bg-amber-400 transition-all" style={{ width: `${activeStats.topLevelSplit.savings.percentage}%` }} title={`Savings ${activeStats.topLevelSplit.savings.percentage}%`} />
+              )}
+              {activeStats.topLevelSplit.expenses.percentage > 0 && (
+                <div className="bg-rose-400 transition-all" style={{ width: `${activeStats.topLevelSplit.expenses.percentage}%` }} title={`Expenses ${activeStats.topLevelSplit.expenses.percentage}%`} />
+              )}
+            </div>
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div>
+                <div className="flex items-center justify-center gap-1.5 mb-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-indigo-500" />
+                  <span className="text-xs text-muted-foreground">Investments</span>
+                </div>
+                <p className="text-sm font-bold tabular-nums">{activeStats.topLevelSplit.investments.percentage}%</p>
+                <p className="text-xs text-muted-foreground tabular-nums">{formatCurrency(activeStats.topLevelSplit.investments.amount)}</p>
+                <p className="text-[10px] text-muted-foreground/60">target: 50%</p>
+              </div>
+              <div>
+                <div className="flex items-center justify-center gap-1.5 mb-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+                  <span className="text-xs text-muted-foreground">Savings</span>
+                </div>
+                <p className="text-sm font-bold tabular-nums">{activeStats.topLevelSplit.savings.percentage}%</p>
+                <p className="text-xs text-muted-foreground tabular-nums">{formatCurrency(activeStats.topLevelSplit.savings.amount)}</p>
+                <p className="text-[10px] text-muted-foreground/60">target: 20%</p>
+              </div>
+              <div>
+                <div className="flex items-center justify-center gap-1.5 mb-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-rose-400" />
+                  <span className="text-xs text-muted-foreground">Expenses</span>
+                </div>
+                <p className="text-sm font-bold tabular-nums">{activeStats.topLevelSplit.expenses.percentage}%</p>
+                <p className="text-xs text-muted-foreground tabular-nums">{formatCurrency(activeStats.topLevelSplit.expenses.amount)}</p>
+                <p className="text-[10px] text-muted-foreground/60">target: 30%</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* FY monthly bar chart (only in FY view) */}
       {period === "fy" && (

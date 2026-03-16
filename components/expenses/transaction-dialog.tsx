@@ -64,8 +64,10 @@ export function TransactionDialog({ open, onClose, transaction, accounts }: Tran
   const bankCashAccounts = accounts.filter(a => (a.type === "bank" || a.type === "cash") && a.isActive);
   const allNonExpenseAccounts = accounts.filter(a => a.type !== "expense" && a.type !== "income" && a.isActive);
 
-  const parentExpenseAccounts = expenseAccounts.filter(a => !a.parentId);
-  const childExpenseAccounts = expenseAccounts.filter(a => a.parentId);
+  // Build 3-level hierarchy for expense categories
+  const topLevelExpense = expenseAccounts.filter(a => !a.parentId);
+  const level2Expense = expenseAccounts.filter(a => a.parentId && topLevelExpense.some(p => p.id === a.parentId));
+  const level3Expense = expenseAccounts.filter(a => a.parentId && level2Expense.some(p => p.id === a.parentId));
 
   function toggleTag(tag: string) {
     setSelectedTags(prev =>
@@ -160,18 +162,26 @@ export function TransactionDialog({ open, onClose, transaction, accounts }: Tran
                         <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>
                       ))
                     ) : (
-                      parentExpenseAccounts.map(parent => {
-                        const children = childExpenseAccounts.filter(c => c.parentId === parent.id);
+                      topLevelExpense.map(parent => {
+                        const children = level2Expense.filter(c => c.parentId === parent.id);
                         if (children.length === 0) {
                           return <SelectItem key={parent.id} value={String(parent.id)}>{parent.name}</SelectItem>;
                         }
                         return (
                           <SelectGroup key={parent.id}>
                             <SelectLabel>{parent.name}</SelectLabel>
-                            <SelectItem value={String(parent.id)}>{parent.name} (General)</SelectItem>
-                            {children.map(child => (
-                              <SelectItem key={child.id} value={String(child.id)}>  {child.name}</SelectItem>
-                            ))}
+                            {children.map(child => {
+                              const grandchildren = level3Expense.filter(gc => gc.parentId === child.id);
+                              if (grandchildren.length === 0) {
+                                return <SelectItem key={child.id} value={String(child.id)}>{child.name}</SelectItem>;
+                              }
+                              return [
+                                <SelectItem key={child.id} value={String(child.id)}>{child.name} (General)</SelectItem>,
+                                ...grandchildren.map(gc => (
+                                  <SelectItem key={gc.id} value={String(gc.id)}>{"  "}{gc.name}</SelectItem>
+                                ))
+                              ];
+                            })}
                           </SelectGroup>
                         );
                       })

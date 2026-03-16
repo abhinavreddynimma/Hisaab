@@ -8,6 +8,7 @@ import { getDayEntriesForMonth } from "./day-entries";
 import { getDefaultProjectId } from "./settings";
 import { getEffectiveRate } from "./projects";
 import { calculateMonthSummary, withImplicitWorkingDays } from "@/lib/calculations";
+import { syncTaxPaymentToExpense, removeTaxPaymentExpenseLink } from "./tax-expense-sync";
 import { getFrenchHolidays } from "@/lib/constants";
 import { assertAdminAccess, assertAuthenticatedAccess } from "@/lib/auth";
 import { unlink } from "fs/promises";
@@ -60,7 +61,9 @@ export async function createTaxPayment(data: {
       notes: data.notes || null,
     })
     .run();
-  return { success: true, id: Number(result.lastInsertRowid) };
+  const id = Number(result.lastInsertRowid);
+  await syncTaxPaymentToExpense(id);
+  return { success: true, id };
 }
 
 export async function updateTaxPayment(
@@ -86,6 +89,7 @@ export async function updateTaxPayment(
     })
     .where(eq(taxPayments.id, id))
     .run();
+  await syncTaxPaymentToExpense(id);
   return { success: true };
 }
 
@@ -105,6 +109,7 @@ export async function deleteTaxPayment(id: number): Promise<{ success: boolean }
   }
   db.delete(taxPaymentAttachments).where(eq(taxPaymentAttachments.taxPaymentId, id)).run();
 
+  await removeTaxPaymentExpenseLink(id);
   db.delete(taxPayments).where(eq(taxPayments.id, id)).run();
   return { success: true };
 }
