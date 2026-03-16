@@ -96,13 +96,43 @@ export function BudgetDialog({ open, onClose, budget, expenseCategories, financi
           <div className="space-y-2">
             <Label>Expense Categories</Label>
             <p className="text-xs text-muted-foreground">Select categories covered by this budget</p>
-            <div className="space-y-2 max-h-[200px] overflow-y-auto border rounded-lg p-3">
-              {expenseCategories.map(cat => (
-                <label key={cat.id} className="flex items-center gap-2 cursor-pointer">
-                  <Checkbox checked={selectedCategories.includes(cat.id)} onCheckedChange={() => toggleCategory(cat.id)} />
-                  <span className="text-sm">{cat.name}</span>
-                </label>
-              ))}
+            <div className="space-y-2 max-h-[250px] overflow-y-auto border rounded-lg p-3">
+              {expenseCategories.filter(c => !c.parentId).map(parent => {
+                const children = expenseCategories.filter(c => c.parentId === parent.id);
+                return (
+                  <div key={parent.id}>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <Checkbox checked={selectedCategories.includes(parent.id)} onCheckedChange={() => toggleCategory(parent.id)} />
+                      <span className="text-sm font-medium">{parent.name}</span>
+                    </label>
+                    {children.length > 0 && (
+                      <div className="ml-5 mt-1 space-y-1">
+                        {children.map(child => {
+                          const grandchildren = expenseCategories.filter(gc => gc.parentId === child.id);
+                          return (
+                            <div key={child.id}>
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <Checkbox checked={selectedCategories.includes(child.id)} onCheckedChange={() => toggleCategory(child.id)} />
+                                <span className="text-sm">{child.name}</span>
+                              </label>
+                              {grandchildren.length > 0 && (
+                                <div className="ml-5 mt-0.5 space-y-0.5">
+                                  {grandchildren.map(gc => (
+                                    <label key={gc.id} className="flex items-center gap-2 cursor-pointer">
+                                      <Checkbox checked={selectedCategories.includes(gc.id)} onCheckedChange={() => toggleCategory(gc.id)} />
+                                      <span className="text-xs text-muted-foreground">{gc.name}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
