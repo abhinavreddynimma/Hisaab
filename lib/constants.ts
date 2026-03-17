@@ -161,11 +161,8 @@ export const DEFAULT_EXPENSE_CATEGORIES: Record<string, { items: string[]; subCa
   investment: {
     items: ["ChitFunds", "Mutual Funds", "ETFs", "Stock Picks", "Crypto"],
     subCategories: {
-      "ChitFunds": ["Kapil ChitFunds", "Mom Chitti"],
+      "ChitFunds": ["Kapil ChitFunds", "Chitti 1", "Chitti 2", "Chitti 3", "Chitti 4", "Mom Chitti"],
     },
-    subSubCategories: {
-      "Kapil ChitFunds": ["Chitti 1", "Chitti 2", "Chitti 3", "Chitti 4"],
-    }
   },
   savings: { items: ["Personal Savings", "P2P Lending"] },
   bank: { items: ["SBI", "BOB"] },
