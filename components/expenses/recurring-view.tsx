@@ -112,7 +112,7 @@ export function RecurringView({ recurringExpenses, accounts }: RecurringViewProp
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {recurringExpenses.map((item) => (
+                {[...recurringExpenses].sort((a, b) => a.dayOfMonth - b.dayOfMonth).map((item) => (
                   <TableRow
                     key={item.id}
                     className="cursor-pointer hover:bg-muted/50"
