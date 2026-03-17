@@ -187,46 +187,12 @@ export function StatsView({ stats, fyStats, fyOverview, currentMonth, currentYea
         </Card>
       )}
 
-      {/* Pie chart */}
+      {/* Pie chart with integrated category list */}
       <CategoryPieChart
         data={view === "expense" ? outflowData : incomeData}
         title={`${view === "expense" ? "Where money went" : "Income sources"} — ${periodLabel}`}
         onCategoryClick={(id) => id > 0 && router.push(`/expenses/${id}`)}
       />
-
-      {/* Category breakdown list */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="space-y-3">
-            {(view === "expense" ? outflowData : incomeData).length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">No data for this period</p>
-            ) : (
-              (view === "expense" ? outflowData : incomeData).map((item, idx) => {
-                const total = view === "expense"
-                  ? activeStats.totalExpenses + activeStats.totalTransfersOut
-                  : activeStats.totalIncome;
-                const pct = total > 0 ? Math.round((item.value / total) * 100) : 0;
-                return (
-                  <div
-                    key={`${item.name}-${idx}`}
-                    className="flex items-center gap-3 cursor-pointer hover:bg-muted/50 rounded-lg p-2 -mx-2"
-                    onClick={() => item.id > 0 && router.push(`/expenses/${item.id}`)}
-                  >
-                    <span
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold text-white"
-                      style={{ backgroundColor: item.color || "#94a3b8" }}
-                    >
-                      {pct}%
-                    </span>
-                    <span className="flex-1 text-sm font-medium">{item.name}</span>
-                    <span className="text-sm font-semibold tabular-nums">{formatCurrency(item.value)}</span>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }
