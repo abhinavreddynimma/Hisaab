@@ -21,13 +21,14 @@ const RADIAN = Math.PI / 180;
 function renderLabel(props: any) {
   const { cx, cy, midAngle, outerRadius, name, percent } = props;
   const pct = Math.round((percent ?? 0) * 100);
-  if (pct < 3) return null;
+  // Only label slices >= 8% to avoid overlap — smaller ones are in the list below
+  if (pct < 8) return null;
 
-  const radius = (outerRadius ?? 90) + 20;
+  const radius = (outerRadius ?? 90) + 24;
   const x = cx + radius * Math.cos(-(midAngle ?? 0) * RADIAN);
   const y = cy + radius * Math.sin(-(midAngle ?? 0) * RADIAN);
 
-  const truncated = (name ?? "").length > 12 ? (name ?? "").slice(0, 11) + "…" : (name ?? "");
+  const truncated = (name ?? "").length > 10 ? (name ?? "").slice(0, 9) + "…" : (name ?? "");
 
   return (
     <text
