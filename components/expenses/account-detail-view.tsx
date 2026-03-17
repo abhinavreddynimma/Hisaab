@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid } from "recharts";
+import { LineChart, Line, XAxis, ResponsiveContainer, Tooltip, ReferenceLine, Label } from "recharts";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { EXPENSE_ACCOUNT_TYPES } from "@/lib/constants";
 import type { ExpenseAccount, ExpenseTransaction, ExpenseBudget, ExpenseTarget, ExpenseAccountType } from "@/lib/types";
@@ -83,29 +83,71 @@ export function AccountDetailView({ drillDown, budgets, targets }: AccountDetail
         )}
       </div>
 
-      {monthlyTrend.some(m => m.amount > 0) && (
+      {monthlyTrend.some(m => m.amount > 0) && (() => {
+        const nonZeroMonths = monthlyTrend.filter(m => m.amount > 0);
+        const monthlyAvg = nonZeroMonths.length > 0 ? nonZeroMonths.reduce((s, m) => s + m.amount, 0) / nonZeroMonths.length : 0;
+        const budgetAmount = linkedBudget?.monthlyAmount;
+        const targetAmount = linkedTarget?.monthlyAmount;
+        const lineColor = typeConfig?.color || "#f97316";
+
+        // Custom label on dots
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const renderDotLabel = (props: any) => {
+          const { x, y, value } = props;
+          if (!value || value === 0) return null;
+          const label = value >= 100000 ? `${(value / 100000).toFixed(1)}L` : value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value.toString();
+          return (
+            <text x={x} y={y - 12} textAnchor="middle" className="fill-foreground" fontSize={10} fontWeight={600}>
+              {label}
+            </text>
+          );
+        };
+
+        return (
         <Card>
           <CardHeader><CardTitle className="text-base">Monthly Trend</CardTitle></CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={monthlyTrend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
-                <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
+              <LineChart data={monthlyTrend} margin={{ top: 20, right: 10, left: 10, bottom: 0 }}>
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                 <Tooltip formatter={(value: number | undefined) => [formatCurrency(value ?? 0), "Amount"]} contentStyle={{ borderRadius: 12, fontSize: 13 }} />
+
+                {/* Monthly average line */}
+                {monthlyAvg > 0 && (
+                  <ReferenceLine y={monthlyAvg} stroke="#94a3b8" strokeDasharray="4 4" strokeWidth={1}>
+                    <Label value={`avg ${formatCurrency(monthlyAvg)}`} position="right" className="fill-muted-foreground" fontSize={9} />
+                  </ReferenceLine>
+                )}
+
+                {/* Budget line (for expense categories) */}
+                {budgetAmount && (
+                  <ReferenceLine y={budgetAmount} stroke="#f43f5e" strokeDasharray="6 3" strokeWidth={1.5}>
+                    <Label value={`budget ${formatCurrency(budgetAmount)}`} position="right" className="fill-rose-500" fontSize={9} />
+                  </ReferenceLine>
+                )}
+
+                {/* Target line (for investment/savings) */}
+                {targetAmount && (
+                  <ReferenceLine y={targetAmount} stroke="#10b981" strokeDasharray="6 3" strokeWidth={1.5}>
+                    <Label value={`target ${formatCurrency(targetAmount)}`} position="right" className="fill-emerald-500" fontSize={9} />
+                  </ReferenceLine>
+                )}
+
                 <Line
                   type="monotone"
                   dataKey="amount"
-                  stroke={typeConfig?.color || "#f97316"}
-                  strokeWidth={2.5}
-                  dot={{ r: 4, fill: typeConfig?.color || "#f97316", strokeWidth: 0 }}
+                  stroke={lineColor}
+                  strokeWidth={2}
+                  dot={{ r: 4, fill: lineColor, strokeWidth: 0 }}
                   activeDot={{ r: 6, strokeWidth: 2, stroke: "#fff" }}
+                  label={renderDotLabel}
                 />
               </LineChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
-      )}
+        );
+      })()}
 
       <Card>
         <CardHeader><CardTitle className="text-base">Transactions</CardTitle></CardHeader>
