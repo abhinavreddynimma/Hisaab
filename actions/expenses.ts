@@ -295,8 +295,8 @@ export async function getExpenseStats(startDate: string, endDate: string): Promi
   totalTransfersOut: number;
   net: number;
   incomeByCategory: { id: number; name: string; amount: number; percentage: number; color: string | null }[];
-  expenseByCategory: { id: number; name: string; amount: number; percentage: number; color: string | null }[];
-  transfersByType: { type: string; amount: number; percentage: number }[];
+  expenseByCategory: { id: number; name: string; amount: number; percentage: number; color: string | null; subCategories: { id: number; name: string; amount: number; percentage: number; color: string | null }[] }[];
+  transfersByType: { type: string; amount: number; percentage: number; subCategories: { id: number; name: string; amount: number; percentage: number; color: string | null }[] }[];
   topLevelSplit: {
     postTaxIncome: number;
     investments: { amount: number; percentage: number };
@@ -332,8 +332,9 @@ export async function getExpenseStats(startDate: string, endDate: string): Promi
     }
   }
 
-  // Roll up expenses to root ancestor category
+  // Roll up expenses to root ancestor category + track sub-categories
   const expenseMap = new Map<number, number>();
+  const expenseSubMap = new Map<number, Map<number, number>>(); // rootId -> (categoryId -> amount)
   let totalExpenses = 0;
   let taxExpenses = 0;
   for (const txn of txns) {
@@ -341,6 +342,13 @@ export async function getExpenseStats(startDate: string, endDate: string): Promi
       const rootId = getRootAncestor(txn.categoryId);
       expenseMap.set(rootId, (expenseMap.get(rootId) ?? 0) + txn.amount);
       totalExpenses += txn.amount;
+
+      // Track sub-category amounts (only if different from root)
+      if (txn.categoryId !== rootId) {
+        if (!expenseSubMap.has(rootId)) expenseSubMap.set(rootId, new Map());
+        const subMap = expenseSubMap.get(rootId)!;
+        subMap.set(txn.categoryId, (subMap.get(txn.categoryId) ?? 0) + txn.amount);
+      }
 
       // Check if this is a tax expense
       const rootAcc = accountMap.get(rootId);
@@ -351,13 +359,13 @@ export async function getExpenseStats(startDate: string, endDate: string): Promi
   }
 
   const transferTypeMap = new Map<string, number>();
+  const transferSubMap = new Map<string, Map<number, number>>(); // "Investments"/"Savings" -> (accountId -> amount)
   let totalTransfersOut = 0;
   let investmentTransfers = 0;
   let savingsTransfers = 0;
   for (const txn of txns) {
     if (txn.type === "transfer" && txn.toAccountId) {
       const toAccount = accountMap.get(txn.toAccountId);
-      // Walk up to root to determine if it's investment or savings
       const rootId = txn.toAccountId ? getRootAncestor(txn.toAccountId) : txn.toAccountId;
       const rootAccount = accountMap.get(rootId);
       const accountType = rootAccount?.type ?? toAccount?.type;
@@ -368,6 +376,13 @@ export async function getExpenseStats(startDate: string, endDate: string): Promi
         totalTransfersOut += txn.amount;
         if (accountType === "investment") investmentTransfers += txn.amount;
         if (accountType === "savings") savingsTransfers += txn.amount;
+
+        // Track individual account within type
+        if (!transferSubMap.has(typeLabel)) transferSubMap.set(typeLabel, new Map());
+        const subMap = transferSubMap.get(typeLabel)!;
+        // Use the direct toAccountId (not root) for granular view
+        const trackId = txn.toAccountId;
+        subMap.set(trackId, (subMap.get(trackId) ?? 0) + txn.amount);
       }
     }
   }
@@ -409,14 +424,32 @@ export async function getExpenseStats(startDate: string, endDate: string): Promi
     .map(([id, amount]) => {
       const acc = accountMap.get(id);
       const nonTaxOutflow = nonTaxExpenses + totalTransfersOut;
-      return { id, name: acc?.name ?? "Unknown", amount, percentage: nonTaxOutflow > 0 ? Math.round((amount / nonTaxOutflow) * 100) : 0, color: acc?.color ?? null };
+      const subMap = expenseSubMap.get(id);
+      const subCategories = subMap
+        ? Array.from(subMap.entries())
+            .map(([subId, subAmt]) => {
+              const subAcc = accountMap.get(subId);
+              return { id: subId, name: subAcc?.name ?? "Unknown", amount: subAmt, percentage: amount > 0 ? Math.round((subAmt / amount) * 100) : 0, color: subAcc?.color ?? null };
+            })
+            .sort((a, b) => b.amount - a.amount)
+        : [];
+      return { id, name: acc?.name ?? "Unknown", amount, percentage: nonTaxOutflow > 0 ? Math.round((amount / nonTaxOutflow) * 100) : 0, color: acc?.color ?? null, subCategories };
     })
     .sort((a, b) => b.amount - a.amount);
 
   const transfersByType = Array.from(transferTypeMap.entries())
     .map(([type, amount]) => {
       const nonTaxOutflow = nonTaxExpenses + totalTransfersOut;
-      return { type, amount, percentage: nonTaxOutflow > 0 ? Math.round((amount / nonTaxOutflow) * 100) : 0 };
+      const subMap = transferSubMap.get(type);
+      const subCategories = subMap
+        ? Array.from(subMap.entries())
+            .map(([subId, subAmt]) => {
+              const subAcc = accountMap.get(subId);
+              return { id: subId, name: subAcc?.name ?? "Unknown", amount: subAmt, percentage: amount > 0 ? Math.round((subAmt / amount) * 100) : 0, color: subAcc?.color ?? null };
+            })
+            .sort((a, b) => b.amount - a.amount)
+        : [];
+      return { type, amount, percentage: nonTaxOutflow > 0 ? Math.round((amount / nonTaxOutflow) * 100) : 0, subCategories };
     })
     .sort((a, b) => b.amount - a.amount);
 
