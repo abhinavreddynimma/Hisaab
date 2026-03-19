@@ -110,18 +110,18 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const dayEntriesUpToMonthEnd = allEntries.filter((entry) => entry.date <= monthEndStr);
   const leaveBalance = calculateLeaveBalance(policy, dayEntriesUpToMonthEnd, currentYear, currentMonth);
 
-  // Open invoices (draft + sent), capped at current month-end by issue date
+  // Open invoices (sent only), capped at current month-end by issue date
   const openInvoiceCount = db
     .select({ count: sql<number>`count(*)` })
     .from(invoices)
-    .where(and(sql`${invoices.status} IN ('draft', 'sent')`, sql`${invoices.issueDate} <= ${monthEndStr}`))
+    .where(and(sql`${invoices.status} = 'sent'`, sql`${invoices.issueDate} <= ${monthEndStr}`))
     .get();
 
-  // Outstanding by currency (draft + sent totals), capped at current month-end by issue date
+  // Outstanding by currency (sent only — drafts are not yet invoiced), capped at current month-end by issue date
   const openInvoiceRows = db
     .select({ total: invoices.total, currency: invoices.currency })
     .from(invoices)
-    .where(and(sql`${invoices.status} IN ('draft', 'sent')`, sql`${invoices.issueDate} <= ${monthEndStr}`))
+    .where(and(sql`${invoices.status} = 'sent'`, sql`${invoices.issueDate} <= ${monthEndStr}`))
     .all();
   const outstandingMap = new Map<string, number>();
   for (const inv of openInvoiceRows) {
