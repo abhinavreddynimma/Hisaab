@@ -127,21 +127,21 @@ export function BudgetProgressCard({ budget, financialYear, onEdit }: BudgetProg
                 {/* Line chart */}
                 <div>
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Monthly Spending — FY {financialYear}</p>
-                  <ResponsiveContainer width="100%" height={180}>
-                    <LineChart data={trendData.months} margin={{ top: 20, right: 10, left: 10, bottom: 0 }}>
-                      <XAxis dataKey="month" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <ResponsiveContainer width="100%" height={220}>
+                    <LineChart data={trendData.months} margin={{ top: 25, right: 15, left: 15, bottom: 0 }}>
+                      <XAxis dataKey="month" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                       <Tooltip formatter={(value: number | undefined) => [formatCurrency(value ?? 0), "Spent"]} contentStyle={{ borderRadius: 12, fontSize: 12 }} />
 
                       {/* Monthly average */}
                       {trendData.average > 0 && (
                         <ReferenceLine y={trendData.average} stroke="#94a3b8" strokeDasharray="4 4" strokeWidth={1}>
-                          <Label value={`avg ${formatCurrency(trendData.average)}`} position="right" className="fill-muted-foreground" fontSize={9} />
+                          <Label value={`Avg ${formatCurrency(trendData.average)}`} position="insideTopLeft" className="fill-muted-foreground" fontSize={10} />
                         </ReferenceLine>
                       )}
 
                       {/* Budget line */}
                       <ReferenceLine y={budget.monthlyAmount} stroke="#f43f5e" strokeDasharray="6 3" strokeWidth={1.5}>
-                        <Label value={`budget ${formatCurrency(budget.monthlyAmount)}`} position="right" className="fill-rose-500" fontSize={9} />
+                        <Label value={`Budget ${formatCurrency(budget.monthlyAmount)}`} position="insideTopLeft" className="fill-rose-500" fontSize={10} />
                       </ReferenceLine>
 
                       <Line

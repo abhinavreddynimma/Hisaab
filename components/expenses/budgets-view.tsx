@@ -37,7 +37,7 @@ export function BudgetsView({ budgets, accounts, financialYear }: BudgetsViewPro
           <Button variant="link" onClick={() => { setEditingBudget(null); setDialogOpen(true); }}>Create your first budget</Button>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4">
           {budgets.map(budget => (
             <BudgetProgressCard key={budget.id} budget={budget} financialYear={financialYear} onEdit={() => { setEditingBudget(budget); setDialogOpen(true); }} />
           ))}
