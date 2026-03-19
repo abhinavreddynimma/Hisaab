@@ -903,6 +903,7 @@ export async function getAccountDrillDown(accountId: number, startDate: string, 
   transactions: ExpenseTransaction[];
   monthlyTrend: { month: string; amount: number }[];
   totalAmount: number;
+  subCategoryBreakdown: { id: number; name: string; amount: number; color: string | null }[];
 }> {
   await assertAdminAccess();
 
@@ -910,7 +911,7 @@ export async function getAccountDrillDown(accountId: number, startDate: string, 
     .where(eq(expenseAccounts.id, accountId))
     .get() as ExpenseAccount | undefined ?? null;
 
-  if (!account) return { account: null, transactions: [], monthlyTrend: [], totalAmount: 0 };
+  if (!account) return { account: null, transactions: [], monthlyTrend: [], totalAmount: 0, subCategoryBreakdown: [] };
 
   // Recursively get all descendant IDs
   const allAccsForDrillDown = db.select().from(expenseAccounts).all();
@@ -980,5 +981,56 @@ export async function getAccountDrillDown(accountId: number, startDate: string, 
 
   const totalAmount = transactions.reduce((sum, t) => sum + t.amount, 0);
 
-  return { account, transactions: enriched, monthlyTrend, totalAmount };
+  // Sub-category breakdown: roll up each transaction to its direct child of this account
+  const directChildren = allAccsForDrillDown.filter(a => a.parentId === accountId);
+  const subCategoryBreakdown: { id: number; name: string; amount: number; color: string | null }[] = [];
+
+  if (directChildren.length > 0) {
+    const fullAccountMap = new Map(allAccsForDrillDown.map(a => [a.id, a]));
+
+    // For each transaction, walk up to find which direct child it belongs to
+    function getDirectChildAncestor(catId: number): number | null {
+      let current = catId;
+      while (current) {
+        const acc = fullAccountMap.get(current);
+        if (!acc) return null;
+        if (acc.parentId === accountId) return current;
+        if (!acc.parentId) return null;
+        current = acc.parentId;
+      }
+      return null;
+    }
+
+    const childAmounts = new Map<number, number>();
+    let selfAmount = 0;
+
+    for (const txn of transactions) {
+      const catId = txn.categoryId ?? txn.toAccountId;
+      if (!catId) continue;
+      if (catId === accountId) {
+        selfAmount += txn.amount;
+        continue;
+      }
+      const childId = getDirectChildAncestor(catId);
+      if (childId) {
+        childAmounts.set(childId, (childAmounts.get(childId) ?? 0) + txn.amount);
+      }
+    }
+
+    // Add self amount if any transactions are directly on this account
+    if (selfAmount > 0) {
+      subCategoryBreakdown.push({ id: accountId, name: account.name + " (direct)", amount: selfAmount, color: null });
+    }
+
+    for (const child of directChildren) {
+      const amount = childAmounts.get(child.id) ?? 0;
+      if (amount > 0) {
+        subCategoryBreakdown.push({ id: child.id, name: child.name, amount, color: child.color ?? null });
+      }
+    }
+
+    subCategoryBreakdown.sort((a, b) => b.amount - a.amount);
+  }
+
+  return { account, transactions: enriched, monthlyTrend, totalAmount, subCategoryBreakdown };
 }

@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { LineChart, Line, XAxis, ResponsiveContainer, Tooltip, ReferenceLine, Label } from "recharts";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { EXPENSE_ACCOUNT_TYPES } from "@/lib/constants";
+import { CategoryPieChart } from "./category-pie-chart";
 import type { ExpenseAccount, ExpenseTransaction, ExpenseBudget, ExpenseTarget, ExpenseAccountType } from "@/lib/types";
 
 interface AccountDetailViewProps {
@@ -17,6 +18,7 @@ interface AccountDetailViewProps {
     transactions: ExpenseTransaction[];
     monthlyTrend: { month: string; amount: number }[];
     totalAmount: number;
+    subCategoryBreakdown: { id: number; name: string; amount: number; color: string | null }[];
   };
   budgets: (ExpenseBudget & { categoryIds: number[]; categoryNames: string[]; spent: number })[];
   targets: (ExpenseTarget & { accountIds?: number[]; accountNames?: string[] })[];
@@ -148,6 +150,20 @@ export function AccountDetailView({ drillDown, budgets, targets }: AccountDetail
         </Card>
         );
       })()}
+
+      {/* Sub-category breakdown pie chart */}
+      {drillDown.subCategoryBreakdown.length > 0 && (
+        <CategoryPieChart
+          data={drillDown.subCategoryBreakdown.map(sc => ({
+            id: sc.id,
+            name: sc.name,
+            value: sc.amount,
+            color: sc.color,
+          }))}
+          title={`${account.name} breakdown`}
+          onCategoryClick={(id) => id > 0 && router.push(`/expenses/${id}`)}
+        />
+      )}
 
       <Card>
         <CardHeader><CardTitle className="text-base">Transactions</CardTitle></CardHeader>
