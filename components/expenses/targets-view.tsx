@@ -41,7 +41,7 @@ export function TargetsView({ targets, accounts, financialYear }: TargetsViewPro
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
           {targets.map(target => (
-            <TargetProgressCard key={target.id} target={target} onClick={() => { setEditingTarget(target); setDialogOpen(true); }} />
+            <TargetProgressCard key={target.id} target={target} financialYear={financialYear} onEdit={() => { setEditingTarget(target); setDialogOpen(true); }} />
           ))}
         </div>
       )}
