@@ -624,8 +624,18 @@ export async function getBudgetMonthlyTrend(budgetId: number, financialYear: str
     months.push({ month: `${monthNames[calMonth - 1]}`, amount });
   }
 
-  const nonZero = months.filter(m => m.amount > 0);
-  const average = nonZero.length > 0 ? nonZero.reduce((s, m) => s + m.amount, 0) / nonZero.length : 0;
+  // Average over months elapsed in FY (not just non-zero months)
+  const now = new Date();
+  const fyStartYear = parseInt(financialYear.split("-")[0]);
+  let monthsElapsed: number;
+  if (now.getFullYear() === fyStartYear) {
+    monthsElapsed = now.getMonth() + 1 - 3; // Apr=1, May=2, ...
+  } else {
+    monthsElapsed = now.getMonth() + 1 + 9; // Jan=10, Feb=11, Mar=12
+  }
+  monthsElapsed = Math.max(1, Math.min(12, monthsElapsed));
+  const totalSpent = months.reduce((s, m) => s + m.amount, 0);
+  const average = totalSpent / monthsElapsed;
 
   // Category breakdown (roll up to direct linked categories)
   const catMap = new Map<number, number>();
