@@ -10,6 +10,13 @@ import { formatCurrency, cn } from "@/lib/utils";
 import { getTargetMonthlyTrend } from "@/actions/expenses";
 import type { ExpenseTarget } from "@/lib/types";
 
+function formatCompact(v: number): string {
+  if (v >= 10000000) return `₹${(v / 10000000).toFixed(1)}Cr`;
+  if (v >= 100000) return `₹${(v / 100000).toFixed(1)}L`;
+  if (v >= 1000) return `₹${(v / 1000).toFixed(0)}k`;
+  return `₹${v.toFixed(0)}`;
+}
+
 const DEFAULT_COLORS = [
   "#6366f1", "#f43f5e", "#10b981", "#f59e0b", "#8b5cf6",
   "#ec4899", "#14b8a6", "#f97316", "#3b82f6", "#84cc16",
@@ -140,13 +147,13 @@ export function TargetProgressCard({ target, financialYear, onEdit }: TargetProg
                       {/* Monthly average */}
                       {trendData.average > 0 && (
                         <ReferenceLine y={trendData.average} stroke="#94a3b8" strokeDasharray="4 4" strokeWidth={1}>
-                          <Label value={`Avg ${formatCurrency(trendData.average)}`} position="insideTopLeft" className="fill-muted-foreground" fontSize={10} />
+                          <Label value={`avg ${formatCompact(trendData.average)}`} position="insideTopRight" className="fill-muted-foreground" fontSize={9} dy={-2} />
                         </ReferenceLine>
                       )}
 
                       {/* Target line */}
                       <ReferenceLine y={target.monthlyAmount} stroke="#10b981" strokeDasharray="6 3" strokeWidth={1.5}>
-                        <Label value={`Target ${formatCurrency(target.monthlyAmount)}`} position="insideTopLeft" className="fill-emerald-600" fontSize={10} />
+                        <Label value={`target ${formatCompact(target.monthlyAmount)}`} position="insideTopLeft" className="fill-emerald-600" fontSize={9} dy={-2} />
                       </ReferenceLine>
 
                       <Line
