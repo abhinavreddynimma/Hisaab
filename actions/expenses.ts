@@ -1,9 +1,8 @@
 "use server";
 
 import { db } from "@/db";
-import { bankStatementEntries, bankStatementSplits, expenseAccounts, expenseTransactions, expenseBudgets, expenseBudgetCategories, expenseTargets, expenseTargetAccounts } from "@/db/schema";
-import { eq, desc, and, sql, inArray } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { expenseAccounts, expenseTransactions, expenseBudgets, expenseBudgetCategories, expenseTargets, expenseTargetAccounts } from "@/db/schema";
+import { eq, desc, and, sql } from "drizzle-orm";
 import { assertAdminAccess } from "@/lib/auth";
 import { DEFAULT_EXPENSE_CATEGORIES, getFYDateRange, getMonthDateRange } from "@/lib/constants";
 import type { ExpenseAccount, ExpenseAccountType, ExpenseTransaction, ExpenseTransactionType, ExpenseBudget, ExpenseTarget } from "@/lib/types";
@@ -40,13 +39,13 @@ export async function getExpenseAccountsGrouped(): Promise<{
   const balanceRows = db.all<{ account_id: number; balance: number }>(sql`
     SELECT account_id, SUM(balance) as balance FROM (
       SELECT account_id, SUM(CASE WHEN type = 'income' THEN amount WHEN type = 'expense' THEN -amount ELSE 0 END) as balance
-      FROM expense_transactions WHERE account_id IS NOT NULL GROUP BY account_id
+      FROM expense_transactions WHERE account_id IS NOT NULL AND status = 'confirmed' GROUP BY account_id
       UNION ALL
       SELECT from_account_id as account_id, SUM(-amount - COALESCE(fees, 0)) as balance
-      FROM expense_transactions WHERE type = 'transfer' AND from_account_id IS NOT NULL GROUP BY from_account_id
+      FROM expense_transactions WHERE type = 'transfer' AND from_account_id IS NOT NULL AND status = 'confirmed' GROUP BY from_account_id
       UNION ALL
       SELECT to_account_id as account_id, SUM(amount) as balance
-      FROM expense_transactions WHERE type = 'transfer' AND to_account_id IS NOT NULL GROUP BY to_account_id
+      FROM expense_transactions WHERE type = 'transfer' AND to_account_id IS NOT NULL AND status = 'confirmed' GROUP BY to_account_id
     ) GROUP BY account_id
   `);
   for (const row of balanceRows) {
@@ -192,19 +191,6 @@ export async function resetExpenseData(): Promise<{ success: boolean }> {
   db.delete(expenseTargets).run();
   db.delete(expenseBudgetCategories).run();
   db.delete(expenseBudgets).run();
-  db.delete(bankStatementSplits).run();
-  db.update(bankStatementEntries).set({
-    expenseName: null,
-    expenseType: null,
-    categoryId: null,
-    accountId: null,
-    fromAccountId: null,
-    toAccountId: null,
-    note: null,
-    tags: null,
-    isClassified: false,
-    expenseTransactionId: null,
-  }).run();
   db.delete(expenseTransactions).run();
   db.delete(expenseAccounts).run();
   return { success: true };
@@ -226,6 +212,7 @@ export async function getExpenseTransactions(filters: {
   const conditions = [
     sql`${expenseTransactions.date} >= ${filters.startDate}`,
     sql`${expenseTransactions.date} <= ${filters.endDate}`,
+    sql`${expenseTransactions.status} != 'dismissed'`,
   ];
 
   if (filters.type) {
@@ -247,44 +234,9 @@ export async function getExpenseTransactions(filters: {
 
   const allAccounts = db.select().from(expenseAccounts).all();
   const accountMap = new Map(allAccounts.map(a => [a.id, a.name]));
-  const bankTimeByTxnId = new Map<number, string | null>();
-
-  if (txns.length > 0) {
-    const txnIds = txns.map((txn) => txn.id);
-
-    const directBankLinks = db
-      .select({
-        expenseTransactionId: bankStatementEntries.expenseTransactionId,
-        time: bankStatementEntries.time,
-      })
-      .from(bankStatementEntries)
-      .where(inArray(bankStatementEntries.expenseTransactionId, txnIds))
-      .all();
-
-    for (const row of directBankLinks) {
-      if (row.expenseTransactionId != null) {
-        bankTimeByTxnId.set(row.expenseTransactionId, row.time);
-      }
-    }
-
-    const splitBankLinks = db
-      .select({
-        expenseTransactionId: bankStatementSplits.expenseTransactionId,
-        time: bankStatementEntries.time,
-      })
-      .from(bankStatementSplits)
-      .innerJoin(bankStatementEntries, eq(bankStatementSplits.bankStatementEntryId, bankStatementEntries.id))
-      .where(inArray(bankStatementSplits.expenseTransactionId, txnIds))
-      .all();
-
-    for (const row of splitBankLinks) {
-      bankTimeByTxnId.set(row.expenseTransactionId, row.time);
-    }
-  }
 
   return txns.map(txn => ({
     ...txn,
-    time: bankTimeByTxnId.get(txn.id) ?? null,
     categoryName: txn.categoryId ? accountMap.get(txn.categoryId) ?? undefined : undefined,
     accountName: txn.accountId ? accountMap.get(txn.accountId) ?? undefined : undefined,
     fromAccountName: txn.fromAccountId ? accountMap.get(txn.fromAccountId) ?? undefined : undefined,
@@ -354,128 +306,16 @@ export async function updateExpenseTransaction(id: number, data: {
 
 export async function deleteExpenseTransaction(id: number): Promise<{ success: boolean }> {
   await assertAdminAccess();
-
-  db.transaction((tx) => {
-    const splitLinks = tx
-      .select({ bankStatementEntryId: bankStatementSplits.bankStatementEntryId })
-      .from(bankStatementSplits)
-      .where(eq(bankStatementSplits.expenseTransactionId, id))
-      .all();
-
-    if (splitLinks.length > 0) {
-      const entryIds = [...new Set(splitLinks.map((link) => link.bankStatementEntryId))];
-
-      tx.delete(bankStatementSplits)
-        .where(eq(bankStatementSplits.expenseTransactionId, id))
-        .run();
-
-      tx.delete(expenseTransactions).where(eq(expenseTransactions.id, id)).run();
-
-      for (const entryId of entryIds) {
-        const remainingSplits = tx
-          .select({
-            splitId: bankStatementSplits.id,
-            expenseTransactionId: bankStatementSplits.expenseTransactionId,
-            expenseName: bankStatementSplits.expenseName,
-            type: expenseTransactions.type,
-            categoryId: expenseTransactions.categoryId,
-            accountId: expenseTransactions.accountId,
-            fromAccountId: expenseTransactions.fromAccountId,
-            toAccountId: expenseTransactions.toAccountId,
-            note: expenseTransactions.note,
-            tags: expenseTransactions.tags,
-          })
-          .from(bankStatementSplits)
-          .innerJoin(expenseTransactions, eq(bankStatementSplits.expenseTransactionId, expenseTransactions.id))
-          .where(eq(bankStatementSplits.bankStatementEntryId, entryId))
-          .all();
-
-        if (remainingSplits.length === 0) {
-          tx.update(bankStatementEntries)
-            .set({
-              expenseName: null,
-              expenseType: null,
-              categoryId: null,
-              accountId: null,
-              fromAccountId: null,
-              toAccountId: null,
-              note: null,
-              tags: null,
-              isClassified: false,
-              expenseTransactionId: null,
-            })
-            .where(eq(bankStatementEntries.id, entryId))
-            .run();
-          continue;
-        }
-
-        if (remainingSplits.length === 1) {
-          const [only] = remainingSplits;
-
-          tx.delete(bankStatementSplits)
-            .where(eq(bankStatementSplits.bankStatementEntryId, entryId))
-            .run();
-
-          tx.update(bankStatementEntries)
-            .set({
-              expenseName: only.expenseName,
-              expenseType: only.type,
-              categoryId: only.categoryId,
-              accountId: only.accountId,
-              fromAccountId: only.fromAccountId,
-              toAccountId: only.toAccountId,
-              note: only.note,
-              tags: only.tags,
-              isClassified: true,
-              expenseTransactionId: only.expenseTransactionId,
-            })
-            .where(eq(bankStatementEntries.id, entryId))
-            .run();
-          continue;
-        }
-
-        tx.update(bankStatementEntries)
-          .set({
-            expenseName: `Split into ${remainingSplits.length} transactions`,
-            expenseType: null,
-            categoryId: null,
-            accountId: null,
-            fromAccountId: null,
-            toAccountId: null,
-            note: null,
-            tags: null,
-            isClassified: true,
-            expenseTransactionId: null,
-          })
-          .where(eq(bankStatementEntries.id, entryId))
-          .run();
-      }
-
-      return;
-    }
-
-    tx
-      .update(bankStatementEntries)
-      .set({
-        expenseName: null,
-        expenseType: null,
-        categoryId: null,
-        accountId: null,
-        fromAccountId: null,
-        toAccountId: null,
-        note: null,
-        tags: null,
-        isClassified: false,
-        expenseTransactionId: null,
-      })
-      .where(eq(bankStatementEntries.expenseTransactionId, id))
+  // For estimated recurring transactions, dismiss instead of delete so sync doesn't re-create them
+  const txn = db.select().from(expenseTransactions).where(eq(expenseTransactions.id, id)).get();
+  if (txn && txn.source === "recurring" && txn.status === "estimated") {
+    db.update(expenseTransactions)
+      .set({ status: "dismissed" })
+      .where(eq(expenseTransactions.id, id))
       .run();
-
-    tx.delete(expenseTransactions).where(eq(expenseTransactions.id, id)).run();
-  });
-
-  revalidatePath("/expenses");
-  revalidatePath("/expenses-2");
+  } else {
+    db.delete(expenseTransactions).where(eq(expenseTransactions.id, id)).run();
+  }
   return { success: true };
 }
 
@@ -505,6 +345,7 @@ export async function getExpenseStats(startDate: string, endDate: string): Promi
     .where(and(
       sql`${expenseTransactions.date} >= ${startDate}`,
       sql`${expenseTransactions.date} <= ${endDate}`,
+      sql`${expenseTransactions.status} = 'confirmed'`,
     ))
     .all();
 
@@ -651,49 +492,6 @@ export async function getExpenseStats(startDate: string, endDate: string): Promi
   return { totalIncome, totalExpenses: nonTaxExpenses, totalTax: taxExpenses, totalTransfersOut, net: totalIncome - totalExpenses - totalTransfersOut, incomeByCategory, expenseByCategory, transfersByType, topLevelSplit };
 }
 
-export async function getExpenseCumulativeBalance(endDate: string): Promise<number> {
-  await assertAdminAccess();
-
-  const txns = db.select().from(expenseTransactions)
-    .where(sql`${expenseTransactions.date} <= ${endDate}`)
-    .all();
-
-  const allAccounts = db.select().from(expenseAccounts).all();
-  const accountMap = new Map(allAccounts.map(a => [a.id, a]));
-
-  function getRootAncestor(id: number): number {
-    const acc = accountMap.get(id);
-    if (!acc || !acc.parentId) return id;
-    return getRootAncestor(acc.parentId);
-  }
-
-  let totalIncome = 0;
-  let totalOutflow = 0;
-
-  for (const txn of txns) {
-    if (txn.type === "income") {
-      totalIncome += txn.amount;
-      continue;
-    }
-
-    if (txn.type === "expense") {
-      totalOutflow += txn.amount;
-      continue;
-    }
-
-    if (txn.type === "transfer" && txn.toAccountId) {
-      const rootId = getRootAncestor(txn.toAccountId);
-      const rootAccount = accountMap.get(rootId);
-
-      if (rootAccount?.type === "investment" || rootAccount?.type === "savings") {
-        totalOutflow += txn.amount + (txn.fees ?? 0);
-      }
-    }
-  }
-
-  return totalIncome - totalOutflow;
-}
-
 export async function getExpenseMonthlyOverview(year: number, month: number): Promise<{
   weeks: { label: string; income: number; expense: number; net: number }[];
   totalIncome: number;
@@ -706,6 +504,7 @@ export async function getExpenseMonthlyOverview(year: number, month: number): Pr
     .where(and(
       sql`${expenseTransactions.date} >= ${start}`,
       sql`${expenseTransactions.date} <= ${end}`,
+      sql`${expenseTransactions.status} = 'confirmed'`,
     ))
     .all();
 
@@ -752,6 +551,7 @@ export async function getExpenseFYOverview(financialYear: string): Promise<{
     .where(and(
       sql`${expenseTransactions.date} >= ${start}`,
       sql`${expenseTransactions.date} <= ${end}`,
+      sql`${expenseTransactions.status} = 'confirmed'`,
     ))
     .all();
 
@@ -812,6 +612,7 @@ export async function getBudgetMonthlyTrend(budgetId: number, financialYear: str
       eq(expenseTransactions.type, "expense"),
       sql`${expenseTransactions.date} >= ${fyStart}`,
       sql`${expenseTransactions.date} <= ${fyEnd}`,
+      sql`${expenseTransactions.status} = 'confirmed'`,
     ))
     .all()
     .filter(t => t.categoryId && allCategoryIds.has(t.categoryId));
@@ -904,6 +705,7 @@ export async function getExpenseBudgets(financialYear: string): Promise<(Expense
       eq(expenseTransactions.type, "expense"),
       sql`${expenseTransactions.date} >= ${start}`,
       sql`${expenseTransactions.date} <= ${end}`,
+      sql`${expenseTransactions.status} = 'confirmed'`,
     ))
     .all();
 
@@ -1012,6 +814,7 @@ export async function getExpenseTargets(financialYear: string): Promise<(Expense
       eq(expenseTransactions.type, "transfer"),
       sql`${expenseTransactions.date} >= ${monthStart}`,
       sql`${expenseTransactions.date} <= ${monthEnd}`,
+      sql`${expenseTransactions.status} = 'confirmed'`,
     ))
     .all();
 
@@ -1020,6 +823,7 @@ export async function getExpenseTargets(financialYear: string): Promise<(Expense
       eq(expenseTransactions.type, "transfer"),
       sql`${expenseTransactions.date} >= ${fyStart}`,
       sql`${expenseTransactions.date} <= ${fyEnd}`,
+      sql`${expenseTransactions.status} = 'confirmed'`,
     ))
     .all();
 
@@ -1151,6 +955,7 @@ export async function getTargetMonthlyTrend(targetId: number, financialYear: str
       eq(expenseTransactions.type, "transfer"),
       sql`${expenseTransactions.date} >= ${fyStart}`,
       sql`${expenseTransactions.date} <= ${fyEnd}`,
+      sql`${expenseTransactions.status} = 'confirmed'`,
     ))
     .all()
     .filter(t => t.toAccountId && allAccountIds.has(t.toAccountId));
@@ -1252,6 +1057,7 @@ export async function getAccountDrillDown(accountId: number, startDate: string, 
     .where(and(
       sql`${expenseTransactions.date} >= ${startDate}`,
       sql`${expenseTransactions.date} <= ${endDate}`,
+      sql`${expenseTransactions.status} = 'confirmed'`,
     ))
     .orderBy(desc(expenseTransactions.date))
     .all() as ExpenseTransaction[];
