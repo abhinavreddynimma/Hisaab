@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 import {
   ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Check, ChevronLeft, ChevronRight,
-  FileSpreadsheet, CircleDot,
+  FileSpreadsheet, CircleDot, Trash2,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,7 +13,12 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { dismissBankStatementEntry } from "@/actions/bank-statements";
 import { extractTitle } from "./utils";
 import { ClassifyDialog } from "./classify-dialog";
 import type { BankStatementEntry, ExpenseAccount } from "@/lib/types";
@@ -43,6 +49,16 @@ export function BankStatementsClient({
   const router = useRouter();
   const [selectedEntry, setSelectedEntry] = useState<BankStatementEntry | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  async function handleDismiss(id: number) {
+    try {
+      await dismissBankStatementEntry(id);
+      toast.success("Transaction removed");
+      router.refresh();
+    } catch {
+      toast.error("Failed to remove transaction");
+    }
+  }
 
   function navigateMonth(delta: number) {
     let m = currentMonth + delta;
@@ -142,6 +158,7 @@ export function BankStatementsClient({
                   <TableHead className="text-right w-[120px]">Credit</TableHead>
                   <TableHead className="text-right w-[130px]">Balance</TableHead>
                   <TableHead className="w-[180px]">Classification</TableHead>
+                  <TableHead className="w-[40px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -217,6 +234,32 @@ export function BankStatementsClient({
                       ) : (
                         <span className="text-xs text-muted-foreground italic">Click to classify</span>
                       )}
+                    </TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground/40 hover:text-destructive">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Remove Transaction</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This will hide the transaction and prevent it from being re-imported. Are you sure?
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDismiss(entry.id)}
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                              Remove
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </TableCell>
                   </TableRow>
                 ))}

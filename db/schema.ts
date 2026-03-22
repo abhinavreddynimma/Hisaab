@@ -287,6 +287,7 @@ export const bankStatementEntries = sqliteTable("bank_statement_entries", {
   note: text("note"),
   tags: text("tags"),
   isClassified: integer("is_classified", { mode: "boolean" }).notNull().default(false),
+  isDismissed: integer("is_dismissed", { mode: "boolean" }).notNull().default(false),
   // Link to expense transaction once synced
   expenseTransactionId: integer("expense_transaction_id").references(() => expenseTransactions.id),
   createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
