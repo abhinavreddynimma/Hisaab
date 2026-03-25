@@ -183,7 +183,16 @@ export function AccountDetailView({ drillDown, budgets, targets }: AccountDetail
               <TableBody>
                 {transactions.slice(0, 50).map(txn => (
                   <TableRow key={txn.id}>
-                    <TableCell className="text-sm tabular-nums">{formatDate(txn.date)}</TableCell>
+                    <TableCell className="text-sm tabular-nums">
+                      <div>
+                        <div>{formatDate(txn.date)}</div>
+                        {txn.time && (
+                          <div className="text-[10px] font-light text-muted-foreground/60 mt-0.5">
+                            {txn.time}
+                          </div>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell className="text-sm capitalize">{txn.type}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {txn.type === "transfer"
