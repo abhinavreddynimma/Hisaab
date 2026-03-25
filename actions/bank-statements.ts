@@ -135,14 +135,9 @@ export async function unclassifyBankStatementEntry(id: number) {
 
   if (!entry) throw new Error("Entry not found");
 
-  // Delete linked expense transaction
-  if (entry.expenseTransactionId) {
-    await db
-      .delete(expenseTransactions)
-      .where(eq(expenseTransactions.id, entry.expenseTransactionId));
-  }
+  const linkedTxnId = entry.expenseTransactionId;
 
-  // Reset classification
+  // Clear FK reference first
   await db
     .update(bankStatementEntries)
     .set({
@@ -159,6 +154,13 @@ export async function unclassifyBankStatementEntry(id: number) {
     })
     .where(eq(bankStatementEntries.id, id));
 
+  // Now safe to delete the linked expense transaction
+  if (linkedTxnId) {
+    await db
+      .delete(expenseTransactions)
+      .where(eq(expenseTransactions.id, linkedTxnId));
+  }
+
   revalidatePath("/expenses-2");
   revalidatePath("/expenses");
 }
@@ -171,13 +173,9 @@ export async function dismissBankStatementEntry(id: number) {
 
   if (!entry) throw new Error("Entry not found");
 
-  // If classified, remove the linked expense transaction first
-  if (entry.expenseTransactionId) {
-    await db
-      .delete(expenseTransactions)
-      .where(eq(expenseTransactions.id, entry.expenseTransactionId));
-  }
+  const linkedTxnId = entry.expenseTransactionId;
 
+  // Clear all fields and dismiss first (removes FK reference)
   await db
     .update(bankStatementEntries)
     .set({
@@ -194,6 +192,13 @@ export async function dismissBankStatementEntry(id: number) {
       expenseTransactionId: null,
     })
     .where(eq(bankStatementEntries.id, id));
+
+  // Now safe to delete the linked expense transaction
+  if (linkedTxnId) {
+    await db
+      .delete(expenseTransactions)
+      .where(eq(expenseTransactions.id, linkedTxnId));
+  }
 
   revalidatePath("/expenses-2");
   revalidatePath("/expenses");
