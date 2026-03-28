@@ -1,8 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Trash2, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Plus, Link2, Check, Repeat, Pencil } from "lucide-react";
+import { Trash2, X, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Plus, Link2, Check, Repeat, Pencil } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,8 +32,20 @@ const TYPE_CONFIG = {
   transfer: { icon: ArrowLeftRight, color: "text-blue-600", bg: "bg-blue-50", label: "Transfer" },
 };
 
+const FILTER_OPTIONS = [
+  { value: "all", label: "All" },
+  { value: "income", label: "Income" },
+  { value: "expense", label: "Expense" },
+  { value: "transfer", label: "Transfer" },
+] as const;
+
+type FilterType = (typeof FILTER_OPTIONS)[number]["value"];
+
 export function TransactionList({ transactions, totalIncome, totalExpenses, onEdit, onAddNew }: TransactionListProps) {
   const router = useRouter();
+  const [filter, setFilter] = useState<FilterType>("all");
+
+  const filtered = filter === "all" ? transactions : transactions.filter(t => t.type === filter);
 
   async function handleDelete(id: number) {
     try {
@@ -81,9 +94,28 @@ export function TransactionList({ transactions, totalIncome, totalExpenses, onEd
         </Card>
       </div>
 
+      <div className="flex items-center gap-1">
+        {FILTER_OPTIONS.map((opt) => (
+          <Button
+            key={opt.value}
+            variant={filter === opt.value ? "default" : "ghost"}
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => setFilter(opt.value)}
+          >
+            {opt.label}
+            {opt.value !== "all" && (
+              <span className="ml-1 text-[10px] opacity-60">
+                {transactions.filter(t => t.type === opt.value).length}
+              </span>
+            )}
+          </Button>
+        ))}
+      </div>
+
       <Card>
         <CardContent className="p-0">
-          {transactions.length === 0 ? (
+          {filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <p className="text-muted-foreground mb-2">No transactions this month</p>
               <Button variant="link" onClick={onAddNew}>
@@ -104,7 +136,7 @@ export function TransactionList({ transactions, totalIncome, totalExpenses, onEd
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {transactions.map((txn) => {
+                {filtered.map((txn) => {
                   const config = TYPE_CONFIG[txn.type];
                   const Icon = config.icon;
                   return (
@@ -192,6 +224,15 @@ export function TransactionList({ transactions, totalIncome, totalExpenses, onEd
                               title="Confirm this expense"
                             >
                               <Check className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                              onClick={() => handleDelete(txn.id)}
+                              title="Delete this estimated entry"
+                            >
+                              <X className="h-3.5 w-3.5" />
                             </Button>
                           </div>
                         ) : txn.source === "invoice" || (txn.source === "recurring" && txn.status === "confirmed") ? (
