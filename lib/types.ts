@@ -308,6 +308,8 @@ export interface BankStatementEntry {
   id: number;
   date: string;
   description: string;
+  time: string | null;
+  phonepeName: string | null;
   refNo: string | null;
   debit: number | null;
   credit: number | null;
