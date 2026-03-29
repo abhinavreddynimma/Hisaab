@@ -100,3 +100,55 @@ export const paymentSchema = z.object({
   platformCharges: z.number().min(0).default(0),
   bankCharges: z.number().min(0).default(0),
 });
+
+const halfDayNumber = z.number().positive().refine((value) => Number.isInteger(value * 2), {
+  message: "Value must be in 0.5 day increments",
+});
+
+export const extraDayBucketSchema = z.object({
+  name: z.string().trim().min(1, "Bucket name is required"),
+});
+
+export const extraDayTargetSchema = z.discriminatedUnion("targetType", [
+  z.object({
+    bucketId: z.number().int().positive(),
+    name: z.string().trim().min(1, "Target name is required"),
+    targetType: z.literal("day"),
+    goalDays: halfDayNumber,
+    goalAmountInr: z.null().optional(),
+    notes: z.string().optional().default(""),
+  }),
+  z.object({
+    bucketId: z.number().int().positive(),
+    name: z.string().trim().min(1, "Target name is required"),
+    targetType: z.literal("money"),
+    goalDays: z.null().optional(),
+    goalAmountInr: z.number().positive("Goal amount must be positive"),
+    notes: z.string().optional().default(""),
+  }),
+]);
+
+export const extraDayAllocationSchema = z.discriminatedUnion("kind", [
+  z.object({
+    bucketId: z.number().int().positive(),
+    targetId: z.number().int().positive().nullable().optional(),
+    financialYear: z.string().regex(/^\d{4}-\d{2}$/, "Financial year must be YYYY-YY"),
+    kind: z.literal("day"),
+    confirmedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD format"),
+    days: halfDayNumber,
+    dailyRate: z.null().optional(),
+    amountInr: z.null().optional(),
+    notes: z.string().optional().default(""),
+  }),
+  z.object({
+    bucketId: z.number().int().positive(),
+    targetId: z.number().int().positive().nullable().optional(),
+    financialYear: z.string().regex(/^\d{4}-\d{2}$/, "Financial year must be YYYY-YY"),
+    kind: z.literal("money"),
+    confirmedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD format"),
+    days: halfDayNumber,
+    dailyRate: z.number().positive("Daily rate must be positive"),
+    amountInr: z.number().nonnegative().optional(),
+    notes: z.string().optional().default(""),
+  }),
+]);
