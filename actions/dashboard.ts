@@ -398,23 +398,25 @@ export async function getBalanceData(financialYear?: string): Promise<{
   const fyStart = `${fyStartYear}-04-01`;
   const fyEnd = `${fyEndYear}-03-31`;
   const periodEnd = monthEndStr < fyEnd ? monthEndStr : fyEnd;
-  const fyEntries = entriesUpToMonthEnd.filter((e) => e.date >= fyStart && e.date <= periodEnd);
+  // Use ALL FY entries (including future planned ones) for balance cards
+  const fyEntries = allEntries.filter((e) => e.date >= fyStart && e.date <= fyEnd);
 
-  // FY-scoped leave balance: count months from tracking start (not FY start if tracking started later)
+  // FY-scoped leave balance: count ALL months in this FY (including future)
+  // so planned leaves for the full year are reflected
   const [trackStartY, trackStartM] = policy.trackingStartDate.split("-").map(Number);
   const countFromYear = trackStartY > fyStartYear || (trackStartY === fyStartYear && trackStartM > 4) ? trackStartY : fyStartYear;
   const countFromMonth = trackStartY > fyStartYear || (trackStartY === fyStartYear && trackStartM > 4) ? trackStartM : 4;
-  let fyMonthsElapsed = 0;
+  let fyMonthsTotal = 0;
   {
     let y = countFromYear;
     let m = countFromMonth;
-    while (y < currentYear || (y === currentYear && m <= currentMonth)) {
-      fyMonthsElapsed++;
+    while (y < fyEndYear || (y === fyEndYear && m <= 3)) {
+      fyMonthsTotal++;
       m++;
       if (m > 12) { m = 1; y++; }
     }
   }
-  const leavesAllowed = fyMonthsElapsed * policy.leavesPerMonth;
+  const leavesAllowed = fyMonthsTotal * policy.leavesPerMonth;
   const leavesTaken = fyEntries.filter((e) => e.dayType === "leave").length +
     fyEntries.filter((e) => e.dayType === "half_day").length * 0.5;
   const leaveBalance = leavesAllowed - leavesTaken;
@@ -436,7 +438,7 @@ export async function getBalanceData(financialYear?: string): Promise<{
   const publicHolidaysOffToDate = holidayDates.reduce((sum, dateStr) => {
     const trackStart = `${policy.trackingStartDate}-01`;
     const effectiveStart = trackStart > fyStart ? trackStart : fyStart;
-    if (dateStr < effectiveStart || dateStr > periodEnd) return sum;
+    if (dateStr < effectiveStart || dateStr > fyEnd) return sum;
 
     const dateObj = new Date(`${dateStr}T00:00:00`);
     const dayOfWeek = dateObj.getDay();
