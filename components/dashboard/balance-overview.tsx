@@ -453,23 +453,8 @@ export function BalanceOverview({ balanceData, monthlyData, financialYear }: Bal
                     tickLine={false}
                     tick={{ fontSize: 12, fill: "#9ca3af" }}
                   />
-                  {/* Left Y axis for working days (large scale) */}
-                  <YAxis
-                    yAxisId="left"
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fontSize: 10, fill: "#6366f1" }}
-                    width={35}
-                  />
-                  {/* Right Y axis for leaves/extra (small scale) */}
-                  <YAxis
-                    yAxisId="right"
-                    orientation="right"
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fontSize: 10, fill: "#fb7185" }}
-                    width={30}
-                  />
+                  <YAxis yAxisId="left" hide />
+                  <YAxis yAxisId="right" orientation="right" hide />
                   <Tooltip content={<CumulativeTooltip />} />
                   <Line yAxisId="left" type="monotone" dataKey="cumWorking" stroke="#6366f1" strokeWidth={2.5} dot={{ r: 4, fill: "#6366f1" }} name="Working" label={renderLabel("#6366f1")} />
                   <Line yAxisId="right" type="monotone" dataKey="cumExtra" stroke="#10b981" strokeWidth={2} strokeDasharray="4 4" dot={{ r: 3, fill: "#10b981" }} name="Extra" label={renderLabel("#10b981")} />
