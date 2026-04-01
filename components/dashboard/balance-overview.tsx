@@ -27,6 +27,14 @@ interface BalanceOverviewProps {
     leavesTakenToDate: number;
     publicHolidaysOffToDate: number;
     daysOffStatus: "burnout_risk" | "on_track" | "above_target";
+    fyWorkingDaysComparison: {
+      totalWeekdaysInFY: number;
+      yourWorkingDays: number;
+      frenchEmployeeWorkingDays: number;
+      leavesTaken: number;
+      holidaysTaken: number;
+      extraWorkingDays: number;
+    };
   };
   monthlyData: {
     month: string;
@@ -336,6 +344,92 @@ export function BalanceOverview({ balanceData, monthlyData }: BalanceOverviewPro
           ]}
         />
       </div>
+
+      {/* FY Working Days Comparison */}
+      <Card>
+        <CardContent className="p-4 space-y-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">FY Working Days</p>
+
+          {/* Your working days bar */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-medium">You (Freelancer)</span>
+              <span className="tabular-nums font-semibold">{balanceData.fyWorkingDaysComparison.yourWorkingDays} days</span>
+            </div>
+            <div className="relative h-6 rounded-full bg-muted overflow-hidden">
+              <div
+                className="absolute inset-y-0 left-0 bg-indigo-500 rounded-full transition-all"
+                style={{ width: `${(balanceData.fyWorkingDaysComparison.yourWorkingDays / balanceData.fyWorkingDaysComparison.totalWeekdaysInFY) * 100}%` }}
+              />
+              {/* Leaves carved out */}
+              {balanceData.fyWorkingDaysComparison.leavesTaken > 0 && (
+                <div
+                  className="absolute inset-y-0 bg-rose-400 rounded-r-full"
+                  style={{
+                    left: `${(balanceData.fyWorkingDaysComparison.yourWorkingDays / balanceData.fyWorkingDaysComparison.totalWeekdaysInFY) * 100}%`,
+                    width: `${(balanceData.fyWorkingDaysComparison.leavesTaken / balanceData.fyWorkingDaysComparison.totalWeekdaysInFY) * 100}%`,
+                  }}
+                />
+              )}
+              {/* Holidays carved out */}
+              {balanceData.fyWorkingDaysComparison.holidaysTaken > 0 && (
+                <div
+                  className="absolute inset-y-0 bg-emerald-400 rounded-r-full"
+                  style={{
+                    left: `${((balanceData.fyWorkingDaysComparison.yourWorkingDays + balanceData.fyWorkingDaysComparison.leavesTaken) / balanceData.fyWorkingDaysComparison.totalWeekdaysInFY) * 100}%`,
+                    width: `${(balanceData.fyWorkingDaysComparison.holidaysTaken / balanceData.fyWorkingDaysComparison.totalWeekdaysInFY) * 100}%`,
+                  }}
+                />
+              )}
+            </div>
+
+            {/* French employee bar */}
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-medium text-muted-foreground">French Employee (avg)</span>
+              <span className="tabular-nums text-muted-foreground">{balanceData.fyWorkingDaysComparison.frenchEmployeeWorkingDays} days</span>
+            </div>
+            <div className="relative h-6 rounded-full bg-muted overflow-hidden">
+              <div
+                className="absolute inset-y-0 left-0 bg-slate-400 rounded-full"
+                style={{ width: `${(balanceData.fyWorkingDaysComparison.frenchEmployeeWorkingDays / balanceData.fyWorkingDaysComparison.totalWeekdaysInFY) * 100}%` }}
+              />
+              {/* RTT + Leaves + Holidays = ~41 days */}
+              <div
+                className="absolute inset-y-0 bg-slate-300 rounded-r-full"
+                style={{
+                  left: `${(balanceData.fyWorkingDaysComparison.frenchEmployeeWorkingDays / balanceData.fyWorkingDaysComparison.totalWeekdaysInFY) * 100}%`,
+                  width: `${(41 / balanceData.fyWorkingDaysComparison.totalWeekdaysInFY) * 100}%`,
+                }}
+              />
+            </div>
+
+            {/* Total weekdays reference */}
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Total weekdays in FY: {balanceData.fyWorkingDaysComparison.totalWeekdaysInFY}</span>
+              <span className={cn(
+                "font-semibold",
+                balanceData.fyWorkingDaysComparison.yourWorkingDays > balanceData.fyWorkingDaysComparison.frenchEmployeeWorkingDays ? "text-indigo-600" : "text-emerald-600"
+              )}>
+                {balanceData.fyWorkingDaysComparison.yourWorkingDays > balanceData.fyWorkingDaysComparison.frenchEmployeeWorkingDays
+                  ? `+${balanceData.fyWorkingDaysComparison.yourWorkingDays - balanceData.fyWorkingDaysComparison.frenchEmployeeWorkingDays} more days than French employee`
+                  : `${balanceData.fyWorkingDaysComparison.frenchEmployeeWorkingDays - balanceData.fyWorkingDaysComparison.yourWorkingDays} fewer days`
+                }
+              </span>
+            </div>
+          </div>
+
+          {/* Legend */}
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-indigo-500" /> Working ({balanceData.fyWorkingDaysComparison.yourWorkingDays})</span>
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-rose-400" /> Leaves ({balanceData.fyWorkingDaysComparison.leavesTaken})</span>
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-400" /> Holidays ({balanceData.fyWorkingDaysComparison.holidaysTaken})</span>
+            {balanceData.fyWorkingDaysComparison.extraWorkingDays > 0 && (
+              <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-violet-500" /> Extra ({balanceData.fyWorkingDaysComparison.extraWorkingDays})</span>
+            )}
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-slate-400" /> French avg (210)</span>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
