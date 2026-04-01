@@ -271,19 +271,19 @@ function CumulativeTooltip({ active, payload, label }: { active?: boolean; paylo
           <span className="ml-auto font-medium tabular-nums">+{d.mWorking}</span>
           <span className="text-gray-400 tabular-nums">({d.cumWorking})</span>
         </div>
-        {d.mExtra > 0 && (
+        {d.cumExtra > 0 && (
           <div className="flex items-center gap-2">
             <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
             <span className="text-gray-600 dark:text-gray-400">Extra</span>
-            <span className="ml-auto font-medium tabular-nums">+{d.mExtra}</span>
+            <span className="ml-auto font-medium tabular-nums">{d.mExtra > 0 ? `+${d.mExtra}` : "—"}</span>
             <span className="text-gray-400 tabular-nums">({d.cumExtra})</span>
           </div>
         )}
-        {d.mLeaves > 0 && (
+        {d.cumLeaves > 0 && (
           <div className="flex items-center gap-2">
             <span className="inline-block h-2 w-2 rounded-full bg-rose-400" />
             <span className="text-gray-600 dark:text-gray-400">Leaves</span>
-            <span className="ml-auto font-medium tabular-nums">+{d.mLeaves}</span>
+            <span className="ml-auto font-medium tabular-nums">{d.mLeaves > 0 ? `+${d.mLeaves}` : "—"}</span>
             <span className="text-gray-400 tabular-nums">({d.cumLeaves})</span>
           </div>
         )}
