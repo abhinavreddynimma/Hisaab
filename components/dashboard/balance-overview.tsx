@@ -427,9 +427,9 @@ export function BalanceOverview({ balanceData, monthlyData, financialYear }: Bal
             // Build cumulative data
             let cumW = 0, cumE = 0, cumL = 0, cumH = 0;
             const cumulativeData: CumulativeEntry[] = monthlyData.map((m) => {
-              cumW += m.working;
+              cumW += m.working + m.halfDays * 0.5;
               cumE += m.extraWorking;
-              cumL += m.leaves;
+              cumL += m.leaves + m.halfDays * 0.5;
               cumH += m.halfDays;
               return { month: m.month, cumWorking: cumW, cumExtra: cumE, cumLeaves: cumL, cumHalfDays: cumH };
             });
