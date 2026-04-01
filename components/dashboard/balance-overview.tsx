@@ -1,11 +1,9 @@
 "use client";
 
 import {
-  BarChart,
-  Bar,
+  LineChart,
+  Line,
   XAxis,
-  YAxis,
-  CartesianGrid,
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
@@ -241,21 +239,23 @@ function BalanceCard({
   );
 }
 
-interface TooltipEntry {
-  working: number;
-  leaves: number;
-  extraWorking: number;
-  halfDays: number;
+interface CumulativeEntry {
+  month: string;
+  cumWorking: number;
+  cumExtra: number;
+  cumLeaves: number;
+  cumHalfDays: number;
 }
 
-function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: { payload: TooltipEntry }[]; label?: string }) {
-  if (!active || !payload?.[0]) return null;
-  const d = payload[0].payload;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function CumulativeTooltip({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0]?.payload as CumulativeEntry;
   const rows = [
-    { label: "Working", value: d.working, color: "#10b981" },
-    { label: "Extra", value: d.extraWorking, color: "#8b5cf6" },
-    { label: "Half Day", value: d.halfDays, color: "#f59e0b" },
-    { label: "Leave", value: d.leaves, color: "#ef4444" },
+    { label: "Working", value: d.cumWorking, color: "#10b981" },
+    { label: "Extra", value: d.cumExtra, color: "#10b981" },
+    { label: "Half Days", value: d.cumHalfDays, color: "#f59e0b" },
+    { label: "Leaves", value: d.cumLeaves, color: "#ef4444" },
   ].filter((r) => r.value > 0);
 
   return (
@@ -422,47 +422,37 @@ export function BalanceOverview({ balanceData, monthlyData, financialYear }: Bal
           <CardTitle>Monthly Breakdown</CardTitle>
         </CardHeader>
         <CardContent>
-          {hasData ? (
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={monthlyData} barSize={40}>
-                <defs>
-                  <linearGradient id="workingGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#34d399" stopOpacity={1} />
-                    <stop offset="100%" stopColor="#059669" stopOpacity={0.8} />
-                  </linearGradient>
-                  <linearGradient id="extraGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#a78bfa" stopOpacity={1} />
-                    <stop offset="100%" stopColor="#7c3aed" stopOpacity={0.8} />
-                  </linearGradient>
-                  <linearGradient id="halfDayGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#fbbf24" stopOpacity={1} />
-                    <stop offset="100%" stopColor="#d97706" stopOpacity={0.8} />
-                  </linearGradient>
-                  <linearGradient id="leaveGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#fb7185" stopOpacity={1} />
-                    <stop offset="100%" stopColor="#e11d48" stopOpacity={0.8} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis
-                  dataKey="month"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 12, fill: "#9ca3af" }}
-                />
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 12, fill: "#9ca3af" }}
-                />
-                <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(0,0,0,0.04)" }} />
-                <Bar dataKey="working" stackId="a" fill="url(#workingGrad)" name="Working" />
-                <Bar dataKey="extraWorking" stackId="a" fill="url(#extraGrad)" name="Extra" />
-                <Bar dataKey="halfDays" stackId="a" fill="url(#halfDayGrad)" name="Half Day" />
-                <Bar dataKey="leaves" stackId="a" fill="url(#leaveGrad)" radius={[6, 6, 0, 0]} name="Leave" />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
+          {hasData ? (() => {
+            // Build cumulative data
+            let cumW = 0, cumE = 0, cumL = 0, cumH = 0;
+            const cumulativeData: CumulativeEntry[] = monthlyData.map((m) => {
+              cumW += m.working;
+              cumE += m.extraWorking;
+              cumL += m.leaves;
+              cumH += m.halfDays;
+              return { month: m.month, cumWorking: cumW, cumExtra: cumE, cumLeaves: cumL, cumHalfDays: cumH };
+            });
+
+            return (
+              <ResponsiveContainer width="100%" height={280}>
+                <LineChart data={cumulativeData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                  <XAxis
+                    dataKey="month"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 12, fill: "#9ca3af" }}
+                  />
+                  <Tooltip content={<CumulativeTooltip />} />
+                  <Line type="monotone" dataKey="cumWorking" stroke="#10b981" strokeWidth={2.5} dot={{ r: 3, fill: "#10b981" }} name="Working" />
+                  <Line type="monotone" dataKey="cumExtra" stroke="#10b981" strokeWidth={2} strokeDasharray="4 4" dot={{ r: 3, fill: "#10b981" }} name="Extra" />
+                  <Line type="monotone" dataKey="cumLeaves" stroke="#ef4444" strokeWidth={2} dot={{ r: 3, fill: "#ef4444" }} name="Leaves" />
+                  {cumulativeData.some(d => d.cumHalfDays > 0) && (
+                    <Line type="monotone" dataKey="cumHalfDays" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3, fill: "#f59e0b" }} name="Half Days" />
+                  )}
+                </LineChart>
+              </ResponsiveContainer>
+            );
+          })() : (
             <div className="flex h-[280px] items-center justify-center text-muted-foreground">
               No data yet. Start tracking days in the Calendar.
             </div>
