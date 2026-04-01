@@ -400,12 +400,14 @@ export async function getBalanceData(financialYear?: string): Promise<{
   const periodEnd = monthEndStr < fyEnd ? monthEndStr : fyEnd;
   const fyEntries = entriesUpToMonthEnd.filter((e) => e.date >= fyStart && e.date <= periodEnd);
 
-  // FY-scoped leave balance: count months in this FY only
-  const fyStartMonth = 4; // April
+  // FY-scoped leave balance: count months from tracking start (not FY start if tracking started later)
+  const [trackStartY, trackStartM] = policy.trackingStartDate.split("-").map(Number);
+  const countFromYear = trackStartY > fyStartYear || (trackStartY === fyStartYear && trackStartM > 4) ? trackStartY : fyStartYear;
+  const countFromMonth = trackStartY > fyStartYear || (trackStartY === fyStartYear && trackStartM > 4) ? trackStartM : 4;
   let fyMonthsElapsed = 0;
   {
-    let y = fyStartYear;
-    let m = fyStartMonth;
+    let y = countFromYear;
+    let m = countFromMonth;
     while (y < currentYear || (y === currentYear && m <= currentMonth)) {
       fyMonthsElapsed++;
       m++;
