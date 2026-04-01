@@ -470,7 +470,10 @@ export async function getBalanceData(financialYear?: string): Promise<{
   let implicitWorkingDays = 0;
   const today = new Date();
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-  for (let d = new Date(fyStartDate); d <= fyEndDate && `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` <= todayStr; d.setDate(d.getDate() + 1)) {
+  // Only count implicit working days from tracking start date (when user actually started working)
+  const trackingStart = `${policy.trackingStartDate}-01`;
+  const implicitStartDate = new Date(Math.max(fyStartDate.getTime(), new Date(trackingStart).getTime()));
+  for (let d = new Date(implicitStartDate); d <= fyEndDate && `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` <= todayStr; d.setDate(d.getDate() + 1)) {
     const day = d.getDay();
     if (day === 0 || day === 6) continue;
     const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
