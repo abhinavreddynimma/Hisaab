@@ -445,11 +445,13 @@ export async function getBalanceData(financialYear?: string): Promise<{
         : "on_track";
 
   // Calculate FY working days comparison
-  // Count total weekdays in FY
-  let totalWeekdaysInFY = 0;
+  // Count total weekdays in FY (from tracking start date if it falls within this FY)
   const fyStartDate = new Date(fyStartYear, 3, 1); // April 1
   const fyEndDate = new Date(fyEndYear, 2, 31); // March 31
-  for (let d = new Date(fyStartDate); d <= fyEndDate; d.setDate(d.getDate() + 1)) {
+  const trackingStartForWeekdays = `${policy.trackingStartDate}-01`;
+  const weekdayCountStart = new Date(Math.max(fyStartDate.getTime(), new Date(trackingStartForWeekdays).getTime()));
+  let totalWeekdaysInFY = 0;
+  for (let d = new Date(weekdayCountStart); d <= fyEndDate; d.setDate(d.getDate() + 1)) {
     const day = d.getDay();
     if (day !== 0 && day !== 6) totalWeekdaysInFY++;
   }
