@@ -492,9 +492,9 @@ export async function getBalanceData(financialYear?: string): Promise<{
   const allFyEntryByDate = new Map(allFyEntries.map((entry) => [entry.date, entry.dayType]));
 
   // Recalculate working days from all FY entries (not just up to today)
+  // Only count "working" and "half_day" here — extra_working is tracked separately
   const allFyWorkingDays = allFyEntries.reduce((sum, e) => {
     if (e.dayType === "working") return sum + 1;
-    if (e.dayType === "extra_working") return sum + 1;
     if (e.dayType === "half_day") return sum + 0.5;
     return sum;
   }, 0);
