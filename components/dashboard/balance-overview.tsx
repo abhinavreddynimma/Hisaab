@@ -364,7 +364,7 @@ export function BalanceOverview({ balanceData, monthlyData, financialYear }: Bal
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-medium">{effectiveDays} effective days</span>
                   <span className={cn("text-xs font-semibold tabular-nums", diff > 0 ? "text-indigo-600" : "text-emerald-600")}>
-                    {diff > 0 ? `+${diff}` : diff} vs French employee
+                    {diff > 0 ? `+${diff}` : diff}
                   </span>
                 </div>
                 <div className="relative h-7 rounded-full bg-muted overflow-hidden">
