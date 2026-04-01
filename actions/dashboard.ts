@@ -308,19 +308,37 @@ export async function getClientEarningsData(): Promise<
   return Array.from(clientMap.entries()).map(([name, value]) => ({ name, value }));
 }
 
-export async function getMonthlyBreakdownData(months: number = 6): Promise<
+export async function getMonthlyBreakdownData(financialYear?: string): Promise<
   { month: string; working: number; leaves: number; extraWorking: number; halfDays: number }[]
 > {
   await assertAdminAccess();
   const result: { month: string; working: number; leaves: number; extraWorking: number; halfDays: number }[] = [];
-  const now = new Date();
 
-  for (let i = months - 1; i >= 0; i--) {
-    const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const year = date.getFullYear();
-    const month = date.getMonth() + 1;
-    const monthKey = `${year}-${String(month).padStart(2, "0")}`;
-    const monthName = date.toLocaleDateString("en-IN", { month: "short" });
+  // Determine FY start year
+  const now = new Date();
+  let fyStartYear: number;
+  if (financialYear) {
+    fyStartYear = parseInt(financialYear.split("-")[0]);
+  } else {
+    fyStartYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  }
+
+  // Tracking started May 2025
+  const trackingStart = new Date(2025, 4, 1); // May 1, 2025
+
+  // Generate all 12 months of the FY (Apr to Mar)
+  for (let i = 0; i < 12; i++) {
+    const calMonth = ((3 + i) % 12) + 1; // Apr=4, May=5, ..., Mar=3
+    const calYear = calMonth >= 4 ? fyStartYear : fyStartYear + 1;
+    const monthStart = new Date(calYear, calMonth - 1, 1);
+
+    // Skip months before tracking started
+    if (monthStart < trackingStart) {
+      continue;
+    }
+
+    const monthKey = `${calYear}-${String(calMonth).padStart(2, "0")}`;
+    const monthName = monthStart.toLocaleDateString("en-IN", { month: "short" });
 
     const rawEntries = db
       .select()
@@ -328,8 +346,8 @@ export async function getMonthlyBreakdownData(months: number = 6): Promise<
       .where(like(dayEntries.date, `${monthKey}%`))
       .all() as DayEntry[];
 
-    const holidays = getFrenchHolidays(year);
-    const entries = withImplicitWorkingDays(rawEntries, year, month, holidays);
+    const holidays = getFrenchHolidays(calYear);
+    const entries = withImplicitWorkingDays(rawEntries, calYear, calMonth, holidays);
     const summary = calculateMonthSummary(entries);
 
     result.push({
