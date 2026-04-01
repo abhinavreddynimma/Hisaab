@@ -357,10 +357,7 @@ export function BalanceOverview({ balanceData, monthlyData, financialYear }: Bal
         return (
           <Card>
             <CardContent className="p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">FY Working Days</p>
-                <span className="text-xs text-muted-foreground tabular-nums">{cmp.totalWeekdaysInFY} weekdays in FY</span>
-              </div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">FY Working Days</p>
 
               {/* Single bar with French employee marker */}
               <div className="space-y-1">
@@ -371,18 +368,18 @@ export function BalanceOverview({ balanceData, monthlyData, financialYear }: Bal
                   </span>
                 </div>
                 <div className="relative h-7 rounded-full bg-muted overflow-hidden">
-                  {/* Working days (indigo) */}
+                  {/* Net working days = working - leaves (indigo) */}
                   <div
                     className="absolute inset-y-0 left-0 bg-indigo-500 transition-all"
-                    style={{ width: `${yourPct}%` }}
+                    style={{ width: `${Math.min(((cmp.yourWorkingDays - cmp.leavesTaken) / cmp.totalWeekdaysInFY) * 100, 100)}%` }}
                   />
-                  {/* Extra working days overlay (violet, stacked on right edge) */}
+                  {/* Extra working days (violet, stacked after net working) */}
                   {cmp.extraWorkingDays > 0 && (
                     <div
                       className="absolute inset-y-0 bg-violet-500 transition-all"
                       style={{
-                        left: `${Math.min(((effectiveDays - cmp.extraWorkingDays) / cmp.totalWeekdaysInFY) * 100, 100)}%`,
-                        width: `${(cmp.extraWorkingDays / cmp.totalWeekdaysInFY) * 100}%`,
+                        left: `${Math.min(((cmp.yourWorkingDays - cmp.leavesTaken) / cmp.totalWeekdaysInFY) * 100, 100)}%`,
+                        width: `${Math.min((cmp.extraWorkingDays / cmp.totalWeekdaysInFY) * 100, 100 - Math.min(((cmp.yourWorkingDays - cmp.leavesTaken) / cmp.totalWeekdaysInFY) * 100, 100))}%`,
                       }}
                     />
                   )}
@@ -413,6 +410,7 @@ export function BalanceOverview({ balanceData, monthlyData, financialYear }: Bal
                 <span className="inline-flex items-center gap-1">
                   <span className="h-0.5 w-3 bg-foreground" /> French avg: {cmp.frenchEmployeeWorkingDays}
                 </span>
+                <span>Total weekdays: {cmp.totalWeekdaysInFY}</span>
               </div>
             </CardContent>
           </Card>
