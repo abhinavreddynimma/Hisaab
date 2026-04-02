@@ -13,6 +13,23 @@ const ACCESS_CONTROL_KEY = "access_control";
 const SESSION_DURATION_DAYS = 30;
 const PASSWORD_ALGO = "scrypt-v1";
 
+// Simple in-memory rate limiter for login attempts
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 minutes
+const MAX_ATTEMPTS = 10;
+
+function checkRateLimit(identifier: string): boolean {
+  const now = Date.now();
+  const entry = loginAttempts.get(identifier);
+  if (!entry || now > entry.resetAt) {
+    loginAttempts.set(identifier, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
+    return true;
+  }
+  if (entry.count >= MAX_ATTEMPTS) return false;
+  entry.count++;
+  return true;
+}
+
 interface AccessControlConfig {
   sessionsEnabled: boolean;
 }
@@ -290,6 +307,10 @@ export async function authenticateWithCredentials(input: {
 
   const normalizedEmail = normalizeEmail(input.email);
   if (!normalizedEmail || !input.password) return null;
+
+  if (!checkRateLimit(normalizedEmail)) {
+    throw new Error("Too many login attempts. Please try again later.");
+  }
 
   const row = db
     .select({
