@@ -464,16 +464,10 @@ export async function getBalanceData(financialYear?: string): Promise<{
   }, 0);
 
   const totalDaysOffToDate = leavesTakenToDate + publicHolidaysOffToDate;
-  const fyStartUtc = Date.UTC(fyStartYear, 3, 1);
-  const fyEndUtc = Date.UTC(fyEndYear, 2, 31);
-  const periodEndDate = new Date(`${periodEnd}T00:00:00`);
-  const periodEndUtc = Date.UTC(periodEndDate.getFullYear(), periodEndDate.getMonth(), periodEndDate.getDate());
-  const elapsedDays = Math.floor((periodEndUtc - fyStartUtc) / (1000 * 60 * 60 * 24)) + 1;
-  const daysInFy = Math.floor((fyEndUtc - fyStartUtc) / (1000 * 60 * 60 * 24)) + 1;
-  const elapsedFraction = Math.min(1, elapsedDays / daysInFy);
 
-  const expectedDaysOffToDate = policy.annualDaysOffTarget * elapsedFraction;
-  const burnoutRiskThreshold = expectedDaysOffToDate * 0.75;
+  // Use full-year targets since we show full-year planned data
+  const expectedDaysOffToDate = policy.annualDaysOffTarget;
+  const burnoutRiskThreshold = policy.annualDaysOffTarget * 0.5;
 
   const daysOffStatus: "burnout_risk" | "on_track" | "above_target" =
     totalDaysOffToDate < burnoutRiskThreshold
