@@ -110,7 +110,7 @@ export function TransactionList({ transactions, totalIncome, totalExpenses, onEd
                   return (
                     <TableRow
                       key={txn.id}
-                      className={`hover:bg-muted/50 ${txn.source !== "manual" ? "opacity-80" : "cursor-pointer"}`}
+                      className={`hover:bg-muted/50 ${txn.status === "estimated" ? "opacity-40" : txn.source !== "manual" ? "opacity-80" : "cursor-pointer"}`}
                       onClick={() => txn.source === "manual" && onEdit(txn)}
                     >
                       <TableCell className="text-sm tabular-nums">{formatDate(txn.date)}</TableCell>
