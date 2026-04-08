@@ -249,6 +249,15 @@ export const expenseRecurring = sqliteTable("expense_recurring", {
   createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
 });
 
+export const expenseRecurringSkips = sqliteTable("expense_recurring_skips", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  recurringId: integer("recurring_id").notNull().references(() => expenseRecurring.id),
+  monthKey: text("month_key").notNull(), // "YYYY-MM"
+  createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+}, (table) => [
+  uniqueIndex("expense_recurring_skip_month_idx").on(table.recurringId, table.monthKey),
+]);
+
 export const expenseTargets = sqliteTable("expense_targets", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
@@ -264,4 +273,94 @@ export const expenseTargetAccounts = sqliteTable("expense_target_accounts", {
   accountId: integer("account_id").notNull().references(() => expenseAccounts.id),
 }, (table) => [
   uniqueIndex("target_account_idx").on(table.targetId, table.accountId),
+]);
+
+// Bank Statement Entries - raw imported rows from bank statements
+export const bankStatementEntries = sqliteTable("bank_statement_entries", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  date: text("date").notNull(), // "YYYY-MM-DD"
+  description: text("description").notNull(),
+  time: text("time"), // "HH:MM AM/PM" from PhonePe
+  phonepeName: text("phonepe_name"), // payee/payer name from PhonePe
+  refNo: text("ref_no"),
+  debit: real("debit"),
+  credit: real("credit"),
+  balance: real("balance"),
+  accountNumber: text("account_number"),
+  bankName: text("bank_name"),
+  // Classification fields (filled when user classifies)
+  expenseName: text("expense_name"),
+  expenseType: text("expense_type", { enum: ["income", "expense", "transfer"] }),
+  categoryId: integer("category_id").references(() => expenseAccounts.id),
+  accountId: integer("account_id").references(() => expenseAccounts.id),
+  fromAccountId: integer("from_account_id").references(() => expenseAccounts.id),
+  toAccountId: integer("to_account_id").references(() => expenseAccounts.id),
+  note: text("note"),
+  tags: text("tags"),
+  isClassified: integer("is_classified", { mode: "boolean" }).notNull().default(false),
+  isDismissed: integer("is_dismissed", { mode: "boolean" }).notNull().default(false),
+  // Link to expense transaction once synced
+  expenseTransactionId: integer("expense_transaction_id").references(() => expenseTransactions.id),
+  createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+});
+
+export const bankStatementSplits = sqliteTable("bank_statement_splits", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  bankStatementEntryId: integer("bank_statement_entry_id").notNull().references(() => bankStatementEntries.id),
+  expenseTransactionId: integer("expense_transaction_id").notNull().references(() => expenseTransactions.id),
+  expenseName: text("expense_name").notNull(),
+  amount: real("amount").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+}, (table) => [
+  uniqueIndex("bank_statement_split_tx_idx").on(table.expenseTransactionId),
+]);
+
+export const extraDayBuckets = sqliteTable("extra_day_buckets", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+});
+
+export const extraDayTargets = sqliteTable("extra_day_targets", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  bucketId: integer("bucket_id").notNull().references(() => extraDayBuckets.id),
+  name: text("name").notNull(),
+  targetType: text("target_type", { enum: ["day", "money"] }).notNull(),
+  goalDays: real("goal_days"),
+  goalAmountInr: real("goal_amount_inr"),
+  status: text("status", { enum: ["active", "completed", "archived"] }).notNull().default("active"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  notes: text("notes"),
+  createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+}, (table) => [
+  uniqueIndex("extra_day_target_name_idx").on(table.bucketId, table.name),
+]);
+
+export const extraDayAllocations = sqliteTable("extra_day_allocations", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  bucketId: integer("bucket_id").notNull().references(() => extraDayBuckets.id),
+  targetId: integer("target_id").references(() => extraDayTargets.id),
+  financialYear: text("financial_year").notNull(),
+  kind: text("kind", { enum: ["day", "money"] }).notNull(),
+  confirmedDate: text("confirmed_date").notNull(),
+  days: real("days").notNull(),
+  dailyRate: real("daily_rate"),
+  amountInr: real("amount_inr"),
+  notes: text("notes"),
+  createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+});
+
+export const reminders = sqliteTable("reminders", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  type: text("type").notNull(),
+  monthKey: text("month_key").notNull(),
+  status: text("status", { enum: ["pending", "dismissed"] }).notNull().default("pending"),
+  metadata: text("metadata"),
+  createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+  dismissedAt: text("dismissed_at"),
+}, (table) => [
+  uniqueIndex("reminder_type_month_idx").on(table.type, table.monthKey),
 ]);
