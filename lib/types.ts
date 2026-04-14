@@ -323,6 +323,7 @@ export interface BankStatementEntry {
   note: string | null;
   tags: string | null;
   isClassified: boolean;
+  isDismissed: boolean;
   expenseTransactionId: number | null;
   createdAt: string;
   // Joined fields

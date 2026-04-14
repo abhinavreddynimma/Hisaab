@@ -71,6 +71,13 @@
       "when": 1776192000000,
       "tag": "0009_bank_statement_entries",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1776278400000,
+      "tag": "0012_bank_statement_dismiss",
+      "breakpoints": true
     }
   ]
 }

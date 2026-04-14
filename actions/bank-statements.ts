@@ -10,7 +10,7 @@ export async function getBankStatementEntries(filters?: {
   startDate?: string;
   endDate?: string;
 }): Promise<BankStatementEntry[]> {
-  const conditions = [];
+  const conditions = [eq(bankStatementEntries.isDismissed, false)];
   if (filters?.startDate) conditions.push(gte(bankStatementEntries.date, filters.startDate));
   if (filters?.endDate) conditions.push(lte(bankStatementEntries.date, filters.endDate));
 
@@ -34,11 +34,12 @@ export async function getBankStatementEntries(filters?: {
       note: bankStatementEntries.note,
       tags: bankStatementEntries.tags,
       isClassified: bankStatementEntries.isClassified,
+      isDismissed: bankStatementEntries.isDismissed,
       expenseTransactionId: bankStatementEntries.expenseTransactionId,
       createdAt: bankStatementEntries.createdAt,
     })
     .from(bankStatementEntries)
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .where(and(...conditions))
     .orderBy(bankStatementEntries.date);
 
   return rows as BankStatementEntry[];
@@ -162,6 +163,42 @@ export async function unclassifyBankStatementEntry(id: number) {
   revalidatePath("/expenses");
 }
 
+export async function dismissBankStatementEntry(id: number) {
+  const [entry] = await db
+    .select()
+    .from(bankStatementEntries)
+    .where(eq(bankStatementEntries.id, id));
+
+  if (!entry) throw new Error("Entry not found");
+
+  // If classified, remove the linked expense transaction first
+  if (entry.expenseTransactionId) {
+    await db
+      .delete(expenseTransactions)
+      .where(eq(expenseTransactions.id, entry.expenseTransactionId));
+  }
+
+  await db
+    .update(bankStatementEntries)
+    .set({
+      isDismissed: true,
+      isClassified: false,
+      expenseName: null,
+      expenseType: null,
+      categoryId: null,
+      accountId: null,
+      fromAccountId: null,
+      toAccountId: null,
+      note: null,
+      tags: null,
+      expenseTransactionId: null,
+    })
+    .where(eq(bankStatementEntries.id, id));
+
+  revalidatePath("/expenses-2");
+  revalidatePath("/expenses");
+}
+
 export async function importBankStatementEntries(
   entries: {
     date: string;
@@ -176,8 +213,24 @@ export async function importBankStatementEntries(
 ) {
   if (entries.length === 0) return;
 
+  // Get all existing refNos (including dismissed) to avoid re-adding
+  const existing = await db
+    .select({ refNo: bankStatementEntries.refNo, date: bankStatementEntries.date, debit: bankStatementEntries.debit, credit: bankStatementEntries.credit })
+    .from(bankStatementEntries);
+
+  const existingKeys = new Set(
+    existing.map(e => `${e.date}|${e.refNo || ""}|${e.debit || ""}|${e.credit || ""}`)
+  );
+
+  const newEntries = entries.filter(e => {
+    const key = `${e.date}|${e.refNo || ""}|${e.debit || ""}|${e.credit || ""}`;
+    return !existingKeys.has(key);
+  });
+
+  if (newEntries.length === 0) return;
+
   await db.insert(bankStatementEntries).values(
-    entries.map(e => ({
+    newEntries.map(e => ({
       date: e.date,
       description: e.description,
       refNo: e.refNo || null,
@@ -193,7 +246,7 @@ export async function importBankStatementEntries(
 }
 
 export async function getBankStatementStats(startDate?: string, endDate?: string) {
-  const conditions = [];
+  const conditions = [eq(bankStatementEntries.isDismissed, false)];
   if (startDate) conditions.push(gte(bankStatementEntries.date, startDate));
   if (endDate) conditions.push(lte(bankStatementEntries.date, endDate));
 
@@ -205,7 +258,7 @@ export async function getBankStatementStats(startDate?: string, endDate?: string
       totalCredit: sql<number>`coalesce(sum(${bankStatementEntries.credit}), 0)`,
     })
     .from(bankStatementEntries)
-    .where(conditions.length > 0 ? and(...conditions) : undefined);
+    .where(and(...conditions));
 
   return {
     total: stats?.total || 0,
