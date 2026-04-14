@@ -164,10 +164,18 @@ export function BankStatementsClient({
                     </TableCell>
                     <TableCell className="text-sm tabular-nums">{formatDate(entry.date)}</TableCell>
                     <TableCell>
-                      <p className="text-sm font-medium">{extractTitle(entry.description)}</p>
-                      <p className="text-[11px] font-light text-muted-foreground/60 leading-tight line-clamp-1 mt-0.5">
-                        {entry.description.replace(/\n/g, " ").trim()}
-                      </p>
+                      {entry.isClassified && entry.expenseName ? (
+                        <>
+                          <p className="text-sm font-medium">{entry.expenseName}</p>
+                          <p className="text-[11px] font-light text-muted-foreground/60 leading-tight line-clamp-1 mt-0.5">
+                            {entry.description.replace(/\n/g, " ").trim()}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-sm leading-tight line-clamp-2">
+                          {entry.description.replace(/\n/g, " ").trim()}
+                        </p>
+                      )}
                     </TableCell>
                     <TableCell className="text-right font-medium tabular-nums text-rose-600">
                       {entry.debit ? formatCurrency(entry.debit) : ""}
