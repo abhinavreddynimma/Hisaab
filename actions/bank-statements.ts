@@ -19,6 +19,8 @@ export async function getBankStatementEntries(filters?: {
       id: bankStatementEntries.id,
       date: bankStatementEntries.date,
       description: bankStatementEntries.description,
+      time: bankStatementEntries.time,
+      phonepeName: bankStatementEntries.phonepeName,
       refNo: bankStatementEntries.refNo,
       debit: bankStatementEntries.debit,
       credit: bankStatementEntries.credit,

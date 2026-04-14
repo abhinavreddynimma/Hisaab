@@ -271,6 +271,8 @@ export const bankStatementEntries = sqliteTable("bank_statement_entries", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   date: text("date").notNull(), // "YYYY-MM-DD"
   description: text("description").notNull(),
+  time: text("time"), // "HH:MM AM/PM" from PhonePe
+  phonepeName: text("phonepe_name"), // payee/payer name from PhonePe
   refNo: text("ref_no"),
   debit: real("debit"),
   credit: real("credit"),

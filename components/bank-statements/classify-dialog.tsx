@@ -43,7 +43,7 @@ export function ClassifyDialog({ open, onClose, entry, accounts }: ClassifyDialo
         setToAccountId(entry.toAccountId ? String(entry.toAccountId) : "");
         setNote(entry.note || "");
       } else {
-        setExpenseName(extractTitle(entry.description));
+        setExpenseName(entry.phonepeName || extractTitle(entry.description));
         setType(entry.credit ? "income" : "expense");
         setCategoryId("");
         setAccountId("");
