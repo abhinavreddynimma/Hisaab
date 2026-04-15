@@ -260,6 +260,7 @@ export interface ExpenseTransaction {
   id: number;
   type: ExpenseTransactionType;
   date: string;
+  time?: string | null;
   amount: number;
   categoryId: number | null;
   accountId: number | null;
@@ -303,6 +304,61 @@ export interface ExpenseTarget {
   fyAverage?: number;
 }
 
+// Bank Statement types
+export interface BankStatementEntry {
+  id: number;
+  date: string;
+  description: string;
+  time: string | null;
+  phonepeName: string | null;
+  refNo: string | null;
+  debit: number | null;
+  credit: number | null;
+  balance: number | null;
+  accountNumber: string | null;
+  bankName: string | null;
+  expenseName: string | null;
+  expenseType: ExpenseTransactionType | null;
+  categoryId: number | null;
+  accountId: number | null;
+  fromAccountId: number | null;
+  toAccountId: number | null;
+  note: string | null;
+  tags: string | null;
+  isClassified: boolean;
+  isDismissed: boolean;
+  expenseTransactionId: number | null;
+  createdAt: string;
+  splitCount?: number;
+  splits?: BankStatementSplit[];
+  // Joined fields
+  categoryName?: string;
+  accountName?: string;
+  fromAccountName?: string;
+  toAccountName?: string;
+}
+
+export interface BankStatementSplit {
+  id: number;
+  bankStatementEntryId: number;
+  expenseTransactionId: number;
+  expenseName: string;
+  amount: number;
+  sortOrder: number;
+  createdAt: string;
+  expenseType: ExpenseTransactionType;
+  categoryId: number | null;
+  accountId: number | null;
+  fromAccountId: number | null;
+  toAccountId: number | null;
+  note: string | null;
+  tags: string | null;
+  categoryName?: string;
+  accountName?: string;
+  fromAccountName?: string;
+  toAccountName?: string;
+}
+
 export type RecurringFrequency = "monthly" | "quarterly" | "yearly";
 
 export interface ExpenseRecurring {
@@ -322,4 +378,95 @@ export interface ExpenseRecurring {
   createdAt: string;
   categoryName?: string;
   accountName?: string;
+}
+
+export type ExtraDayTargetType = "day" | "money";
+export type ExtraDayAllocationKind = "day" | "money";
+export type ExtraDayTargetStatus = "active" | "completed" | "archived";
+
+export interface ExtraDayBucket {
+  id: number;
+  name: string;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface ExtraDayTarget {
+  id: number;
+  bucketId: number;
+  name: string;
+  targetType: ExtraDayTargetType;
+  goalDays: number | null;
+  goalAmountInr: number | null;
+  status: ExtraDayTargetStatus;
+  sortOrder: number;
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface ExtraDayAllocation {
+  id: number;
+  bucketId: number;
+  targetId: number | null;
+  financialYear: string;
+  kind: ExtraDayAllocationKind;
+  confirmedDate: string;
+  days: number;
+  dailyRate: number | null;
+  amountInr: number | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface ExtraDaysBalanceData {
+  leaveBalance: number;
+  totalExtraWorking: number;
+  leavesAllowed: number;
+  leavesTaken: number;
+  totalWeekdays: number;
+  publicHolidayWeekdays: number;
+  totalPossibleWorkDays: number;
+  totalDaysWorked: number;
+  extraWorkingPublicHolidays: number;
+  extraWorkingWeekends: number;
+}
+
+export interface ExtraDayTargetSummary {
+  target: ExtraDayTarget;
+  fundedDays: number;
+  fundedAmountInr: number;
+  remainingDays: number;
+  remainingAmountInr: number;
+  fundedPct: number;
+  readinessLabel: string;
+  isReady: boolean;
+}
+
+export interface ExtraDayBucketSummary {
+  bucket: ExtraDayBucket;
+  targets: ExtraDayTargetSummary[];
+  totalDays: number;
+  totalAmountInr: number;
+  reserveDayDays: number;
+  reserveMoneyDays: number;
+  reserveMoneyAmountInr: number;
+}
+
+export interface ExtraDayAllocationDetail extends ExtraDayAllocation {
+  bucketName: string;
+  targetName: string | null;
+}
+
+export interface ExtraDaysPlannerData {
+  financialYear: string;
+  balanceData: ExtraDaysBalanceData;
+  rawExtraBalance: number;
+  allocatableDays: number;
+  allocatedDays: number;
+  remainingPlannerDays: number;
+  overAllocatedDays: number;
+  totalAllocatedAmountInr: number;
+  buckets: ExtraDayBucketSummary[];
+  allocations: ExtraDayAllocationDetail[];
 }
