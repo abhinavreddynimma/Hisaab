@@ -226,6 +226,7 @@ export async function getExpenseTransactions(filters: {
   const conditions = [
     sql`${expenseTransactions.date} >= ${filters.startDate}`,
     sql`${expenseTransactions.date} <= ${filters.endDate}`,
+    sql`${expenseTransactions.status} != 'dismissed'`,
   ];
 
   if (filters.type) {
@@ -354,6 +355,16 @@ export async function updateExpenseTransaction(id: number, data: {
 
 export async function deleteExpenseTransaction(id: number): Promise<{ success: boolean }> {
   await assertAdminAccess();
+
+  // For estimated recurring transactions, dismiss instead of delete so sync doesn't re-create them
+  const txn = db.select().from(expenseTransactions).where(eq(expenseTransactions.id, id)).get();
+  if (txn && txn.source === "recurring" && txn.status === "estimated") {
+    db.update(expenseTransactions)
+      .set({ status: "dismissed" })
+      .where(eq(expenseTransactions.id, id))
+      .run();
+    return { success: true };
+  }
 
   db.transaction((tx) => {
     const splitLinks = tx
