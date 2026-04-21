@@ -46,6 +46,7 @@ export function TransactionList({ transactions, totalIncome, totalExpenses, onEd
   const [filter, setFilter] = useState<FilterType>("all");
 
   const filtered = filter === "all" ? transactions : transactions.filter(t => t.type === filter);
+  const filteredTotal = filter !== "all" ? filtered.filter(t => t.status === "confirmed").reduce((sum, t) => sum + t.amount, 0) : 0;
 
   async function handleDelete(id: number) {
     try {
@@ -111,6 +112,12 @@ export function TransactionList({ transactions, totalIncome, totalExpenses, onEd
             )}
           </Button>
         ))}
+        {filter !== "all" && (
+          <span className="ml-2 text-xs text-muted-foreground tabular-nums">
+            Total: <span className={`font-semibold ${filter === "income" ? "text-emerald-600" : filter === "expense" ? "text-rose-600" : "text-blue-600"}`}>{formatCurrency(filteredTotal)}</span>
+            <span className="ml-1 opacity-60">({filtered.length} txns)</span>
+          </span>
+        )}
       </div>
 
       <Card>
