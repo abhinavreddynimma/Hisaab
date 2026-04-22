@@ -323,3 +323,156 @@ export interface ExpenseRecurring {
   categoryName?: string;
   accountName?: string;
 }
+
+// === Unified Statement Ingestion Pipeline ===
+export type StatementSource = "sbi" | "phonepe" | "hdfc" | "icici" | "card" | "other";
+export type ImportStatus = "pending" | "processing" | "completed" | "failed";
+export type TransactionDirection = "credit" | "debit";
+export type MatchStatus = "auto_matched" | "manual_matched" | "unmatched" | "review" | "ignored";
+export type MatchType = "exact" | "strong" | "fuzzy" | "manual";
+
+export interface StatementImport {
+  id: number;
+  source: StatementSource;
+  fileName: string;
+  originalName: string;
+  fileHash: string;
+  dateRangeStart: string | null;
+  dateRangeEnd: string | null;
+  rowCount: number;
+  status: ImportStatus;
+  errorMessage: string | null;
+  createdAt: string;
+}
+
+export interface StatementRow {
+  id: number;
+  importId: number;
+  date: string;
+  amount: number;
+  direction: TransactionDirection;
+  balance: number | null;
+  rawDescription: string;
+  normalizedPayee: string | null;
+  reference: string | null;
+  fingerprint: string;
+  rawJson: string | null;
+  canonicalTransactionId: number | null;
+  createdAt: string;
+}
+
+export interface CanonicalTransaction {
+  id: number;
+  date: string;
+  amount: number;
+  direction: TransactionDirection;
+  normalizedPayee: string | null;
+  reference: string | null;
+  description: string | null;
+  categoryId: number | null;
+  accountId: number | null;
+  matchStatus: MatchStatus;
+  expenseTransactionId: number | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface CanonicalTransactionSource {
+  id: number;
+  canonicalTransactionId: number;
+  statementRowId: number;
+  matchType: MatchType;
+  confidence: number | null;
+  createdAt: string;
+}
+
+export type ExtraDayTargetType = "day" | "money";
+export type ExtraDayAllocationKind = "day" | "money";
+export type ExtraDayTargetStatus = "active" | "completed" | "archived";
+
+export interface ExtraDayBucket {
+  id: number;
+  name: string;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface ExtraDayTarget {
+  id: number;
+  bucketId: number;
+  name: string;
+  targetType: ExtraDayTargetType;
+  goalDays: number | null;
+  goalAmountInr: number | null;
+  status: ExtraDayTargetStatus;
+  sortOrder: number;
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface ExtraDayAllocation {
+  id: number;
+  bucketId: number;
+  targetId: number | null;
+  financialYear: string;
+  kind: ExtraDayAllocationKind;
+  confirmedDate: string;
+  days: number;
+  dailyRate: number | null;
+  amountInr: number | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface ExtraDaysBalanceData {
+  leaveBalance: number;
+  totalExtraWorking: number;
+  leavesAllowed: number;
+  leavesTaken: number;
+  totalWeekdays: number;
+  publicHolidayWeekdays: number;
+  totalPossibleWorkDays: number;
+  totalDaysWorked: number;
+  extraWorkingPublicHolidays: number;
+  extraWorkingWeekends: number;
+}
+
+export interface ExtraDayTargetSummary {
+  target: ExtraDayTarget;
+  fundedDays: number;
+  fundedAmountInr: number;
+  remainingDays: number;
+  remainingAmountInr: number;
+  fundedPct: number;
+  readinessLabel: string;
+  isReady: boolean;
+}
+
+export interface ExtraDayBucketSummary {
+  bucket: ExtraDayBucket;
+  targets: ExtraDayTargetSummary[];
+  totalDays: number;
+  totalAmountInr: number;
+  reserveDayDays: number;
+  reserveMoneyDays: number;
+  reserveMoneyAmountInr: number;
+}
+
+export interface ExtraDayAllocationDetail extends ExtraDayAllocation {
+  bucketName: string;
+  targetName: string | null;
+}
+
+export interface ExtraDaysPlannerData {
+  financialYear: string;
+  balanceData: ExtraDaysBalanceData;
+  rawExtraBalance: number;
+  allocatableDays: number;
+  allocatedDays: number;
+  remainingPlannerDays: number;
+  overAllocatedDays: number;
+  totalAllocatedAmountInr: number;
+  buckets: ExtraDayBucketSummary[];
+  allocations: ExtraDayAllocationDetail[];
+}

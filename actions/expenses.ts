@@ -39,13 +39,13 @@ export async function getExpenseAccountsGrouped(): Promise<{
   const balanceRows = db.all<{ account_id: number; balance: number }>(sql`
     SELECT account_id, SUM(balance) as balance FROM (
       SELECT account_id, SUM(CASE WHEN type = 'income' THEN amount WHEN type = 'expense' THEN -amount ELSE 0 END) as balance
-      FROM expense_transactions WHERE account_id IS NOT NULL GROUP BY account_id
+      FROM expense_transactions WHERE account_id IS NOT NULL AND status = 'confirmed' GROUP BY account_id
       UNION ALL
       SELECT from_account_id as account_id, SUM(-amount - COALESCE(fees, 0)) as balance
-      FROM expense_transactions WHERE type = 'transfer' AND from_account_id IS NOT NULL GROUP BY from_account_id
+      FROM expense_transactions WHERE type = 'transfer' AND from_account_id IS NOT NULL AND status = 'confirmed' GROUP BY from_account_id
       UNION ALL
       SELECT to_account_id as account_id, SUM(amount) as balance
-      FROM expense_transactions WHERE type = 'transfer' AND to_account_id IS NOT NULL GROUP BY to_account_id
+      FROM expense_transactions WHERE type = 'transfer' AND to_account_id IS NOT NULL AND status = 'confirmed' GROUP BY to_account_id
     ) GROUP BY account_id
   `);
   for (const row of balanceRows) {
@@ -335,6 +335,7 @@ export async function getExpenseStats(startDate: string, endDate: string): Promi
     .where(and(
       sql`${expenseTransactions.date} >= ${startDate}`,
       sql`${expenseTransactions.date} <= ${endDate}`,
+      eq(expenseTransactions.status, "confirmed"),
     ))
     .all();
 
@@ -493,6 +494,7 @@ export async function getExpenseMonthlyOverview(year: number, month: number): Pr
     .where(and(
       sql`${expenseTransactions.date} >= ${start}`,
       sql`${expenseTransactions.date} <= ${end}`,
+      eq(expenseTransactions.status, "confirmed"),
     ))
     .all();
 
@@ -539,6 +541,7 @@ export async function getExpenseFYOverview(financialYear: string): Promise<{
     .where(and(
       sql`${expenseTransactions.date} >= ${start}`,
       sql`${expenseTransactions.date} <= ${end}`,
+      eq(expenseTransactions.status, "confirmed"),
     ))
     .all();
 

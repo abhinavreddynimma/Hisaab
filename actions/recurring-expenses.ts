@@ -1,11 +1,21 @@
 "use server";
 
 import { db } from "@/db";
-import { expenseRecurring, expenseTransactions, expenseAccounts } from "@/db/schema";
+import { expenseRecurring, expenseRecurringSkips, expenseTransactions, expenseAccounts } from "@/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { assertAdminAccess } from "@/lib/auth";
 import type { ExpenseRecurring, RecurringFrequency, ExpenseTransactionType } from "@/lib/types";
 import { revalidatePath } from "next/cache";
+
+function parseRecurringSourceKey(sourceId: string | null): { recurringId: number; monthKey: string } | null {
+  if (!sourceId) return null;
+  const match = /^(\d+):(\d{4}-\d{2})$/.exec(sourceId);
+  if (!match) return null;
+  return {
+    recurringId: Number(match[1]),
+    monthKey: match[2],
+  };
+}
 
 // ============================================================
 // CRUD
@@ -111,10 +121,14 @@ export async function deleteRecurringExpense(id: number): Promise<{ success: boo
     .where(
       and(
         eq(expenseTransactions.source, "recurring"),
-        eq(expenseTransactions.sourceId, String(id)),
+        sql`${expenseTransactions.sourceId} like ${`${id}:%`}`,
         eq(expenseTransactions.status, "estimated"),
       ),
     )
+    .run();
+
+  db.delete(expenseRecurringSkips)
+    .where(eq(expenseRecurringSkips.recurringId, id))
     .run();
 
   db.delete(expenseRecurring).where(eq(expenseRecurring.id, id)).run();
@@ -141,7 +155,7 @@ export async function toggleRecurringActive(id: number): Promise<{ success: bool
       .where(
         and(
           eq(expenseTransactions.source, "recurring"),
-          eq(expenseTransactions.sourceId, String(id)),
+          sql`${expenseTransactions.sourceId} like ${`${id}:%`}`,
           eq(expenseTransactions.status, "estimated"),
           sql`${expenseTransactions.date} >= ${today}`,
         ),
@@ -217,6 +231,17 @@ export async function syncRecurringForMonth(year: number, month: number): Promis
     .all();
 
   const existingSourceIds = new Set(existingTxns.map((t) => t.sourceId));
+  const skippedMonths = db
+    .select({
+      recurringId: expenseRecurringSkips.recurringId,
+      monthKey: expenseRecurringSkips.monthKey,
+    })
+    .from(expenseRecurringSkips)
+    .where(eq(expenseRecurringSkips.monthKey, `${year}-${String(month).padStart(2, "0")}`))
+    .all();
+  const skippedSourceIds = new Set(
+    skippedMonths.map((item) => `${item.recurringId}:${item.monthKey}`)
+  );
 
   let created = 0;
   for (const rule of rules) {
@@ -224,7 +249,7 @@ export async function syncRecurringForMonth(year: number, month: number): Promis
 
     // sourceId format: "recurringId:YYYY-MM" to allow one per rule per month
     const sourceKey = `${rule.id}:${year}-${String(month).padStart(2, "0")}`;
-    if (existingSourceIds.has(sourceKey)) continue;
+    if (existingSourceIds.has(sourceKey) || skippedSourceIds.has(sourceKey)) continue;
 
     const day = Math.min(rule.dayOfMonth, lastDay);
     const date = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -278,6 +303,40 @@ export async function confirmRecurringTransaction(
 
   db.update(expenseTransactions)
     .set(updateData)
+    .where(eq(expenseTransactions.id, transactionId))
+    .run();
+
+  revalidatePath("/expenses");
+  return { success: true };
+}
+
+export async function skipRecurringTransactionForMonth(transactionId: number): Promise<{ success: boolean }> {
+  await assertAdminAccess();
+
+  const txn = db
+    .select()
+    .from(expenseTransactions)
+    .where(eq(expenseTransactions.id, transactionId))
+    .get();
+
+  if (!txn || txn.source !== "recurring") {
+    return { success: false };
+  }
+
+  const parsed = parseRecurringSourceKey(txn.sourceId);
+  if (!parsed) {
+    return { success: false };
+  }
+
+  db.insert(expenseRecurringSkips)
+    .values({
+      recurringId: parsed.recurringId,
+      monthKey: parsed.monthKey,
+    })
+    .onConflictDoNothing()
+    .run();
+
+  db.delete(expenseTransactions)
     .where(eq(expenseTransactions.id, transactionId))
     .run();
 

@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/db";
-import { taxPayments, taxPaymentAttachments, invoices } from "@/db/schema";
+import { taxPayments, taxPaymentAttachments, invoices, projects } from "@/db/schema";
 import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
 import type { TaxPayment, TaxPaymentAttachment, TaxQuarter, DayEntry } from "@/lib/types";
 import { getDayEntriesForMonth } from "./day-entries";
@@ -13,6 +13,14 @@ import { getFrenchHolidays } from "@/lib/constants";
 import { assertAdminAccess, assertAuthenticatedAccess } from "@/lib/auth";
 import { unlink } from "fs/promises";
 import path from "path";
+
+export type TaxProjectionMode = "auto" | "invoice" | "calendar";
+
+type ProjectionCalendarBreakdown = {
+  weekdayWorkingDays: number;
+  publicHolidayWorkingDays: number;
+  weekendWorkingDays: number;
+};
 
 export async function getTaxPayments(financialYear?: string): Promise<TaxPayment[]> {
   await assertAdminAccess();
@@ -214,11 +222,21 @@ export async function getTaxComputation(financialYear: string): Promise<{
   };
 }
 
-export async function getTaxProjection(financialYear: string): Promise<{
-  monthlyBreakdown: { month: string; actual: number; projected: boolean; workingDays?: number; invoiceBased?: boolean }[];
+export async function getTaxProjection(financialYear: string, mode: TaxProjectionMode = "auto"): Promise<{
+  monthlyBreakdown: {
+    month: string;
+    actual: number;
+    projected: boolean;
+    workingDays?: number;
+    invoiceBased?: boolean;
+    calendarBreakdown?: ProjectionCalendarBreakdown;
+  }[];
   monthsElapsed: number;
   monthsRemaining: number;
   avgRate: number;
+  mode: TaxProjectionMode;
+  modeSummary: string;
+  rateSourceLabel: string;
   projectedGrossReceipts: number;
   projectedPresumptiveIncome: number;
   projectedTaxableIncome: number;
@@ -286,40 +304,75 @@ export async function getTaxProjection(financialYear: string): Promise<{
   }
   // Don't count the current month as elapsed — it's still in progress
   // and we likely haven't received payment yet, so project it instead.
-  const monthsElapsed = Math.min(12, Math.max(1, currentIdx));
+  const invoiceMonthsElapsed = Math.min(12, Math.max(0, currentIdx));
+  const monthsElapsed = mode === "calendar" ? 0 : invoiceMonthsElapsed;
   const monthsRemaining = 12 - monthsElapsed;
 
-  // Use the most recent paid invoice's EUR-INR rate as current rate for projections
+  const defaultProjectId = await getDefaultProjectId();
+  let projectCurrency = "EUR";
+  if (defaultProjectId) {
+    const project = db
+      .select({ currency: projects.currency })
+      .from(projects)
+      .where(eq(projects.id, defaultProjectId))
+      .get();
+    if (project?.currency) {
+      projectCurrency = project.currency;
+    }
+  }
+
+  // Use the most recent paid invoice's FX rate, otherwise fall back to
+  // a live currency rate for the default project, then to a static EUR-INR fallback.
   const sortedByDate = [...paidInvoices]
     .filter((i) => i.paidDate && i.eurToInrRate)
     .sort((a, b) => b.paidDate!.localeCompare(a.paidDate!));
-  const currentRate = sortedByDate.length > 0 ? sortedByDate[0].eurToInrRate! : 0;
+  let currentRate = 0;
+  let rateSourceLabel = "No FX data";
+  if (projectCurrency === "INR") {
+    currentRate = 1;
+    rateSourceLabel = "Using INR project rate";
+  } else if (sortedByDate.length > 0) {
+    currentRate = sortedByDate[0].eurToInrRate!;
+    rateSourceLabel = "Using latest paid invoice FX rate";
+  } else {
+    const liveRate = await getLiveRateForCurrency(projectCurrency);
+    if (liveRate) {
+      currentRate = liveRate;
+      rateSourceLabel = `Using live ${projectCurrency}-INR rate`;
+    } else {
+      currentRate = 90;
+      rateSourceLabel = "Using fallback EUR-INR rate";
+    }
+  }
 
   // Compute average deduction % from paid invoices
   const totalEur = paidInvoices.reduce((s, i) => s + (i.total ?? 0), 0);
   const avgRate = totalEur > 0
     ? paidInvoices.reduce((s, i) => s + (i.eurToInrRate ?? 0) * (i.total ?? 0), 0) / totalEur
-    : 0;
+    : currentRate;
   const totalGrossInr = totalEur * avgRate;
   const totalDeductions = paidInvoices.reduce((s, i) => s + (i.platformCharges ?? 0) + (i.bankCharges ?? 0), 0);
   const deductionPct = totalGrossInr > 0 ? totalDeductions / totalGrossInr : 0;
 
   // Query sent/draft invoices with due dates in the FY for projection
-  const openInvoices = db
-    .select({
-      total: invoices.total,
-      dueDate: invoices.dueDate,
-      status: invoices.status,
-    })
-    .from(invoices)
-    .where(
-      and(
-        sql`${invoices.status} IN ('sent', 'draft')`,
-        sql`${invoices.dueDate} >= ${fyStart}`,
-        sql`${invoices.dueDate} <= ${fyEnd}`,
+  const shouldUseInvoices = mode !== "calendar";
+  const openInvoices = shouldUseInvoices
+    ? db
+      .select({
+        total: invoices.total,
+        dueDate: invoices.dueDate,
+        status: invoices.status,
+      })
+      .from(invoices)
+      .where(
+        and(
+          sql`${invoices.status} IN ('sent', 'draft')`,
+          sql`${invoices.dueDate} >= ${fyStart}`,
+          sql`${invoices.dueDate} <= ${fyEnd}`,
+        )
       )
-    )
-    .all();
+      .all()
+    : [];
 
   // Group open invoice totals by FY month index (based on due date)
   const invoiceByMonth: number[] = Array(12).fill(0);
@@ -341,9 +394,9 @@ export async function getTaxProjection(financialYear: string): Promise<{
   }
 
   // Project remaining months: prefer sent invoices, fall back to working-days estimate
-  const defaultProjectId = await getDefaultProjectId();
   const projectedMonthly: number[] = Array(12).fill(0);
   const projectedWorkingDays: (number | undefined)[] = Array(12).fill(undefined);
+  const projectedCalendarBreakdown: (ProjectionCalendarBreakdown | undefined)[] = Array(12).fill(undefined);
 
   for (let i = monthsElapsed; i < 12; i++) {
     if (hasInvoiceForMonth[i]) {
@@ -359,16 +412,18 @@ export async function getTaxProjection(financialYear: string): Promise<{
       const holidays = getFrenchHolidays(prevCalYear);
       const augmented = withImplicitWorkingDays(entries as DayEntry[], prevCalYear, prevCalMonth, holidays);
       const summary = calculateMonthSummary(augmented);
+      const calendarBreakdown = calculateProjectionCalendarBreakdown(augmented, holidays);
 
       const monthKey = `${prevCalYear}-${String(prevCalMonth).padStart(2, "0")}`;
       const dailyRate = defaultProjectId ? await getEffectiveRate(defaultProjectId, monthKey) : 0;
 
-      const eurAmount = summary.effectiveWorkingDays * dailyRate;
-      const grossInr = eurAmount * currentRate;
+      const baseAmount = summary.effectiveWorkingDays * dailyRate;
+      const grossInr = projectCurrency === "INR" ? baseAmount : baseAmount * currentRate;
       const netInr = grossInr * (1 - deductionPct);
 
       projectedMonthly[i] = Math.round(netInr);
       projectedWorkingDays[i] = summary.effectiveWorkingDays;
+      projectedCalendarBreakdown[i] = calendarBreakdown;
     }
   }
 
@@ -378,13 +433,20 @@ export async function getTaxProjection(financialYear: string): Promise<{
   // Build monthly breakdown
   const monthlyBreakdown = MONTH_LABELS.map((label, i) => ({
     month: label,
-    actual: i < monthsElapsed ? monthlyActual[i] : projectedMonthly[i],
-    projected: i >= monthsElapsed,
+    actual: mode === "calendar"
+      ? projectedMonthly[i]
+      : i < monthsElapsed
+        ? monthlyActual[i]
+        : projectedMonthly[i],
+    projected: mode === "calendar" ? true : i >= monthsElapsed,
     workingDays: projectedWorkingDays[i],
     invoiceBased: i >= monthsElapsed && hasInvoiceForMonth[i],
+    calendarBreakdown: projectedCalendarBreakdown[i],
   }));
 
-  const projectedGrossReceipts = actualTotal + projectedTotal;
+  const projectedGrossReceipts = mode === "calendar"
+    ? projectedTotal
+    : actualTotal + projectedTotal;
   const projectedPresumptiveIncome = projectedGrossReceipts * 0.5;
   const projectedTaxableIncome = Math.max(0, projectedPresumptiveIncome);
 
@@ -404,6 +466,9 @@ export async function getTaxProjection(financialYear: string): Promise<{
     monthsElapsed,
     monthsRemaining,
     avgRate: Math.round(currentRate * 100) / 100,
+    mode,
+    modeSummary: getProjectionModeSummary(mode),
+    rateSourceLabel,
     projectedGrossReceipts: Math.round(projectedGrossReceipts),
     projectedPresumptiveIncome: Math.round(projectedPresumptiveIncome),
     projectedTaxableIncome: Math.round(projectedTaxableIncome),
@@ -415,6 +480,64 @@ export async function getTaxProjection(financialYear: string): Promise<{
     totalPaid,
     projectedBalance,
   };
+}
+
+function calculateProjectionCalendarBreakdown(
+  entries: DayEntry[],
+  holidays: Map<string, string>,
+): ProjectionCalendarBreakdown {
+  const breakdown: ProjectionCalendarBreakdown = {
+    weekdayWorkingDays: 0,
+    publicHolidayWorkingDays: 0,
+    weekendWorkingDays: 0,
+  };
+
+  for (const entry of entries) {
+    let weight = 0;
+    if (entry.dayType === "working" || entry.dayType === "extra_working") {
+      weight = 1;
+    } else if (entry.dayType === "half_day") {
+      weight = 0.5;
+    }
+
+    if (weight === 0) continue;
+
+    if (holidays.has(entry.date)) {
+      breakdown.publicHolidayWorkingDays += weight;
+      continue;
+    }
+
+    const dayOfWeek = new Date(`${entry.date}T00:00:00`).getDay();
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      breakdown.weekendWorkingDays += weight;
+    } else {
+      breakdown.weekdayWorkingDays += weight;
+    }
+  }
+
+  return breakdown;
+}
+
+function getProjectionModeSummary(mode: TaxProjectionMode): string {
+  switch (mode) {
+    case "invoice":
+      return "Prefer sent or draft invoices where available, then fall back to calendar working days.";
+    case "calendar":
+      return "Ignore invoices and project the whole remaining period from calendar working days.";
+    default:
+      return "Auto mode uses invoices when available and falls back to calendar working days otherwise.";
+  }
+}
+
+async function getLiveRateForCurrency(currency: string): Promise<number | null> {
+  try {
+    const response = await fetch(`https://open.er-api.com/v6/latest/${currency}`, { next: { revalidate: 3600 } });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data?.rates?.INR ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function getTaxSummaryForFY(financialYear: string): Promise<{

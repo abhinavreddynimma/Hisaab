@@ -64,6 +64,27 @@
       "when": 1774742400000,
       "tag": "0008_add_performance_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1775952000000,
+      "tag": "0009_extra_days_planner",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1776078120000,
+      "tag": "0010_recurring_transaction_skips",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1776278400000,
+      "tag": "0011_unified_statement_ingestion",
+      "breakpoints": true
     }
   ]
 }
