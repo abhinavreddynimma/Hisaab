@@ -215,15 +215,15 @@ export async function getAutoPopulatedLineItems(
   });
 
   const hasMultipleRates = buckets.length > 1;
-  return buckets.map((bucket) => ({
-    description: hasMultipleRates
-      ? `${baseDescription} - Rate from ${bucket.effectiveFrom === BASE_RATE_KEY ? "base contract" : bucket.effectiveFrom}`
-      : baseDescription,
-    hsnSac: invoiceSettings.defaultHsnSac,
-    quantity: bucket.quantity,
-    unitPrice: bucket.unitPrice,
-    amount: bucket.quantity * bucket.unitPrice,
-  }));
+    return buckets.map((bucket) => ({
+      description: hasMultipleRates
+        ? `${baseDescription} - Rate from ${bucket.effectiveFrom === BASE_RATE_KEY ? "base contract" : bucket.effectiveFrom}`
+        : baseDescription,
+      hsnSac: invoiceSettings.defaultHsnSac,
+      quantity: bucket.quantity,
+      unitPrice: bucket.unitPrice,
+      amount: bucket.quantity * bucket.unitPrice,
+    }));
 }
 
 export async function createInvoice(data: {
