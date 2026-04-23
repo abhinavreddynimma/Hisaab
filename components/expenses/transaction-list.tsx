@@ -113,7 +113,16 @@ export function TransactionList({ transactions, totalIncome, totalExpenses, onEd
                       className={`hover:bg-muted/50 ${txn.status === "estimated" ? "opacity-40" : txn.source !== "manual" ? "opacity-80" : "cursor-pointer"}`}
                       onClick={() => txn.source === "manual" && onEdit(txn)}
                     >
-                      <TableCell className="text-sm tabular-nums">{formatDate(txn.date)}</TableCell>
+                      <TableCell className="text-sm tabular-nums">
+                        <div>
+                          <div>{formatDate(txn.date)}</div>
+                          {txn.time && (
+                            <div className="text-[10px] font-light text-muted-foreground/60 mt-0.5">
+                              {txn.time}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1.5">
                           <div className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${config.bg} ${config.color}`}>
