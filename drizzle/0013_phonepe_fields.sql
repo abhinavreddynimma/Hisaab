@@ -1,0 +1,1 @@
+-- Folded into 0011_bank_statement_entries.sql for fresh installs.
