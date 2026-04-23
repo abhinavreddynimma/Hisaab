@@ -265,3 +265,15 @@ export const expenseTargetAccounts = sqliteTable("expense_target_accounts", {
 }, (table) => [
   uniqueIndex("target_account_idx").on(table.targetId, table.accountId),
 ]);
+
+export const reminders = sqliteTable("reminders", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  type: text("type").notNull(),
+  monthKey: text("month_key").notNull(),
+  status: text("status", { enum: ["pending", "dismissed", "actioned"] }).notNull().default("pending"),
+  metadata: text("metadata"),
+  createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+  dismissedAt: text("dismissed_at"),
+}, (table) => [
+  uniqueIndex("reminder_type_month_idx").on(table.type, table.monthKey),
+]);
