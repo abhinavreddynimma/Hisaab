@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Trash2, X, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Plus, Link2, Check, Repeat, Pencil } from "lucide-react";
+import { Trash2, X, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Plus, Link2, Check, Repeat, Pencil, ArrowDownUp } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,8 +44,12 @@ type FilterType = (typeof FILTER_OPTIONS)[number]["value"];
 export function TransactionList({ transactions, totalIncome, totalExpenses, onEdit, onAddNew }: TransactionListProps) {
   const router = useRouter();
   const [filter, setFilter] = useState<FilterType>("all");
+  const [sort, setSort] = useState<"date" | "amount">("date");
 
-  const filtered = filter === "all" ? transactions : transactions.filter(t => t.type === filter);
+  const typeFiltered = filter === "all" ? transactions : transactions.filter(t => t.type === filter);
+  const filtered = sort === "amount"
+    ? [...typeFiltered].sort((a, b) => b.amount - a.amount)
+    : typeFiltered;
   const filteredTotal = filter !== "all" ? filtered.filter(t => t.status === "confirmed").reduce((sum, t) => sum + t.amount, 0) : 0;
 
   async function handleDelete(id: number) {
@@ -118,6 +122,17 @@ export function TransactionList({ transactions, totalIncome, totalExpenses, onEd
             <span className="ml-1 opacity-60">({filtered.length} txns)</span>
           </span>
         )}
+        <div className="ml-auto">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs gap-1"
+            onClick={() => setSort(s => s === "date" ? "amount" : "date")}
+          >
+            <ArrowDownUp className="h-3 w-3" />
+            {sort === "date" ? "Date" : "Amount"}
+          </Button>
+        </div>
       </div>
 
       <Card>
