@@ -254,7 +254,7 @@ export interface ExpenseAccount {
 }
 
 export type ExpenseTransactionSource = "manual" | "invoice" | "recurring" | "tax_payment" | "bank_statement";
-export type ExpenseTransactionStatus = "confirmed" | "estimated";
+export type ExpenseTransactionStatus = "confirmed" | "estimated" | "dismissed";
 
 export interface ExpenseTransaction {
   id: number;
