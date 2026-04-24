@@ -380,6 +380,68 @@ export interface ExpenseRecurring {
   accountName?: string;
 }
 
+// === Unified Statement Ingestion Pipeline ===
+export type StatementSource = "sbi" | "phonepe" | "hdfc" | "icici" | "card" | "other";
+export type ImportStatus = "pending" | "processing" | "completed" | "failed";
+export type TransactionDirection = "credit" | "debit";
+export type MatchStatus = "auto_matched" | "manual_matched" | "unmatched" | "review" | "ignored";
+export type MatchType = "exact" | "strong" | "fuzzy" | "manual";
+
+export interface StatementImport {
+  id: number;
+  source: StatementSource;
+  fileName: string;
+  originalName: string;
+  fileHash: string;
+  dateRangeStart: string | null;
+  dateRangeEnd: string | null;
+  rowCount: number;
+  status: ImportStatus;
+  errorMessage: string | null;
+  createdAt: string;
+}
+
+export interface StatementRow {
+  id: number;
+  importId: number;
+  date: string;
+  amount: number;
+  direction: TransactionDirection;
+  balance: number | null;
+  rawDescription: string;
+  normalizedPayee: string | null;
+  reference: string | null;
+  fingerprint: string;
+  rawJson: string | null;
+  canonicalTransactionId: number | null;
+  createdAt: string;
+}
+
+export interface CanonicalTransaction {
+  id: number;
+  date: string;
+  amount: number;
+  direction: TransactionDirection;
+  normalizedPayee: string | null;
+  reference: string | null;
+  description: string | null;
+  categoryId: number | null;
+  accountId: number | null;
+  matchStatus: MatchStatus;
+  expenseTransactionId: number | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface CanonicalTransactionSource {
+  id: number;
+  canonicalTransactionId: number;
+  statementRowId: number;
+  matchType: MatchType;
+  confidence: number | null;
+  createdAt: string;
+}
+
 export type ExtraDayTargetType = "day" | "money";
 export type ExtraDayAllocationKind = "day" | "money";
 export type ExtraDayTargetStatus = "active" | "completed" | "archived";

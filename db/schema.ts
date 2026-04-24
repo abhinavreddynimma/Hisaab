@@ -339,6 +339,78 @@ export const extraDayTargets = sqliteTable("extra_day_targets", {
   uniqueIndex("extra_day_target_name_idx").on(table.bucketId, table.name),
 ]);
 
+// === Unified Statement Ingestion Pipeline ===
+
+export const statementImports = sqliteTable("statement_imports", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  source: text("source", { enum: ["sbi", "phonepe", "hdfc", "icici", "card", "other"] }).notNull(),
+  fileName: text("file_name").notNull(),
+  originalName: text("original_name").notNull(),
+  fileHash: text("file_hash").notNull(), // SHA-256 of file content for re-import detection
+  dateRangeStart: text("date_range_start"), // earliest transaction date in file
+  dateRangeEnd: text("date_range_end"), // latest transaction date in file
+  rowCount: integer("row_count").notNull().default(0),
+  status: text("status", { enum: ["pending", "processing", "completed", "failed"] }).notNull().default("pending"),
+  errorMessage: text("error_message"),
+  createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+}, (table) => [
+  uniqueIndex("statement_imports_file_hash_idx").on(table.fileHash),
+]);
+
+export const statementRows = sqliteTable("statement_rows", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  importId: integer("import_id").notNull().references(() => statementImports.id),
+  // Normalized fields (every source maps into these)
+  date: text("date").notNull(), // "YYYY-MM-DD"
+  amount: real("amount").notNull(), // always positive
+  direction: text("direction", { enum: ["credit", "debit"] }).notNull(),
+  balance: real("balance"), // running balance if available
+  rawDescription: text("raw_description").notNull(),
+  normalizedPayee: text("normalized_payee"), // cleaned up counterparty name
+  reference: text("reference"), // UTR, transaction ID, cheque number
+  // Fingerprint for dedup
+  fingerprint: text("fingerprint").notNull(), // hash of (date + amount + direction + reference/description)
+  // Source-specific raw data preserved as JSON
+  rawJson: text("raw_json"), // full original row for auditability
+  // Linking
+  canonicalTransactionId: integer("canonical_transaction_id").references(() => canonicalTransactions.id),
+  createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+}, (table) => [
+  uniqueIndex("statement_rows_fingerprint_import_idx").on(table.importId, table.fingerprint),
+]);
+
+export const canonicalTransactions = sqliteTable("canonical_transactions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  date: text("date").notNull(), // "YYYY-MM-DD"
+  amount: real("amount").notNull(), // always positive
+  direction: text("direction", { enum: ["credit", "debit"] }).notNull(),
+  normalizedPayee: text("normalized_payee"),
+  reference: text("reference"), // best available UTR/txn ID across sources
+  description: text("description"), // merged/best description
+  // Categorization (linked to expense system)
+  categoryId: integer("category_id").references(() => expenseAccounts.id),
+  accountId: integer("account_id").references(() => expenseAccounts.id),
+  // Matching status
+  matchStatus: text("match_status", {
+    enum: ["auto_matched", "manual_matched", "unmatched", "review", "ignored"],
+  }).notNull().default("unmatched"),
+  // Link to expense_transactions once synced
+  expenseTransactionId: integer("expense_transaction_id").references(() => expenseTransactions.id),
+  notes: text("notes"),
+  createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+});
+
+export const canonicalTransactionSources = sqliteTable("canonical_transaction_sources", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  canonicalTransactionId: integer("canonical_transaction_id").notNull().references(() => canonicalTransactions.id),
+  statementRowId: integer("statement_row_id").notNull().references(() => statementRows.id),
+  matchType: text("match_type", { enum: ["exact", "strong", "fuzzy", "manual"] }).notNull(),
+  confidence: real("confidence"), // 0-1 score for non-exact matches
+  createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+}, (table) => [
+  uniqueIndex("canonical_source_row_idx").on(table.canonicalTransactionId, table.statementRowId),
+]);
+
 export const extraDayAllocations = sqliteTable("extra_day_allocations", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   bucketId: integer("bucket_id").notNull().references(() => extraDayBuckets.id),

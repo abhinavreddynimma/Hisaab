@@ -11,6 +11,8 @@ import {
   IndianRupee,
   Wallet,
   Landmark,
+  TentTree,
+  FileUp,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
@@ -29,6 +31,8 @@ const fullNavItems = [
   { label: "Tax", href: "/tax", icon: IndianRupee },
   { label: "Expenses", href: "/expenses", icon: Wallet },
   { label: "Bank", href: "/bank", icon: Landmark },
+  { label: "Extra Days", href: "/extra-days", icon: TentTree },
+  { label: "Imports", href: "/imports", icon: FileUp },
   { label: "Settings", href: "/settings", icon: Settings },
 ]
 

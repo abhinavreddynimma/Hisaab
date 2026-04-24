@@ -516,7 +516,7 @@ export async function getExpenseStats(startDate: string, endDate: string): Promi
     .where(and(
       sql`${expenseTransactions.date} >= ${startDate}`,
       sql`${expenseTransactions.date} <= ${endDate}`,
-      sql`${expenseTransactions.status} = 'confirmed'`,
+      eq(expenseTransactions.status, "confirmed"),
     ))
     .all();
 
@@ -718,7 +718,7 @@ export async function getExpenseMonthlyOverview(year: number, month: number): Pr
     .where(and(
       sql`${expenseTransactions.date} >= ${start}`,
       sql`${expenseTransactions.date} <= ${end}`,
-      sql`${expenseTransactions.status} = 'confirmed'`,
+      eq(expenseTransactions.status, "confirmed"),
     ))
     .all();
 
@@ -765,7 +765,7 @@ export async function getExpenseFYOverview(financialYear: string): Promise<{
     .where(and(
       sql`${expenseTransactions.date} >= ${start}`,
       sql`${expenseTransactions.date} <= ${end}`,
-      sql`${expenseTransactions.status} = 'confirmed'`,
+      eq(expenseTransactions.status, "confirmed"),
     ))
     .all();
 
