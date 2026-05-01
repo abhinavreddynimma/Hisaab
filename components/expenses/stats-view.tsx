@@ -12,6 +12,7 @@ interface StatsData {
   totalTax: number;
   totalTransfersOut: number;
   net: number;
+  balance: number;
   incomeByCategory: { id: number; name: string; amount: number; percentage: number; color: string | null }[];
   expenseByCategory: { id: number; name: string; amount: number; percentage: number; color: string | null; subCategories: { id: number; name: string; amount: number; percentage: number; color: string | null }[] }[];
   transfersByType: { type: string; amount: number; percentage: number; subCategories: { id: number; name: string; amount: number; percentage: number; color: string | null }[] }[];
@@ -27,7 +28,7 @@ interface StatsViewProps {
   stats: StatsData;
   fyStats: StatsData;
   fyOverview: {
-    months: { month: string; year: number; monthNum: number; income: number; expense: number; net: number }[];
+    months: { month: string; year: number; monthNum: number; income: number; expense: number; net: number; cumulativeNet: number }[];
     totalIncome: number;
     totalExpenses: number;
   };
@@ -126,7 +127,7 @@ export function StatsView({ stats, fyStats, fyOverview, currentMonth, currentYea
         <Card>
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground mb-1">Balance</p>
-            <p className={`text-base font-bold tabular-nums ${activeStats.net >= 0 ? "text-blue-600" : "text-rose-600"}`}>{formatCurrency(activeStats.net)}</p>
+            <p className={`text-base font-bold tabular-nums ${activeStats.balance >= 0 ? "text-blue-600" : "text-rose-600"}`}>{formatCurrency(activeStats.balance)}</p>
           </CardContent>
         </Card>
       </div>

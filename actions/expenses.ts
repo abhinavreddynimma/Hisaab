@@ -494,12 +494,77 @@ export async function deleteExpenseTransaction(id: number): Promise<{ success: b
 // STATS
 // ============================================================
 
+function getExpenseRootAncestor(accountMap: Map<number, ExpenseAccount>, id: number): number {
+  const acc = accountMap.get(id);
+  if (!acc || !acc.parentId) return id;
+  return getExpenseRootAncestor(accountMap, acc.parentId);
+}
+
+function getExpenseTransferOutflow(txn: ExpenseTransaction, accountMap: Map<number, ExpenseAccount>): number {
+  if (txn.type !== "transfer" || !txn.toAccountId) return 0;
+
+  const rootId = getExpenseRootAncestor(accountMap, txn.toAccountId);
+  const rootAccount = accountMap.get(rootId);
+
+  if (rootAccount?.type === "investment" || rootAccount?.type === "savings") {
+    return txn.amount + (txn.fees ?? 0);
+  }
+
+  return 0;
+}
+
+async function getExpenseRunningBalances(endDates: string[]): Promise<Map<string, number>> {
+  const sortedEndDates = Array.from(new Set(endDates)).sort((a, b) => a.localeCompare(b));
+  const balances = new Map<string, number>();
+
+  if (sortedEndDates.length === 0) {
+    return balances;
+  }
+
+  const txns = db.select().from(expenseTransactions)
+    .where(and(
+      sql`${expenseTransactions.date} <= ${sortedEndDates[sortedEndDates.length - 1]}`,
+      sql`${expenseTransactions.status} = 'confirmed'`,
+    ))
+    .all() as ExpenseTransaction[];
+
+  txns.sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
+
+  const allAccounts = db.select().from(expenseAccounts).all() as ExpenseAccount[];
+  const accountMap = new Map(allAccounts.map(a => [a.id, a]));
+
+  let totalIncome = 0;
+  let totalOutflow = 0;
+  let txnIndex = 0;
+
+  for (const endDate of sortedEndDates) {
+    while (txnIndex < txns.length && txns[txnIndex].date <= endDate) {
+      const txn = txns[txnIndex];
+
+      if (txn.type === "income") {
+        totalIncome += txn.amount;
+      } else if (txn.type === "expense") {
+        totalOutflow += txn.amount;
+      } else {
+        totalOutflow += getExpenseTransferOutflow(txn, accountMap);
+      }
+
+      txnIndex += 1;
+    }
+
+    balances.set(endDate, totalIncome - totalOutflow);
+  }
+
+  return balances;
+}
+
 export async function getExpenseStats(startDate: string, endDate: string): Promise<{
   totalIncome: number;
   totalExpenses: number;
   totalTax: number;
   totalTransfersOut: number;
   net: number;
+  balance: number;
   incomeByCategory: { id: number; name: string; amount: number; percentage: number; color: string | null }[];
   expenseByCategory: { id: number; name: string; amount: number; percentage: number; color: string | null; subCategories: { id: number; name: string; amount: number; percentage: number; color: string | null }[] }[];
   transfersByType: { type: string; amount: number; percentage: number; subCategories: { id: number; name: string; amount: number; percentage: number; color: string | null }[] }[];
@@ -520,15 +585,11 @@ export async function getExpenseStats(startDate: string, endDate: string): Promi
     ))
     .all();
 
-  const allAccounts = db.select().from(expenseAccounts).all();
+  const [allAccounts, runningBalances] = await Promise.all([
+    db.select().from(expenseAccounts).all() as ExpenseAccount[],
+    getExpenseRunningBalances([endDate]),
+  ]);
   const accountMap = new Map(allAccounts.map(a => [a.id, a]));
-
-  // Walk up parentId chain to root ancestor
-  function getRootAncestor(id: number): number {
-    const acc = accountMap.get(id);
-    if (!acc || !acc.parentId) return id;
-    return getRootAncestor(acc.parentId);
-  }
 
   const incomeMap = new Map<number, number>();
   let totalIncome = 0;
@@ -546,7 +607,7 @@ export async function getExpenseStats(startDate: string, endDate: string): Promi
   let taxExpenses = 0;
   for (const txn of txns) {
     if (txn.type === "expense" && txn.categoryId) {
-      const rootId = getRootAncestor(txn.categoryId);
+      const rootId = getExpenseRootAncestor(accountMap, txn.categoryId);
       expenseMap.set(rootId, (expenseMap.get(rootId) ?? 0) + txn.amount);
       totalExpenses += txn.amount;
 
@@ -573,7 +634,7 @@ export async function getExpenseStats(startDate: string, endDate: string): Promi
   for (const txn of txns) {
     if (txn.type === "transfer" && txn.toAccountId) {
       const toAccount = accountMap.get(txn.toAccountId);
-      const rootId = txn.toAccountId ? getRootAncestor(txn.toAccountId) : txn.toAccountId;
+      const rootId = getExpenseRootAncestor(accountMap, txn.toAccountId);
       const rootAccount = accountMap.get(rootId);
       const accountType = rootAccount?.type ?? toAccount?.type;
 
@@ -660,54 +721,29 @@ export async function getExpenseStats(startDate: string, endDate: string): Promi
     })
     .sort((a, b) => b.amount - a.amount);
 
-  return { totalIncome, totalExpenses: nonTaxExpenses, totalTax: taxExpenses, totalTransfersOut, net: totalIncome - totalExpenses - totalTransfersOut, incomeByCategory, expenseByCategory, transfersByType, topLevelSplit };
+  return {
+    totalIncome,
+    totalExpenses: nonTaxExpenses,
+    totalTax: taxExpenses,
+    totalTransfersOut,
+    net: totalIncome - totalExpenses - totalTransfersOut,
+    balance: runningBalances.get(endDate) ?? 0,
+    incomeByCategory,
+    expenseByCategory,
+    transfersByType,
+    topLevelSplit,
+  };
 }
 
 export async function getExpenseCumulativeBalance(endDate: string): Promise<number> {
   await assertAdminAccess();
 
-  const txns = db.select().from(expenseTransactions)
-    .where(sql`${expenseTransactions.date} <= ${endDate}`)
-    .all();
-
-  const allAccounts = db.select().from(expenseAccounts).all();
-  const accountMap = new Map(allAccounts.map(a => [a.id, a]));
-
-  function getRootAncestor(id: number): number {
-    const acc = accountMap.get(id);
-    if (!acc || !acc.parentId) return id;
-    return getRootAncestor(acc.parentId);
-  }
-
-  let totalIncome = 0;
-  let totalOutflow = 0;
-
-  for (const txn of txns) {
-    if (txn.type === "income") {
-      totalIncome += txn.amount;
-      continue;
-    }
-
-    if (txn.type === "expense") {
-      totalOutflow += txn.amount;
-      continue;
-    }
-
-    if (txn.type === "transfer" && txn.toAccountId) {
-      const rootId = getRootAncestor(txn.toAccountId);
-      const rootAccount = accountMap.get(rootId);
-
-      if (rootAccount?.type === "investment" || rootAccount?.type === "savings") {
-        totalOutflow += txn.amount + (txn.fees ?? 0);
-      }
-    }
-  }
-
-  return totalIncome - totalOutflow;
+  const runningBalances = await getExpenseRunningBalances([endDate]);
+  return runningBalances.get(endDate) ?? 0;
 }
 
 export async function getExpenseMonthlyOverview(year: number, month: number): Promise<{
-  weeks: { label: string; income: number; expense: number; net: number }[];
+  weeks: { label: string; income: number; expense: number; net: number; runningBalance: number }[];
   totalIncome: number;
   totalExpenses: number;
 }> {
@@ -723,12 +759,21 @@ export async function getExpenseMonthlyOverview(year: number, month: number): Pr
     .all();
 
   const lastDay = new Date(year, month, 0).getDate();
-  const weeks: { label: string; income: number; expense: number; net: number }[] = [];
-
+  const weekRanges: { startStr: string; endStr: string }[] = [];
   for (let weekStart = 1; weekStart <= lastDay; weekStart += 7) {
     const weekEnd = Math.min(weekStart + 6, lastDay);
-    const startStr = `${year}-${String(month).padStart(2, "0")}-${String(weekStart).padStart(2, "0")}`;
-    const endStr = `${year}-${String(month).padStart(2, "0")}-${String(weekEnd).padStart(2, "0")}`;
+    weekRanges.push({
+      startStr: `${year}-${String(month).padStart(2, "0")}-${String(weekStart).padStart(2, "0")}`,
+      endStr: `${year}-${String(month).padStart(2, "0")}-${String(weekEnd).padStart(2, "0")}`,
+    });
+  }
+
+  const runningBalances = await getExpenseRunningBalances(weekRanges.map(week => week.endStr));
+  const weeks: { label: string; income: number; expense: number; net: number; runningBalance: number }[] = [];
+
+  for (const { startStr, endStr } of weekRanges) {
+    const weekStart = Number.parseInt(startStr.slice(-2), 10);
+    const weekEnd = Number.parseInt(endStr.slice(-2), 10);
 
     let income = 0, expense = 0;
     for (const txn of txns) {
@@ -741,7 +786,10 @@ export async function getExpenseMonthlyOverview(year: number, month: number): Pr
 
     weeks.push({
       label: `${String(weekStart).padStart(2, "0")}/${String(month).padStart(2, "0")} ~ ${String(weekEnd).padStart(2, "0")}/${String(month).padStart(2, "0")}`,
-      income, expense, net: income - expense,
+      income,
+      expense,
+      net: income - expense,
+      runningBalance: runningBalances.get(endStr) ?? 0,
     });
   }
 
@@ -752,7 +800,7 @@ export async function getExpenseMonthlyOverview(year: number, month: number): Pr
 }
 
 export async function getExpenseFYOverview(financialYear: string): Promise<{
-  months: { month: string; year: number; monthNum: number; income: number; expense: number; net: number }[];
+  months: { month: string; year: number; monthNum: number; income: number; expense: number; net: number; cumulativeNet: number }[];
   totalIncome: number;
   totalExpenses: number;
 }> {
@@ -770,10 +818,15 @@ export async function getExpenseFYOverview(financialYear: string): Promise<{
     .all();
 
   const monthLabels = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
-  const months = monthLabels.map((label, idx) => {
+  const monthRanges = monthLabels.map((label, idx) => {
     const calYear = idx < 9 ? startYear : startYear + 1;
     const calMonth = idx < 9 ? idx + 4 : idx - 8;
     const { start: mStart, end: mEnd } = getMonthDateRange(calYear, calMonth);
+    return { label, calYear, calMonth, mStart, mEnd };
+  });
+
+  const runningBalances = await getExpenseRunningBalances(monthRanges.map(month => month.mEnd));
+  const months = monthRanges.map(({ label, calYear, calMonth, mStart, mEnd }) => {
 
     let income = 0, expense = 0;
     for (const txn of txns) {
@@ -783,7 +836,15 @@ export async function getExpenseFYOverview(financialYear: string): Promise<{
       }
     }
 
-    return { month: label, year: calYear, monthNum: calMonth, income, expense, net: income - expense };
+    return {
+      month: label,
+      year: calYear,
+      monthNum: calMonth,
+      income,
+      expense,
+      net: income - expense,
+      cumulativeNet: runningBalances.get(mEnd) ?? 0,
+    };
   });
 
   const totalIncome = months.reduce((s, m) => s + m.income, 0);
