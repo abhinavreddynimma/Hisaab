@@ -143,7 +143,7 @@ export async function seedDefaultAccounts(): Promise<{ success: boolean }> {
   const existing = db.select().from(expenseAccounts).limit(1).all();
   if (existing.length > 0) return { success: true };
 
-  await db.transaction(async (tx) => {
+  db.transaction((tx) => {
     for (const [type, config] of Object.entries(DEFAULT_EXPENSE_CATEGORIES)) {
       for (const [idx, name] of config.items.entries()) {
         const result = tx.insert(expenseAccounts).values({
