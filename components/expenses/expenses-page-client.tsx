@@ -30,6 +30,7 @@ interface ExpensesPageClientProps {
     totalTax: number;
     totalTransfersOut: number;
     net: number;
+    balance: number;
     incomeByCategory: { id: number; name: string; amount: number; percentage: number; color: string | null }[];
     expenseByCategory: { id: number; name: string; amount: number; percentage: number; color: string | null; subCategories: { id: number; name: string; amount: number; percentage: number; color: string | null }[] }[];
     transfersByType: { type: string; amount: number; percentage: number; subCategories: { id: number; name: string; amount: number; percentage: number; color: string | null }[] }[];
@@ -44,13 +45,14 @@ interface ExpensesPageClientProps {
     totalTax: number;
     totalTransfersOut: number;
     net: number;
+    balance: number;
     incomeByCategory: { id: number; name: string; amount: number; percentage: number; color: string | null }[];
     expenseByCategory: { id: number; name: string; amount: number; percentage: number; color: string | null; subCategories: { id: number; name: string; amount: number; percentage: number; color: string | null }[] }[];
     transfersByType: { type: string; amount: number; percentage: number; subCategories: { id: number; name: string; amount: number; percentage: number; color: string | null }[] }[];
     topLevelSplit: { postTaxIncome: number; investments: { amount: number; percentage: number }; savings: { amount: number; percentage: number }; expenses: { amount: number; percentage: number } };
   };
   fyOverview: {
-    months: { month: string; year: number; monthNum: number; income: number; expense: number; net: number }[];
+    months: { month: string; year: number; monthNum: number; income: number; expense: number; net: number; cumulativeNet: number }[];
     totalIncome: number;
     totalExpenses: number;
   };
@@ -178,6 +180,7 @@ export function ExpensesPageClient({
             transactions={transactions}
             totalIncome={stats.totalIncome}
             totalExpenses={stats.totalExpenses + stats.totalTransfersOut}
+            balance={stats.balance}
             onEdit={handleEditTxn}
             onAddNew={handleAddTxn}
           />

@@ -22,7 +22,7 @@ interface TransactionListProps {
   transactions: ExpenseTransaction[];
   totalIncome: number;
   totalExpenses: number;
-  cumulativeBalance?: number;
+  balance: number;
   onEdit: (txn: ExpenseTransaction) => void;
   onAddNew: () => void;
 }
@@ -42,14 +42,7 @@ const FILTER_OPTIONS = [
 
 type FilterType = (typeof FILTER_OPTIONS)[number]["value"];
 
-export function TransactionList({
-  transactions,
-  totalIncome,
-  totalExpenses,
-  cumulativeBalance,
-  onEdit,
-  onAddNew,
-}: TransactionListProps) {
+export function TransactionList({ transactions, totalIncome, totalExpenses, balance, onEdit, onAddNew }: TransactionListProps) {
   const router = useRouter();
   const [filter, setFilter] = useState<FilterType>("all");
   const [sort, setSort] = useState<"date" | "amount">("date");
@@ -102,7 +95,7 @@ export function TransactionList({
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Card>
           <CardContent className="p-4 text-center">
             <p className="text-xs text-muted-foreground mb-1">Income</p>
@@ -123,16 +116,14 @@ export function TransactionList({
             </p>
           </CardContent>
         </Card>
-        {cumulativeBalance !== undefined && (
-          <Card>
-            <CardContent className="p-4 text-center">
-              <p className="text-xs text-muted-foreground mb-1">Balance</p>
-              <p className={`text-lg font-bold tabular-nums ${cumulativeBalance >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                {formatCurrency(Math.abs(cumulativeBalance))}
-              </p>
-            </CardContent>
-          </Card>
-        )}
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="text-xs text-muted-foreground mb-1">Balance</p>
+            <p className={`text-lg font-bold tabular-nums ${balance >= 0 ? "text-blue-600" : "text-rose-600"}`}>
+              {formatCurrency(balance)}
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="flex items-center gap-1">
