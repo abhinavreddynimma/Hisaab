@@ -51,7 +51,6 @@ next-env.d.ts
 .vscode/
 .idea/
 
-# claude
 .claude/
 
 # personal notes
