@@ -9,7 +9,7 @@ import { getDefaultProjectId } from "./settings";
 import { getEffectiveRate } from "./projects";
 import { calculateMonthSummary, withImplicitWorkingDays } from "@/lib/calculations";
 import { syncTaxPaymentToExpense, removeTaxPaymentExpenseLink } from "./tax-expense-sync";
-import { getFrenchHolidays } from "@/lib/constants";
+import { getFrenchHolidays, TAX_QUARTERS } from "@/lib/constants";
 import { assertAdminAccess, assertAuthenticatedAccess } from "@/lib/auth";
 import { unlink } from "fs/promises";
 import path from "path";
@@ -247,6 +247,18 @@ export async function getTaxProjection(financialYear: string, mode: TaxProjectio
   projectedTotalTax: number;
   totalPaid: number;
   projectedBalance: number;
+  advanceTaxBasis: { grossReceipts: number; totalTax: number; isAssumed: boolean };
+  advanceTaxSchedule: {
+    quarter: TaxQuarter;
+    label: string;
+    dueDate: string;
+    cumulativePct: number;
+    cumulativeDue: number;
+    installment: number;
+    cumulativePaid: number;
+    balance: number;
+    status: "paid" | "upcoming" | "overdue";
+  }[];
 }> {
   await assertAdminAccess();
   const [startYear] = financialYear.split("-").map(Number);
@@ -274,25 +286,7 @@ export async function getTaxProjection(financialYear: string, mode: TaxProjectio
     )
     .all();
 
-  // Group actual income by paid date month (Apr=0 .. Mar=11)
-  // Earnings in month M = payment received in M for work done in M-1
-  const monthlyActual: number[] = Array(12).fill(0);
   const MONTH_LABELS = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
-
-  for (const inv of paidInvoices) {
-    if (!inv.paidDate) continue;
-    const dateStr = inv.paidDate;
-    const [y, m] = dateStr.split("-").map(Number);
-    let idx: number;
-    if (y === startYear) {
-      idx = m - 4;
-    } else {
-      idx = m + 8;
-    }
-    if (idx >= 0 && idx < 12) {
-      monthlyActual[idx] += inv.netInrAmount ?? 0;
-    }
-  }
 
   // Determine elapsed months
   const now = new Date();
@@ -321,27 +315,29 @@ export async function getTaxProjection(financialYear: string, mode: TaxProjectio
     }
   }
 
-  // Use the most recent paid invoice's FX rate, otherwise fall back to
-  // a live currency rate for the default project, then to a static EUR-INR fallback.
-  const sortedByDate = [...paidInvoices]
-    .filter((i) => i.paidDate && i.eurToInrRate)
-    .sort((a, b) => b.paidDate!.localeCompare(a.paidDate!));
+  // Prefer the live FX rate (same source the dashboard uses), falling back to the
+  // most recent paid invoice's FX rate, then to a static EUR-INR fallback.
   let currentRate = 0;
   let rateSourceLabel = "No FX data";
   if (projectCurrency === "INR") {
     currentRate = 1;
     rateSourceLabel = "Using INR project rate";
-  } else if (sortedByDate.length > 0) {
-    currentRate = sortedByDate[0].eurToInrRate!;
-    rateSourceLabel = "Using latest paid invoice FX rate";
   } else {
     const liveRate = await getLiveRateForCurrency(projectCurrency);
     if (liveRate) {
       currentRate = liveRate;
       rateSourceLabel = `Using live ${projectCurrency}-INR rate`;
     } else {
-      currentRate = 90;
-      rateSourceLabel = "Using fallback EUR-INR rate";
+      const sortedByDate = [...paidInvoices]
+        .filter((i) => i.paidDate && i.eurToInrRate)
+        .sort((a, b) => b.paidDate!.localeCompare(a.paidDate!));
+      if (sortedByDate.length > 0) {
+        currentRate = sortedByDate[0].eurToInrRate!;
+        rateSourceLabel = "Using latest paid invoice FX rate";
+      } else {
+        currentRate = 90;
+        rateSourceLabel = "Using fallback EUR-INR rate";
+      }
     }
   }
 
@@ -354,99 +350,87 @@ export async function getTaxProjection(financialYear: string, mode: TaxProjectio
   const totalDeductions = paidInvoices.reduce((s, i) => s + (i.platformCharges ?? 0) + (i.bankCharges ?? 0), 0);
   const deductionPct = totalGrossInr > 0 ? totalDeductions / totalGrossInr : 0;
 
-  // Query sent/draft invoices with due dates in the FY for projection
+  // Bucket every invoice (paid/sent/draft) by the month it was *worked*, using
+  // billingPeriodStart. This is tax-page-specific: April income = days worked in April,
+  // not money received in April. Paid invoices contribute their actual netInrAmount;
+  // open invoices contribute an estimate of net INR from their EUR total.
   const shouldUseInvoices = mode !== "calendar";
-  const openInvoices = shouldUseInvoices
+  const fyInvoices = shouldUseInvoices
     ? db
       .select({
+        netInrAmount: invoices.netInrAmount,
         total: invoices.total,
-        dueDate: invoices.dueDate,
+        billingPeriodStart: invoices.billingPeriodStart,
         status: invoices.status,
       })
       .from(invoices)
       .where(
         and(
-          sql`${invoices.status} IN ('sent', 'draft')`,
-          sql`${invoices.dueDate} >= ${fyStart}`,
-          sql`${invoices.dueDate} <= ${fyEnd}`,
+          sql`${invoices.status} IN ('paid', 'sent', 'draft')`,
+          sql`${invoices.billingPeriodStart} >= ${fyStart}`,
+          sql`${invoices.billingPeriodStart} <= ${fyEnd}`,
         )
       )
       .all()
     : [];
 
-  // Group open invoice totals by FY month index (based on due date)
   const invoiceByMonth: number[] = Array(12).fill(0);
   const hasInvoiceForMonth: boolean[] = Array(12).fill(false);
-  for (const inv of openInvoices) {
-    if (!inv.dueDate) continue;
-    const [y, m] = inv.dueDate.split("-").map(Number);
-    let idx: number;
-    if (y === startYear) {
-      idx = m - 4;
-    } else {
-      idx = m + 8;
-    }
-    if (idx >= 0 && idx < 12) {
-      // Estimate net INR from the invoice EUR total
-      invoiceByMonth[idx] += Math.round((inv.total ?? 0) * currentRate * (1 - deductionPct));
-      hasInvoiceForMonth[idx] = true;
-    }
+  for (const inv of fyInvoices) {
+    if (!inv.billingPeriodStart) continue;
+    const [y, m] = inv.billingPeriodStart.split("-").map(Number);
+    const idx = y === startYear ? m - 4 : m + 8;
+    if (idx < 0 || idx >= 12) continue;
+    const amount = inv.status === "paid"
+      ? (inv.netInrAmount ?? 0)
+      : Math.round((inv.total ?? 0) * currentRate * (1 - deductionPct));
+    invoiceByMonth[idx] += amount;
+    hasInvoiceForMonth[idx] = true;
   }
 
-  // Project remaining months: prefer sent invoices, fall back to working-days estimate
+  // For each month: use the invoiced amount when available, otherwise fall back to that
+  // month's own calendar working-days estimate (no M-1 lag).
   const projectedMonthly: number[] = Array(12).fill(0);
   const projectedWorkingDays: (number | undefined)[] = Array(12).fill(undefined);
   const projectedCalendarBreakdown: (ProjectionCalendarBreakdown | undefined)[] = Array(12).fill(undefined);
 
-  for (let i = monthsElapsed; i < 12; i++) {
-    if (hasInvoiceForMonth[i]) {
-      // Use actual invoice amount instead of estimating
+  for (let i = 0; i < 12; i++) {
+    if (shouldUseInvoices && hasInvoiceForMonth[i]) {
       projectedMonthly[i] = invoiceByMonth[i];
-    } else {
-      // Fall back to working-days-based estimate
-      const prevIdx = i - 1;
-      const prevCalYear = prevIdx < 9 ? startYear : startYear + 1;
-      const prevCalMonth = prevIdx < 9 ? prevIdx + 4 : prevIdx - 8;
-
-      const entries = await getDayEntriesForMonth(prevCalYear, prevCalMonth);
-      const holidays = getFrenchHolidays(prevCalYear);
-      const augmented = withImplicitWorkingDays(entries as DayEntry[], prevCalYear, prevCalMonth, holidays);
-      const summary = calculateMonthSummary(augmented);
-      const calendarBreakdown = calculateProjectionCalendarBreakdown(augmented, holidays);
-
-      const monthKey = `${prevCalYear}-${String(prevCalMonth).padStart(2, "0")}`;
-      const dailyRate = defaultProjectId ? await getEffectiveRate(defaultProjectId, monthKey) : 0;
-
-      const baseAmount = summary.effectiveWorkingDays * dailyRate;
-      const grossInr = projectCurrency === "INR" ? baseAmount : baseAmount * currentRate;
-      const netInr = grossInr * (1 - deductionPct);
-
-      projectedMonthly[i] = Math.round(netInr);
-      projectedWorkingDays[i] = summary.effectiveWorkingDays;
-      projectedCalendarBreakdown[i] = calendarBreakdown;
+      continue;
     }
-  }
+    const calYear = i < 9 ? startYear : startYear + 1;
+    const calMonth = i < 9 ? i + 4 : i - 8;
 
-  const actualTotal = monthlyActual.reduce((a, b) => a + b, 0);
-  const projectedTotal = projectedMonthly.reduce((a, b) => a + b, 0);
+    const entries = await getDayEntriesForMonth(calYear, calMonth);
+    const holidays = getFrenchHolidays(calYear);
+    const augmented = withImplicitWorkingDays(entries as DayEntry[], calYear, calMonth, holidays);
+    const summary = calculateMonthSummary(augmented);
+    const calendarBreakdown = calculateProjectionCalendarBreakdown(augmented, holidays);
+
+    const monthKey = `${calYear}-${String(calMonth).padStart(2, "0")}`;
+    const dailyRate = defaultProjectId ? await getEffectiveRate(defaultProjectId, monthKey) : 0;
+
+    const baseAmount = summary.effectiveWorkingDays * dailyRate;
+    const grossInr = projectCurrency === "INR" ? baseAmount : baseAmount * currentRate;
+    const netInr = grossInr * (1 - deductionPct);
+
+    projectedMonthly[i] = Math.round(netInr);
+    projectedWorkingDays[i] = summary.effectiveWorkingDays;
+    projectedCalendarBreakdown[i] = calendarBreakdown;
+  }
 
   // Build monthly breakdown
   const monthlyBreakdown = MONTH_LABELS.map((label, i) => ({
     month: label,
-    actual: mode === "calendar"
-      ? projectedMonthly[i]
-      : i < monthsElapsed
-        ? monthlyActual[i]
-        : projectedMonthly[i],
+    actual: projectedMonthly[i],
     projected: mode === "calendar" ? true : i >= monthsElapsed,
     workingDays: projectedWorkingDays[i],
-    invoiceBased: i >= monthsElapsed && hasInvoiceForMonth[i],
+    invoiceBased: shouldUseInvoices && hasInvoiceForMonth[i],
     calendarBreakdown: projectedCalendarBreakdown[i],
   }));
 
-  const projectedGrossReceipts = mode === "calendar"
-    ? projectedTotal
-    : actualTotal + projectedTotal;
+  const projectedGrossReceipts = projectedMonthly.reduce((a, b) => a + b, 0);
   const projectedPresumptiveIncome = projectedGrossReceipts * 0.5;
   const projectedTaxableIncome = Math.max(0, projectedPresumptiveIncome);
 
@@ -460,6 +444,56 @@ export async function getTaxProjection(financialYear: string, mode: TaxProjectio
   const taxSummary = await getTaxSummaryForFY(financialYear);
   const totalPaid = taxSummary.total;
   const projectedBalance = projectedTotalTax - totalPaid;
+
+  // Advance tax schedule: assume gross receipts of ₹74.5L for FY 2026-27 (just under
+  // the 44ADA limit) so the schedule is stable across the year and doesn't drift with
+  // the live projection. For other FYs, fall back to the live projection.
+  const HARDCODED_FY = "2026-27";
+  const HARDCODED_GROSS = 7450000;
+  const isAssumed = financialYear === HARDCODED_FY;
+  const advanceGross = isAssumed ? HARDCODED_GROSS : projectedGrossReceipts;
+  const advancePresumptive = advanceGross * 0.5;
+  const advanceTaxable = Math.max(0, advancePresumptive);
+  const { totalTax: advanceIncomeTax } = calculateIncomeTax(advanceTaxable);
+  const advanceRebate = advanceTaxable <= 1200000 ? Math.min(advanceIncomeTax, 60000) : 0;
+  const advanceAfterRebate = advanceIncomeTax - advanceRebate;
+  const advanceCess = advanceAfterRebate * 0.04;
+  const advanceTotalTax = advanceAfterRebate + advanceCess;
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const dueDateForQuarter: Record<TaxQuarter, string> = {
+    Q1: `${startYear}-06-15`,
+    Q2: `${startYear}-09-15`,
+    Q3: `${startYear}-12-15`,
+    Q4: `${startYear + 1}-03-15`,
+  };
+  const quarterOrder: TaxQuarter[] = ["Q1", "Q2", "Q3", "Q4"];
+  let cumulativePaid = 0;
+  let prevCumulativeDue = 0;
+  const advanceTaxSchedule = quarterOrder.map((q) => {
+    const config = TAX_QUARTERS[q];
+    cumulativePaid += taxSummary.byQuarter[q];
+    const cumulativeDue = Math.round((advanceTotalTax * config.cumPercent) / 100);
+    const installment = cumulativeDue - prevCumulativeDue;
+    prevCumulativeDue = cumulativeDue;
+    const balance = Math.max(0, cumulativeDue - cumulativePaid);
+    const dueDate = dueDateForQuarter[q];
+    let status: "paid" | "upcoming" | "overdue";
+    if (cumulativePaid >= cumulativeDue) status = "paid";
+    else if (todayIso > dueDate) status = "overdue";
+    else status = "upcoming";
+    return {
+      quarter: q,
+      label: config.label,
+      dueDate,
+      cumulativePct: config.cumPercent,
+      cumulativeDue,
+      installment,
+      cumulativePaid,
+      balance,
+      status,
+    };
+  });
 
   return {
     monthlyBreakdown,
@@ -479,6 +513,12 @@ export async function getTaxProjection(financialYear: string, mode: TaxProjectio
     projectedTotalTax,
     totalPaid,
     projectedBalance,
+    advanceTaxBasis: {
+      grossReceipts: Math.round(advanceGross),
+      totalTax: Math.round(advanceTotalTax),
+      isAssumed,
+    },
+    advanceTaxSchedule,
   };
 }
 

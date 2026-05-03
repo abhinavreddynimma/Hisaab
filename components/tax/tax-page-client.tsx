@@ -82,6 +82,18 @@ interface TaxProjection {
   projectedTotalTax: number;
   totalPaid: number;
   projectedBalance: number;
+  advanceTaxBasis: { grossReceipts: number; totalTax: number; isAssumed: boolean };
+  advanceTaxSchedule: {
+    quarter: TaxQuarter;
+    label: string;
+    dueDate: string;
+    cumulativePct: number;
+    cumulativeDue: number;
+    installment: number;
+    cumulativePaid: number;
+    balance: number;
+    status: "paid" | "upcoming" | "overdue";
+  }[];
 }
 
 interface TaxPageClientProps {
@@ -695,26 +707,69 @@ export function TaxPageClient({
             </CardContent>
           </Card>
 
-          {/* Quarter Summary Cards */}
-          <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-            {quarters.map((q) => {
-              const config = TAX_QUARTERS[q];
-              const paid = initialSummary.byQuarter[q];
-              return (
-                <Card key={q}>
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="text-sm font-medium text-muted-foreground">{config.label}</p>
-                      <span className="text-[10px] text-muted-foreground">Due: {config.dueDate}</span>
+          {/* Advance Tax Schedule */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Advance Tax Schedule</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                {projection.advanceTaxBasis.isAssumed
+                  ? `Based on assumed gross receipts of ${formatCurrency(projection.advanceTaxBasis.grossReceipts)} (just under the 44ADA limit). Total tax: ${formatCurrency(projection.advanceTaxBasis.totalTax)}.`
+                  : `Based on projected gross receipts of ${formatCurrency(projection.advanceTaxBasis.grossReceipts)}. Total tax: ${formatCurrency(projection.advanceTaxBasis.totalTax)}.`}
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+                {projection.advanceTaxSchedule.map((row) => {
+                  const statusStyle =
+                    row.status === "paid"
+                      ? "border-green-500/40 bg-green-500/5"
+                      : row.status === "overdue"
+                        ? "border-red-500/40 bg-red-500/5"
+                        : "border-border";
+                  const statusLabel =
+                    row.status === "paid" ? "Paid" : row.status === "overdue" ? "Overdue" : "Upcoming";
+                  const statusColor =
+                    row.status === "paid"
+                      ? "text-green-600"
+                      : row.status === "overdue"
+                        ? "text-red-600"
+                        : "text-muted-foreground";
+                  return (
+                    <div key={row.quarter} className={`rounded-md border p-4 ${statusStyle}`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-sm font-medium">{row.label}</p>
+                        <span className={`text-[10px] font-medium uppercase ${statusColor}`}>{statusLabel}</span>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mb-3">
+                        Due {row.dueDate} · {row.cumulativePct}% cumulative
+                      </p>
+                      <div className="space-y-1.5 text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Cumulative due</span>
+                          <span className="font-medium tabular-nums">{formatCurrency(row.cumulativeDue)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">This installment</span>
+                          <span className="tabular-nums">{formatCurrency(row.installment)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Paid so far</span>
+                          <span className="tabular-nums text-green-600">{formatCurrency(row.cumulativePaid)}</span>
+                        </div>
+                        <Separator />
+                        <div className="flex justify-between font-semibold">
+                          <span>Balance</span>
+                          <span className={`tabular-nums ${row.balance > 0 ? "text-red-600" : "text-green-600"}`}>
+                            {formatCurrency(row.balance)}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <p className="text-2xl font-bold tabular-nums">
-                      {paid > 0 ? formatCurrency(paid) : "—"}
-                    </p>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 
