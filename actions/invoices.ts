@@ -266,7 +266,7 @@ export async function createInvoice(data: {
     .filter(Boolean)
     .join(", ");
 
-  const invoiceId = await db.transaction(async (tx) => {
+  const invoiceId = db.transaction((tx) => {
     const result = tx
       .insert(invoices)
       .values({
