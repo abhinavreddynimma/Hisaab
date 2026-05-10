@@ -10,6 +10,7 @@ import type { DayEntry } from "@/lib/types";
 interface CalendarOverviewProps {
   entries: DayEntry[];
   holidays: [string, string][];
+  indianReferenceHolidays: [string, string][];
   months?: number;
 }
 
@@ -59,11 +60,13 @@ function MiniMonth({
   month,
   entryMap,
   holidayMap,
+  indianReferenceHolidayMap,
 }: {
   year: number;
   month: number;
   entryMap: Map<string, DayEntry>;
   holidayMap: Map<string, string>;
+  indianReferenceHolidayMap: Map<string, string>;
 }) {
   const daysInMonth = getDaysInMonth(year, month);
   const firstDay = new Date(year, month - 1, 1).getDay();
@@ -77,12 +80,14 @@ function MiniMonth({
     year: "numeric",
   });
 
-  const cells: { day: number; dateStr: string; type: string }[] = [];
+  const cells: { day: number; dateStr: string; type: string; frenchHolidayName?: string; indianHolidayName?: string }[] = [];
 
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
     const entry = entryMap.get(dateStr);
-    const isHoliday = holidayMap.has(dateStr);
+    const frenchHolidayName = holidayMap.get(dateStr);
+    const isHoliday = !!frenchHolidayName;
+    const indianHolidayName = indianReferenceHolidayMap.get(dateStr);
     const dateObj = new Date(year, month - 1, d);
     const dow = dateObj.getDay();
     const isWeekend = dow === 0 || dow === 6;
@@ -98,7 +103,7 @@ function MiniMonth({
       type = "implicit_working";
     }
 
-    cells.push({ day: d, dateStr, type });
+    cells.push({ day: d, dateStr, type, frenchHolidayName, indianHolidayName });
   }
 
   return (
@@ -121,21 +126,39 @@ function MiniMonth({
             <div
               key={c.day}
               className={cn(
-                "flex items-center justify-center h-9 w-9 mx-auto rounded-full text-sm transition-all",
+                "relative flex items-center justify-center h-9 w-9 mx-auto overflow-hidden rounded-full text-sm transition-all",
                 style.bg,
                 style.text,
                 isToday && "ring-2 ring-offset-1 ring-gray-900 font-bold",
               )}
               title={
-                c.type === "holiday"
-                  ? holidayMap.get(c.dateStr)
-                  : c.type === "implicit_working"
-                  ? "Working"
-                  : c.type === "weekend"
-                  ? "Weekend"
-                  : c.type.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase())
+                [
+                  c.type === "holiday"
+                    ? holidayMap.get(c.dateStr)
+                    : c.type === "implicit_working"
+                    ? "Working"
+                    : c.type === "weekend"
+                    ? "Weekend"
+                    : c.type.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase()),
+                  c.indianHolidayName ? `India reference: ${c.indianHolidayName}` : null,
+                ].filter(Boolean).join(" | ")
               }
             >
+              {c.frenchHolidayName && (
+                <span
+                  className="absolute inset-x-1 top-1 h-0.5 rounded-full bg-gradient-to-r from-blue-700 via-white to-red-600"
+                  aria-hidden="true"
+                />
+              )}
+              {c.indianHolidayName && (
+                <span
+                  className={cn(
+                    "absolute inset-x-1 h-0.5 rounded-full bg-gradient-to-r from-orange-500 via-white to-emerald-600",
+                    c.frenchHolidayName ? "top-2" : "top-1"
+                  )}
+                  aria-hidden="true"
+                />
+              )}
               {c.day}
             </div>
           );
@@ -148,17 +171,19 @@ function MiniMonth({
 const LEGEND = [
   { label: "Working", color: "bg-slate-200" },
   { label: "Leave", color: "bg-rose-200" },
-  { label: "Holiday", color: "bg-teal-200" },
+  { label: "France holiday", color: "bg-gradient-to-r from-blue-700 via-white to-red-600 ring-1 ring-slate-200" },
+  { label: "India ref", color: "bg-gradient-to-r from-orange-500 via-white to-emerald-600 ring-1 ring-slate-200" },
   { label: "Half Day", color: "bg-orange-200" },
   { label: "Extra", color: "bg-violet-200" },
 ];
 
-export function CalendarOverview({ entries, holidays }: CalendarOverviewProps) {
+export function CalendarOverview({ entries, holidays, indianReferenceHolidays }: CalendarOverviewProps) {
   const [offset, setOffset] = useState(0);
 
   const entryMap = new Map<string, DayEntry>();
   for (const e of entries) entryMap.set(e.date, e);
   const holidayMap = new Map<string, string>(holidays);
+  const indianReferenceHolidayMap = new Map<string, string>(indianReferenceHolidays);
 
   const now = new Date();
   const monthList: { year: number; month: number }[] = [];
@@ -195,6 +220,7 @@ export function CalendarOverview({ entries, holidays }: CalendarOverviewProps) {
               month={month}
               entryMap={entryMap}
               holidayMap={holidayMap}
+              indianReferenceHolidayMap={indianReferenceHolidayMap}
             />
           ))}
         </div>
