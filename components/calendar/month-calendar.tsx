@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { WEEKDAYS, getFrenchHolidays } from "@/lib/constants";
+import { WEEKDAYS, getFrenchHolidays, getIndianReferenceHolidays } from "@/lib/constants";
 import { getCalendarDays, calculateMonthSummary, withImplicitWorkingDays } from "@/lib/calculations";
 import type { DayEntry } from "@/lib/types";
 import { DayCell } from "./day-cell";
@@ -37,6 +37,11 @@ export function MonthCalendar({
 
   const holidays = useMemo(
     () => getFrenchHolidays(year),
+    [year]
+  );
+
+  const indianReferenceHolidays = useMemo(
+    () => getIndianReferenceHolidays(year),
     [year]
   );
 
@@ -88,6 +93,7 @@ export function MonthCalendar({
             isCurrentMonth={day.isCurrentMonth}
             dayEntry={entryMap.get(day.date) ?? null}
             holidayName={holidays.get(day.date) ?? null}
+            indianHolidayName={indianReferenceHolidays.get(day.date) ?? null}
             onClick={handleDayClick}
           />
         ))}

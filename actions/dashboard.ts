@@ -6,7 +6,7 @@ import { eq, desc, sql, and, like, lte } from "drizzle-orm";
 import { getLeavePolicy, getDefaultProjectId } from "./settings";
 // Rate lookup uses same logic as projects.ts but kept local to avoid async boundary
 import { calculateLeaveBalance, calculateMonthSummary, withImplicitWorkingDays } from "@/lib/calculations";
-import { getFrenchHolidays } from "@/lib/constants";
+import { getFrenchHolidays, getIndianReferenceHolidays } from "@/lib/constants";
 import type { DashboardStats, DayEntry } from "@/lib/types";
 import { assertAdminAccess, assertAuthenticatedAccess } from "@/lib/auth";
 
@@ -635,16 +635,24 @@ export async function getMonthlyExchangeRateData(months: number = 12): Promise<
 export async function getCalendarOverviewData(): Promise<{
   entries: DayEntry[];
   holidays: [string, string][];
+  indianReferenceHolidays: [string, string][];
 }> {
   await assertAdminAccess();
   const entries = getAllDayEntriesInternal();
   const now = new Date();
   const holidays = new Map<string, string>();
+  const indianReferenceHolidays = new Map<string, string>();
   for (const year of [now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1]) {
     const yearHolidays = getFrenchHolidays(year);
     for (const [k, v] of yearHolidays) holidays.set(k, v);
+    const yearIndianHolidays = getIndianReferenceHolidays(year);
+    for (const [k, v] of yearIndianHolidays) indianReferenceHolidays.set(k, v);
   }
-  return { entries, holidays: Array.from(holidays.entries()) };
+  return {
+    entries,
+    holidays: Array.from(holidays.entries()),
+    indianReferenceHolidays: Array.from(indianReferenceHolidays.entries()),
+  };
 }
 
 export async function getLiveRate(currency: string = "EUR"): Promise<number | null> {

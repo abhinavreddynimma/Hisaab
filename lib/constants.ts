@@ -126,6 +126,39 @@ export function getFrenchHolidays(year: number): Map<string, string> {
   return holidays;
 }
 
+const INDIAN_REFERENCE_HOLIDAYS_BY_YEAR: Record<number, [string, string][]> = {
+  2026: [
+    ["01-26", "Republic Day"],
+    ["03-04", "Holi"],
+    ["03-21", "Id-ul-Fitr"],
+    ["03-26", "Ram Navami"],
+    ["03-31", "Mahavir Jayanti"],
+    ["04-03", "Good Friday"],
+    ["05-01", "Buddha Purnima"],
+    ["05-27", "Id-ul-Zuha"],
+    ["06-26", "Muharram"],
+    ["08-15", "Independence Day"],
+    ["08-26", "Id-e-Milad"],
+    ["09-04", "Janmashtami"],
+    ["10-02", "Gandhi Jayanti"],
+    ["10-20", "Dussehra"],
+    ["11-08", "Diwali"],
+    ["11-24", "Guru Nanak Jayanti"],
+    ["12-25", "Christmas Day"],
+  ],
+};
+
+// Indian public holidays shown for personal reference only.
+// These dates must not be passed into working-day calculations.
+export function getIndianReferenceHolidays(year: number): Map<string, string> {
+  return new Map(
+    (INDIAN_REFERENCE_HOLIDAYS_BY_YEAR[year] ?? []).map(([date, name]) => [
+      `${year}-${date}`,
+      name,
+    ])
+  );
+}
+
 // Expense Manager constants
 export const EXPENSE_ACCOUNT_TYPES = {
   income: { label: "Income", color: "#10b981" },

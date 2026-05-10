@@ -10,6 +10,7 @@ interface DayCellProps {
   isCurrentMonth: boolean;
   dayEntry: DayEntry | null;
   holidayName: string | null;
+  indianHolidayName: string | null;
   onClick: (date: string) => void;
 }
 
@@ -19,6 +20,7 @@ export function DayCell({
   isCurrentMonth,
   dayEntry,
   holidayName,
+  indianHolidayName,
   onClick,
 }: DayCellProps) {
   const today = new Date();
@@ -34,11 +36,17 @@ export function DayCell({
 
   const dayTypeConfig = dayEntry ? DAY_TYPES[dayEntry.dayType] : null;
   const isHoliday = !!holidayName && !dayEntry;
+  const hasFrenchHoliday = !!holidayName && isCurrentMonth;
+  const hasIndianReferenceHoliday = !!indianHolidayName && isCurrentMonth;
 
   return (
     <button
       type="button"
       onClick={() => onClick(date)}
+      title={[
+        holidayName ? `France public holiday: ${holidayName}` : null,
+        indianHolidayName ? `India reference holiday: ${indianHolidayName}` : null,
+      ].filter(Boolean).join("\n") || undefined}
       className={cn(
         "relative flex flex-col items-center justify-start gap-1.5 rounded-lg border p-2.5 text-sm",
         "min-h-[80px] w-full",
@@ -51,11 +59,27 @@ export function DayCell({
         dayEntry?.dayType === "half_day" && "border-sky-200/40 dark:border-sky-800/40",
         dayEntry?.dayType === "extra_working" && "border-purple-200/40 dark:border-purple-800/40",
         dayEntry?.dayType === "holiday" && "border-green-200/40 dark:border-green-800/40",
-        isHoliday && "bg-green-50 dark:bg-green-950 border-green-200/40 dark:border-green-800/40",
+        isHoliday && "bg-green-50 dark:bg-green-950 border-blue-300/70 dark:border-blue-700/60",
         isImplicitWorking && "bg-blue-50 dark:bg-blue-950 border-blue-200/40 dark:border-blue-800/40",
+        hasIndianReferenceHoliday && !isHoliday && "border-amber-300/70 dark:border-amber-700/60",
         !dayTypeConfig && !isHoliday && !isImplicitWorking && "border-border/40"
       )}
     >
+      {hasFrenchHoliday && (
+        <span
+          className="absolute inset-x-2 top-1 h-0.5 rounded-full bg-gradient-to-r from-blue-700 via-white to-red-600 shadow-sm"
+          aria-hidden="true"
+        />
+      )}
+      {hasIndianReferenceHoliday && (
+        <span
+          className={cn(
+            "absolute inset-x-2 h-0.5 rounded-full bg-gradient-to-r from-orange-500 via-white to-emerald-600 shadow-sm",
+            hasFrenchHoliday ? "top-2" : "top-1"
+          )}
+          aria-hidden="true"
+        />
+      )}
       <span
         className={cn(
           "text-sm font-medium tabular-nums",
@@ -88,7 +112,12 @@ export function DayCell({
       )}
       {holidayName && (
         <span className="text-[9px] leading-tight text-green-700 dark:text-green-400 text-center truncate w-full font-medium">
-          {holidayName}
+          FR: {holidayName}
+        </span>
+      )}
+      {indianHolidayName && (
+        <span className="text-[9px] leading-tight text-amber-700 dark:text-amber-300 text-center truncate w-full font-medium">
+          IN: {indianHolidayName}
         </span>
       )}
     </button>

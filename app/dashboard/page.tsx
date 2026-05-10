@@ -75,7 +75,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
       <StatsCards stats={stats} monthlyEarnings={monthlyEarnings} />
 
-      <CalendarOverview entries={calendarData.entries} holidays={calendarData.holidays} />
+      <CalendarOverview
+        entries={calendarData.entries}
+        holidays={calendarData.holidays}
+        indianReferenceHolidays={calendarData.indianReferenceHolidays}
+      />
 
       <BalanceOverview balanceData={balanceData} monthlyData={monthlyBreakdown} financialYear={fy} />
 
