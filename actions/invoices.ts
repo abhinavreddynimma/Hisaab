@@ -2,7 +2,7 @@
 
 import { db } from "@/db";
 import { invoices, invoiceLineItems, invoiceAttachments, clients, projects } from "@/db/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, like } from "drizzle-orm";
 import { getInvoiceSettings, getUserProfile } from "./settings";
 import { getDayEntriesForRange } from "./day-entries";
 import { getProjectRateTimeline } from "./projects";
@@ -117,21 +117,49 @@ export async function getInvoiceLineItems(invoiceId: number): Promise<InvoiceLin
     .all() as InvoiceLineItem[];
 }
 
-export async function generateInvoiceNumber(): Promise<string> {
-  await assertAdminAccess();
-  const settings = await getInvoiceSettings();
-  const number = String(settings.nextNumber).padStart(4, "0");
-  return `${settings.prefix}-${number}`;
+// Indian financial year starts April 1; we use the starting year (e.g. Apr 2026–Mar 2027 → "26").
+function financialYearStart(isoDate: string): number {
+  const [year, month] = isoDate.split("-").map(Number);
+  return month >= 4 ? year : year - 1;
 }
 
-async function generateAndIncrementInvoiceNumber(): Promise<string> {
+function formatInvoiceNumber(prefix: string, fyStart: number, sequence: number): string {
+  const yy = String(fyStart % 100).padStart(2, "0");
+  const seq = String(sequence).padStart(2, "0");
+  return `${prefix}/${yy}/${seq}`;
+}
+
+function nextSequenceForFy(prefix: string, fyStart: number): number {
+  const yy = String(fyStart % 100).padStart(2, "0");
+  const pattern = `${prefix}/${yy}/%`;
+  const rows = db
+    .select({ invoiceNumber: invoices.invoiceNumber })
+    .from(invoices)
+    .where(like(invoices.invoiceNumber, pattern))
+    .all();
+
+  let max = 0;
+  for (const row of rows) {
+    const parts = row.invoiceNumber.split("/");
+    const n = parseInt(parts[2] ?? "", 10);
+    if (Number.isFinite(n) && n > max) max = n;
+  }
+  return max + 1;
+}
+
+export async function generateInvoiceNumber(issueDate?: string): Promise<string> {
+  await assertAdminAccess();
   const settings = await getInvoiceSettings();
-  const number = String(settings.nextNumber).padStart(4, "0");
-  const invoiceNumber = `${settings.prefix}-${number}`;
-  // Immediately increment to prevent race condition
-  const { saveInvoiceSettings } = await import("./settings");
-  await saveInvoiceSettings({ ...settings, nextNumber: settings.nextNumber + 1 });
-  return invoiceNumber;
+  const fyStart = financialYearStart(issueDate ?? new Date().toISOString().slice(0, 10));
+  const sequence = nextSequenceForFy(settings.prefix, fyStart);
+  return formatInvoiceNumber(settings.prefix, fyStart, sequence);
+}
+
+async function generateAndIncrementInvoiceNumber(issueDate: string): Promise<string> {
+  const settings = await getInvoiceSettings();
+  const fyStart = financialYearStart(issueDate);
+  const sequence = nextSequenceForFy(settings.prefix, fyStart);
+  return formatInvoiceNumber(settings.prefix, fyStart, sequence);
 }
 
 export async function getAutoPopulatedLineItems(
@@ -243,7 +271,7 @@ export async function createInvoice(data: {
   }[];
 }): Promise<{ success: boolean; id?: number }> {
   await assertAdminAccess();
-  const invoiceNumber = await generateAndIncrementInvoiceNumber();
+  const invoiceNumber = await generateAndIncrementInvoiceNumber(data.issueDate);
   const profile = await getUserProfile();
   const client = await getClient(data.clientId);
 

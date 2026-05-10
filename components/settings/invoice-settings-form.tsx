@@ -54,35 +54,19 @@ export function InvoiceSettingsForm({ initialData }: InvoiceSettingsFormProps) {
           <CardTitle>Invoice Numbering</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="prefix">Invoice Prefix</Label>
-              <Input
-                id="prefix"
-                value={formData.prefix}
-                onChange={(e) => handleChange("prefix", e.target.value)}
-                placeholder="e.g. INV"
-              />
-              <p className="text-sm text-muted-foreground">
-                Prefix used for generated invoice numbers (e.g. INV-001).
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="nextNumber">Next Invoice Number</Label>
-              <Input
-                id="nextNumber"
-                type="number"
-                min={1}
-                value={formData.nextNumber}
-                onChange={(e) =>
-                  handleChange("nextNumber", parseInt(e.target.value, 10) || 1)
-                }
-                placeholder="Next sequential number"
-              />
-              <p className="text-sm text-muted-foreground">
-                The next number to be used when generating an invoice.
-              </p>
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="prefix">Invoice Prefix</Label>
+            <Input
+              id="prefix"
+              value={formData.prefix}
+              onChange={(e) => handleChange("prefix", e.target.value)}
+              placeholder="e.g. INV"
+            />
+            <p className="text-sm text-muted-foreground">
+              Invoice numbers are generated as <code>{formData.prefix || "INV"}/YY/NN</code>,
+              where YY is the Indian financial year start (Apr–Mar) and NN is the sequence
+              within that year. The next number is derived automatically from existing invoices.
+            </p>
           </div>
         </CardContent>
       </Card>

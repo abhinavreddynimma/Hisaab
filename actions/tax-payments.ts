@@ -14,7 +14,7 @@ import { assertAdminAccess, assertAuthenticatedAccess } from "@/lib/auth";
 import { unlink } from "fs/promises";
 import path from "path";
 
-export type TaxProjectionMode = "auto" | "invoice" | "calendar";
+export type TaxProjectionMode = "invoice" | "calendar";
 
 type ProjectionCalendarBreakdown = {
   weekdayWorkingDays: number;
@@ -222,13 +222,14 @@ export async function getTaxComputation(financialYear: string): Promise<{
   };
 }
 
-export async function getTaxProjection(financialYear: string, mode: TaxProjectionMode = "auto"): Promise<{
+export async function getTaxProjection(financialYear: string, mode: TaxProjectionMode = "invoice"): Promise<{
   monthlyBreakdown: {
     month: string;
     actual: number;
     projected: boolean;
     workingDays?: number;
     invoiceBased?: boolean;
+    rate?: number;
     calendarBreakdown?: ProjectionCalendarBreakdown;
   }[];
   monthsElapsed: number;
@@ -259,6 +260,19 @@ export async function getTaxProjection(financialYear: string, mode: TaxProjectio
     balance: number;
     status: "paid" | "upcoming" | "overdue";
   }[];
+  yearlyDayTotals: {
+    workingDays: number;
+    extraWorkingDays: number;
+    halfDays: number;
+    leaves: number;
+    holidays: number;
+    effectiveWorkingDays: number;
+  };
+  yearlyCalendarBreakdown: {
+    weekdayWorkingDays: number;
+    publicHolidayWorkingDays: number;
+    weekendWorkingDays: number;
+  };
 }> {
   await assertAdminAccess();
   const [startYear] = financialYear.split("-").map(Number);
@@ -298,8 +312,7 @@ export async function getTaxProjection(financialYear: string, mode: TaxProjectio
   }
   // Don't count the current month as elapsed — it's still in progress
   // and we likely haven't received payment yet, so project it instead.
-  const invoiceMonthsElapsed = Math.min(12, Math.max(0, currentIdx));
-  const monthsElapsed = mode === "calendar" ? 0 : invoiceMonthsElapsed;
+  const monthsElapsed = Math.min(12, Math.max(0, currentIdx));
   const monthsRemaining = 12 - monthsElapsed;
 
   const defaultProjectId = await getDefaultProjectId();
@@ -350,35 +363,37 @@ export async function getTaxProjection(financialYear: string, mode: TaxProjectio
   const totalDeductions = paidInvoices.reduce((s, i) => s + (i.platformCharges ?? 0) + (i.bankCharges ?? 0), 0);
   const deductionPct = totalGrossInr > 0 ? totalDeductions / totalGrossInr : 0;
 
-  // Bucket every invoice (paid/sent/draft) by the month it was *worked*, using
-  // billingPeriodStart. This is tax-page-specific: April income = days worked in April,
-  // not money received in April. Paid invoices contribute their actual netInrAmount;
-  // open invoices contribute an estimate of net INR from their EUR total.
-  const shouldUseInvoices = mode !== "calendar";
-  const fyInvoices = shouldUseInvoices
-    ? db
-      .select({
-        netInrAmount: invoices.netInrAmount,
-        total: invoices.total,
-        billingPeriodStart: invoices.billingPeriodStart,
-        status: invoices.status,
-      })
-      .from(invoices)
-      .where(
-        and(
-          sql`${invoices.status} IN ('paid', 'sent', 'draft')`,
-          sql`${invoices.billingPeriodStart} >= ${fyStart}`,
-          sql`${invoices.billingPeriodStart} <= ${fyEnd}`,
-        )
+  // Bucket every invoice (paid/sent/draft) by the month it was *issued*, using
+  // issueDate. This is tax-page-specific: April income = invoices generated in April,
+  // not money received in April or days worked in April. Paid invoices contribute
+  // their actual netInrAmount; open invoices contribute an estimate of net INR from
+  // their EUR total. Both modes consult invoices first — only the fallback differs.
+  const fyInvoices = db
+    .select({
+      netInrAmount: invoices.netInrAmount,
+      total: invoices.total,
+      issueDate: invoices.issueDate,
+      status: invoices.status,
+      eurToInrRate: invoices.eurToInrRate,
+    })
+    .from(invoices)
+    .where(
+      and(
+        sql`${invoices.status} IN ('paid', 'sent', 'draft')`,
+        sql`${invoices.issueDate} >= ${fyStart}`,
+        sql`${invoices.issueDate} <= ${fyEnd}`,
       )
-      .all()
-    : [];
+    )
+    .all();
 
   const invoiceByMonth: number[] = Array(12).fill(0);
   const hasInvoiceForMonth: boolean[] = Array(12).fill(false);
+  // Per-month weighted average of the actual FX rate from paid invoices in that month.
+  const paidRateNumByMonth: number[] = Array(12).fill(0);
+  const paidEurByMonth: number[] = Array(12).fill(0);
   for (const inv of fyInvoices) {
-    if (!inv.billingPeriodStart) continue;
-    const [y, m] = inv.billingPeriodStart.split("-").map(Number);
+    if (!inv.issueDate) continue;
+    const [y, m] = inv.issueDate.split("-").map(Number);
     const idx = y === startYear ? m - 4 : m + 8;
     if (idx < 0 || idx >= 12) continue;
     const amount = inv.status === "paid"
@@ -386,7 +401,24 @@ export async function getTaxProjection(financialYear: string, mode: TaxProjectio
       : Math.round((inv.total ?? 0) * currentRate * (1 - deductionPct));
     invoiceByMonth[idx] += amount;
     hasInvoiceForMonth[idx] = true;
+    if (inv.status === "paid" && inv.eurToInrRate && inv.total) {
+      paidRateNumByMonth[idx] += inv.eurToInrRate * inv.total;
+      paidEurByMonth[idx] += inv.total;
+    }
   }
+
+  // Per-month FX rate: weighted avg of paid invoices that month, else live rate.
+  const rateByMonth: number[] = Array.from({ length: 12 }, (_, i) =>
+    paidEurByMonth[i] > 0 ? paidRateNumByMonth[i] / paidEurByMonth[i] : currentRate
+  );
+
+  // Months before the user started working get zeroed out — no calendar fallback.
+  // We infer the work-start month from the earliest invoice ever issued.
+  const earliestInvoice = db
+    .select({ issueDate: sql<string>`MIN(${invoices.issueDate})` })
+    .from(invoices)
+    .get();
+  const workStartDate = earliestInvoice?.issueDate ?? null;
 
   // For each month: use the invoiced amount when available, otherwise fall back to that
   // month's own calendar working-days estimate (no M-1 lag).
@@ -395,12 +427,36 @@ export async function getTaxProjection(financialYear: string, mode: TaxProjectio
   const projectedCalendarBreakdown: (ProjectionCalendarBreakdown | undefined)[] = Array(12).fill(undefined);
 
   for (let i = 0; i < 12; i++) {
-    if (shouldUseInvoices && hasInvoiceForMonth[i]) {
-      projectedMonthly[i] = invoiceByMonth[i];
-      continue;
-    }
     const calYear = i < 9 ? startYear : startYear + 1;
     const calMonth = i < 9 ? i + 4 : i - 8;
+    const monthKey = `${calYear}-${String(calMonth).padStart(2, "0")}`;
+    const beforeWorkStart =
+      workStartDate !== null && monthKey < workStartDate.slice(0, 7);
+
+    if (hasInvoiceForMonth[i]) {
+      projectedMonthly[i] = invoiceByMonth[i];
+      // In calendar mode, also surface the working-days context for invoice-backed
+      // months so the user can see "X days / ₹<rate>" alongside the invoiced amount.
+      if (mode === "calendar" && !beforeWorkStart) {
+        const entries = await getDayEntriesForMonth(calYear, calMonth);
+        const holidays = getFrenchHolidays(calYear);
+        const augmented = withImplicitWorkingDays(entries as DayEntry[], calYear, calMonth, holidays);
+        const summary = calculateMonthSummary(augmented);
+        projectedWorkingDays[i] = summary.effectiveWorkingDays;
+        projectedCalendarBreakdown[i] = calculateProjectionCalendarBreakdown(augmented, holidays);
+      }
+      continue;
+    }
+
+    // Invoice mode: only fall back to calendar working-days for future months.
+    // Past months with no invoice get zero — otherwise we'd double-count when a
+    // multi-month invoice eventually lands in its issue month.
+    // Calendar mode: always fall back to calendar working-days for any month
+    // without an invoice, past or future.
+    if (mode === "invoice" && i < monthsElapsed) continue;
+
+    // Skip months that fall before the user began working.
+    if (beforeWorkStart) continue;
 
     const entries = await getDayEntriesForMonth(calYear, calMonth);
     const holidays = getFrenchHolidays(calYear);
@@ -408,7 +464,6 @@ export async function getTaxProjection(financialYear: string, mode: TaxProjectio
     const summary = calculateMonthSummary(augmented);
     const calendarBreakdown = calculateProjectionCalendarBreakdown(augmented, holidays);
 
-    const monthKey = `${calYear}-${String(calMonth).padStart(2, "0")}`;
     const dailyRate = defaultProjectId ? await getEffectiveRate(defaultProjectId, monthKey) : 0;
 
     const baseAmount = summary.effectiveWorkingDays * dailyRate;
@@ -420,15 +475,68 @@ export async function getTaxProjection(financialYear: string, mode: TaxProjectio
     projectedCalendarBreakdown[i] = calendarBreakdown;
   }
 
-  // Build monthly breakdown
+  // Build monthly breakdown — invoice-backed months are actual, calendar-backed
+  // months are projections.
   const monthlyBreakdown = MONTH_LABELS.map((label, i) => ({
     month: label,
     actual: projectedMonthly[i],
-    projected: mode === "calendar" ? true : i >= monthsElapsed,
+    projected: !hasInvoiceForMonth[i],
     workingDays: projectedWorkingDays[i],
-    invoiceBased: shouldUseInvoices && hasInvoiceForMonth[i],
+    invoiceBased: hasInvoiceForMonth[i],
+    rate: Math.round(rateByMonth[i] * 100) / 100,
     calendarBreakdown: projectedCalendarBreakdown[i],
   }));
+
+  // FY-wide day-type totals from day_entries (with implicit weekday working days
+  // filled in for unmarked dates). Skip months before the user's work-start month.
+  const yearlyDayTotals = {
+    workingDays: 0,
+    extraWorkingDays: 0,
+    halfDays: 0,
+    leaves: 0,
+    holidays: 0,
+    effectiveWorkingDays: 0,
+  };
+  // Companion FY-wide calendar-position breakdown (weekday/holiday/weekend) so
+  // both summary rows are computed from the same set of months and always agree.
+  const yearlyCalendarBreakdown: ProjectionCalendarBreakdown = {
+    weekdayWorkingDays: 0,
+    publicHolidayWorkingDays: 0,
+    weekendWorkingDays: 0,
+  };
+  for (let i = 0; i < 12; i++) {
+    const calYear = i < 9 ? startYear : startYear + 1;
+    const calMonth = i < 9 ? i + 4 : i - 8;
+    const monthKey = `${calYear}-${String(calMonth).padStart(2, "0")}`;
+    if (workStartDate && monthKey < workStartDate.slice(0, 7)) continue;
+
+    const entries = await getDayEntriesForMonth(calYear, calMonth);
+    const holidays = getFrenchHolidays(calYear);
+    const augmented = withImplicitWorkingDays(entries as DayEntry[], calYear, calMonth, holidays);
+    const summary = calculateMonthSummary(augmented);
+    yearlyDayTotals.workingDays += summary.workingDays;
+    yearlyDayTotals.extraWorkingDays += summary.extraWorkingDays;
+    yearlyDayTotals.halfDays += summary.halfDays;
+    yearlyDayTotals.leaves += summary.leaves;
+    yearlyDayTotals.effectiveWorkingDays += summary.effectiveWorkingDays;
+
+    const monthCalBreakdown = calculateProjectionCalendarBreakdown(augmented, holidays);
+    yearlyCalendarBreakdown.weekdayWorkingDays += monthCalBreakdown.weekdayWorkingDays;
+    yearlyCalendarBreakdown.publicHolidayWorkingDays += monthCalBreakdown.publicHolidayWorkingDays;
+    yearlyCalendarBreakdown.weekendWorkingDays += monthCalBreakdown.weekendWorkingDays;
+
+    // Count public holidays directly from the calendar (the holidays map for the
+    // year), filtered to this month, since users rarely create explicit
+    // dayType: "holiday" entries — the days are simply skipped from working.
+    // Exclude holidays the user explicitly worked on (extra_working).
+    const explicitDates = new Map(entries.map((e) => [e.date, e.dayType]));
+    for (const date of holidays.keys()) {
+      if (!date.startsWith(monthKey)) continue;
+      const explicit = explicitDates.get(date);
+      if (explicit === "extra_working" || explicit === "working" || explicit === "half_day") continue;
+      yearlyDayTotals.holidays += 1;
+    }
+  }
 
   const projectedGrossReceipts = projectedMonthly.reduce((a, b) => a + b, 0);
   const projectedPresumptiveIncome = projectedGrossReceipts * 0.5;
@@ -519,6 +627,8 @@ export async function getTaxProjection(financialYear: string, mode: TaxProjectio
       isAssumed,
     },
     advanceTaxSchedule,
+    yearlyDayTotals,
+    yearlyCalendarBreakdown,
   };
 }
 
@@ -560,12 +670,11 @@ function calculateProjectionCalendarBreakdown(
 
 function getProjectionModeSummary(mode: TaxProjectionMode): string {
   switch (mode) {
-    case "invoice":
-      return "Prefer sent or draft invoices where available, then fall back to calendar working days.";
     case "calendar":
-      return "Ignore invoices and project the whole remaining period from calendar working days.";
+      return "Use invoices when issued; otherwise estimate income from calendar working days, including past months.";
+    case "invoice":
     default:
-      return "Auto mode uses invoices when available and falls back to calendar working days otherwise.";
+      return "Use invoices when issued; only project future months from calendar working days. Past months without an invoice show no income.";
   }
 }
 
