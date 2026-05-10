@@ -60,6 +60,7 @@ interface TaxProjection {
     projected: boolean;
     workingDays?: number;
     invoiceBased?: boolean;
+    rate?: number;
     calendarBreakdown?: {
       weekdayWorkingDays: number;
       publicHolidayWorkingDays: number;
@@ -69,7 +70,7 @@ interface TaxProjection {
   monthsElapsed: number;
   monthsRemaining: number;
   avgRate: number;
-  mode: "auto" | "invoice" | "calendar";
+  mode: "invoice" | "calendar";
   modeSummary: string;
   rateSourceLabel: string;
   projectedGrossReceipts: number;
@@ -94,6 +95,19 @@ interface TaxProjection {
     balance: number;
     status: "paid" | "upcoming" | "overdue";
   }[];
+  yearlyDayTotals: {
+    workingDays: number;
+    extraWorkingDays: number;
+    halfDays: number;
+    leaves: number;
+    holidays: number;
+    effectiveWorkingDays: number;
+  };
+  yearlyCalendarBreakdown: {
+    weekdayWorkingDays: number;
+    publicHolidayWorkingDays: number;
+    weekendWorkingDays: number;
+  };
 }
 
 interface TaxPageClientProps {
@@ -102,7 +116,7 @@ interface TaxPageClientProps {
   initialFY: string;
   computation: TaxComputation;
   projection: TaxProjection;
-  initialProjectionMode: "auto" | "invoice" | "calendar";
+  initialProjectionMode: "invoice" | "calendar";
   attachmentsByPaymentId: Record<number, TaxPaymentAttachment[]>;
 }
 
@@ -119,10 +133,10 @@ export function TaxPageClient({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPayment, setEditingPayment] = useState<TaxPayment | null>(null);
 
-  function setProjectionMode(mode: "auto" | "invoice" | "calendar") {
+  function setProjectionMode(mode: "invoice" | "calendar") {
     const params = new URLSearchParams();
     params.set("fy", initialFY);
-    if (mode !== "auto") {
+    if (mode !== "invoice") {
       params.set("pm", mode);
     }
     router.push(`/tax?${params.toString()}`);
@@ -165,24 +179,7 @@ export function TaxPageClient({
   const presumptiveLimit = 7500000;
   const actualExceeds44AdaLimit = computation.grossReceipts > presumptiveLimit;
   const projectedExceeds44AdaLimit = projection.projectedGrossReceipts > presumptiveLimit;
-  const yearlyCalendarBreakdown = projection.monthlyBreakdown.reduce(
-    (totals, month) => {
-      if (!month.calendarBreakdown) return totals;
-      totals.weekdayWorkingDays += month.calendarBreakdown.weekdayWorkingDays;
-      totals.publicHolidayWorkingDays += month.calendarBreakdown.publicHolidayWorkingDays;
-      totals.weekendWorkingDays += month.calendarBreakdown.weekendWorkingDays;
-      return totals;
-    },
-    {
-      weekdayWorkingDays: 0,
-      publicHolidayWorkingDays: 0,
-      weekendWorkingDays: 0,
-    }
-  );
-  const hasYearlyCalendarBreakdown =
-    yearlyCalendarBreakdown.weekdayWorkingDays > 0 ||
-    yearlyCalendarBreakdown.publicHolidayWorkingDays > 0 ||
-    yearlyCalendarBreakdown.weekendWorkingDays > 0;
+  const yearlyCalendarBreakdown = projection.yearlyCalendarBreakdown;
   const yearlyCalendarWorkingDays =
     yearlyCalendarBreakdown.weekdayWorkingDays +
     yearlyCalendarBreakdown.publicHolidayWorkingDays +
@@ -498,7 +495,6 @@ export function TaxPageClient({
             <CardContent className="space-y-4">
               <div className="flex flex-wrap gap-2">
                 {[
-                  { value: "auto", label: "Auto" },
                   { value: "invoice", label: "Invoice-based" },
                   { value: "calendar", label: "Calendar-based" },
                 ].map((option) => (
@@ -506,7 +502,7 @@ export function TaxPageClient({
                     key={option.value}
                     variant={initialProjectionMode === option.value ? "default" : "outline"}
                     size="sm"
-                    onClick={() => setProjectionMode(option.value as "auto" | "invoice" | "calendar")}
+                    onClick={() => setProjectionMode(option.value as "invoice" | "calendar")}
                   >
                     {option.label}
                   </Button>
@@ -546,13 +542,13 @@ export function TaxPageClient({
                     )}>
                       {m.actual > 0 ? formatCurrency(m.actual) : "—"}
                     </p>
-                    {m.projected && m.invoiceBased && (
+                    {m.invoiceBased && projection.mode !== "calendar" && (
                       <p className="text-[10px] text-muted-foreground mt-0.5">Invoice sent</p>
                     )}
-                    {m.projected && !m.invoiceBased && m.workingDays !== undefined && (
+                    {m.workingDays !== undefined && (
                       <div className="mt-0.5 space-y-0.5">
                         <p className="text-[10px] text-muted-foreground">
-                          {formatDayCount(m.workingDays)} days / ₹{projection.avgRate.toFixed(2)}
+                          {formatDayCount(m.workingDays)} days / ₹{(m.rate ?? projection.avgRate).toFixed(2)}
                         </p>
                         {m.calendarBreakdown && (
                           <div className="flex items-center justify-center gap-1.5 text-[10px] font-medium tabular-nums leading-tight">
@@ -572,35 +568,33 @@ export function TaxPageClient({
                   </div>
                 ))}
               </div>
-              {hasYearlyCalendarBreakdown && (
-                <div className="mt-5 rounded-xl border bg-muted/20 p-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="text-sm font-medium">Financial Year Total</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatDayCount(yearlyCalendarWorkingDays)} total working days from calendar mode
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3 text-sm font-semibold tabular-nums">
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700 dark:bg-slate-900 dark:text-slate-200">
-                      {formatDayCount(yearlyCalendarBreakdown.weekdayWorkingDays)}
-                    </span>
-                    <span className="rounded-full bg-violet-100 px-2.5 py-1 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300">
-                      {formatDayCount(yearlyCalendarBreakdown.publicHolidayWorkingDays)}
-                    </span>
-                    <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
-                      {formatDayCount(yearlyCalendarBreakdown.weekendWorkingDays)}
-                    </span>
-                    </div>
-                  </div>
-                  {projection.mode === "calendar" && daysToTrimFor44Ada > 0 && (
-                    <p className="mt-3 text-xs text-red-600 dark:text-red-400">
-                      To come under the ₹75 lakh limit at the current projection, you need to remove about{" "}
-                      {formatDayCount(daysToTrimFor44Ada)} working day{daysToTrimFor44Ada === 1 ? "" : "s"} or take the same number of additional leave day{daysToTrimFor44Ada === 1 ? "" : "s"}.
+              <div className="mt-5 rounded-xl border bg-muted/20 p-4 space-y-3">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <div>
+                    <p className="text-sm font-medium">Financial Year Total</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatDayCount(projection.yearlyDayTotals.effectiveWorkingDays)} effective working days across the FY
                     </p>
-                  )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-xs font-medium tabular-nums">
+                    <span className="rounded-full bg-blue-100 px-2.5 py-1 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">
+                      Working {formatDayCount(projection.yearlyDayTotals.workingDays + projection.yearlyDayTotals.halfDays * 0.5)}
+                    </span>
+                    <span className="rounded-full bg-purple-100 px-2.5 py-1 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300">
+                      Extra {formatDayCount(projection.yearlyDayTotals.extraWorkingDays)}
+                    </span>
+                    <span className="rounded-full bg-red-100 px-2.5 py-1 text-red-700 dark:bg-red-950/60 dark:text-red-300">
+                      Leaves {formatDayCount(projection.yearlyDayTotals.leaves + projection.yearlyDayTotals.halfDays * 0.5)}
+                    </span>
+                  </div>
                 </div>
-              )}
+                {projection.mode === "calendar" && daysToTrimFor44Ada > 0 && (
+                  <p className="text-xs text-red-600 dark:text-red-400">
+                    To come under the ₹75 lakh limit at the current projection, you need to remove about{" "}
+                    {formatDayCount(daysToTrimFor44Ada)} working day{daysToTrimFor44Ada === 1 ? "" : "s"} or take the same number of additional leave day{daysToTrimFor44Ada === 1 ? "" : "s"}.
+                  </p>
+                )}
+              </div>
             </CardContent>
           </Card>
 

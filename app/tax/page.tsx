@@ -14,7 +14,7 @@ export default async function TaxPage({ searchParams }: TaxPageProps) {
   const params = await searchParams;
   const fy = params.fy || getCurrentFinancialYear();
   const projectionMode: TaxProjectionMode =
-    params.pm === "invoice" || params.pm === "calendar" ? params.pm : "auto";
+    params.pm === "calendar" ? "calendar" : "invoice";
   const [payments, summary, computation, projection] = await Promise.all([
     getTaxPayments(fy),
     getTaxSummaryForFY(fy),
