@@ -59,6 +59,7 @@ interface TaxProjection {
     actual: number;
     projected: boolean;
     workingDays?: number;
+    leaves?: number;
     invoiceBased?: boolean;
     rate?: number;
     calendarBreakdown?: {
@@ -561,6 +562,11 @@ export function TaxPageClient({
                             <span className="text-emerald-600 dark:text-emerald-400">
                               {formatDayCount(m.calendarBreakdown.weekendWorkingDays)}
                             </span>
+                            {m.leaves !== undefined && m.leaves > 0 && (
+                              <span className="text-red-600 dark:text-red-400">
+                                {formatDayCount(m.leaves)}
+                              </span>
+                            )}
                           </div>
                         )}
                       </div>
