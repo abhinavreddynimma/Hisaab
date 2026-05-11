@@ -222,7 +222,11 @@ export async function getTaxComputation(financialYear: string): Promise<{
   };
 }
 
-export async function getTaxProjection(financialYear: string, mode: TaxProjectionMode = "invoice"): Promise<{
+export async function getTaxProjection(
+  financialYear: string,
+  mode: TaxProjectionMode = "invoice",
+  deferredInvoiceIds: number[] = [],
+): Promise<{
   monthlyBreakdown: {
     month: string;
     actual: number;
@@ -274,6 +278,15 @@ export async function getTaxProjection(financialYear: string, mode: TaxProjectio
     publicHolidayWorkingDays: number;
     weekendWorkingDays: number;
   };
+  deferrableInvoices: {
+    id: number;
+    invoiceNumber: string;
+    issueDate: string;
+    netInrAmount: number | null;
+    total: number | null;
+    status: string;
+  }[];
+  deferredInvoiceIds: number[];
 }> {
   await assertAdminAccess();
   const [startYear] = financialYear.split("-").map(Number);
@@ -369,8 +382,10 @@ export async function getTaxProjection(financialYear: string, mode: TaxProjectio
   // not money received in April or days worked in April. Paid invoices contribute
   // their actual netInrAmount; open invoices contribute an estimate of net INR from
   // their EUR total. Both modes consult invoices first — only the fallback differs.
-  const fyInvoices = db
+  const fyInvoicesRaw = db
     .select({
+      id: invoices.id,
+      invoiceNumber: invoices.invoiceNumber,
       netInrAmount: invoices.netInrAmount,
       total: invoices.total,
       issueDate: invoices.issueDate,
@@ -386,6 +401,24 @@ export async function getTaxProjection(financialYear: string, mode: TaxProjectio
       )
     )
     .all();
+
+  // Deferrable = invoices issued in the last month of the FY (March of startYear+1).
+  // Allows the user to simulate "what if I delayed this March invoice to April"
+  // for 44ADA-threshold planning without mutating real data.
+  const fyEndMonthKey = `${startYear + 1}-03`;
+  const deferrableInvoices = fyInvoicesRaw
+    .filter((inv) => inv.issueDate && inv.issueDate.startsWith(fyEndMonthKey))
+    .map((inv) => ({
+      id: inv.id,
+      invoiceNumber: inv.invoiceNumber,
+      issueDate: inv.issueDate,
+      netInrAmount: inv.netInrAmount,
+      total: inv.total,
+      status: inv.status,
+    }));
+
+  const deferredSet = new Set(deferredInvoiceIds);
+  const fyInvoices = fyInvoicesRaw.filter((inv) => !deferredSet.has(inv.id));
 
   const invoiceByMonth: number[] = Array(12).fill(0);
   const hasInvoiceForMonth: boolean[] = Array(12).fill(false);
@@ -634,6 +667,10 @@ export async function getTaxProjection(financialYear: string, mode: TaxProjectio
     advanceTaxSchedule,
     yearlyDayTotals,
     yearlyCalendarBreakdown,
+    deferrableInvoices,
+    deferredInvoiceIds: deferredInvoiceIds.filter((id) =>
+      deferrableInvoices.some((inv) => inv.id === id)
+    ),
   };
 }
 

@@ -109,6 +109,15 @@ interface TaxProjection {
     publicHolidayWorkingDays: number;
     weekendWorkingDays: number;
   };
+  deferrableInvoices: {
+    id: number;
+    invoiceNumber: string;
+    issueDate: string;
+    netInrAmount: number | null;
+    total: number | null;
+    status: string;
+  }[];
+  deferredInvoiceIds: number[];
 }
 
 interface TaxPageClientProps {
@@ -134,13 +143,25 @@ export function TaxPageClient({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPayment, setEditingPayment] = useState<TaxPayment | null>(null);
 
-  function setProjectionMode(mode: "invoice" | "calendar") {
+  function buildParams(overrides: { mode?: "invoice" | "calendar"; deferIds?: number[] } = {}) {
     const params = new URLSearchParams();
     params.set("fy", initialFY);
-    if (mode !== "invoice") {
-      params.set("pm", mode);
-    }
-    router.push(`/tax?${params.toString()}`);
+    const mode = overrides.mode ?? initialProjectionMode;
+    if (mode !== "invoice") params.set("pm", mode);
+    const deferIds = overrides.deferIds ?? projection.deferredInvoiceIds;
+    if (deferIds.length > 0) params.set("defer", deferIds.join(","));
+    return params;
+  }
+
+  function setProjectionMode(mode: "invoice" | "calendar") {
+    router.push(`/tax?${buildParams({ mode }).toString()}`);
+  }
+
+  function toggleDeferred(invoiceId: number) {
+    const current = new Set(projection.deferredInvoiceIds);
+    if (current.has(invoiceId)) current.delete(invoiceId);
+    else current.add(invoiceId);
+    router.push(`/tax?${buildParams({ deferIds: Array.from(current) }).toString()}`);
   }
 
   function handleAdd() {
@@ -520,6 +541,58 @@ export function TaxPageClient({
               </div>
             </CardContent>
           </Card>
+
+          {projection.deferrableInvoices.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Defer March invoices (preview)</CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Simulate moving these March invoices to the next financial year. Affects this projection
+                  only — no invoice data is changed.
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {projection.deferrableInvoices.map((inv) => {
+                    const isDeferred = projection.deferredInvoiceIds.includes(inv.id);
+                    const amount = inv.netInrAmount ?? (inv.total ?? 0) * projection.avgRate;
+                    return (
+                      <label
+                        key={inv.id}
+                        className={cn(
+                          "flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm cursor-pointer hover:bg-muted/40",
+                          isDeferred && "bg-amber-50/60 border-amber-300/60 dark:bg-amber-950/30 dark:border-amber-700/60"
+                        )}
+                      >
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            checked={isDeferred}
+                            onChange={() => toggleDeferred(inv.id)}
+                            className="h-4 w-4"
+                          />
+                          <div>
+                            <p className="font-medium">{inv.invoiceNumber}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Issued {formatDate(inv.issueDate)} · {inv.status}
+                            </p>
+                          </div>
+                        </div>
+                        <span className="tabular-nums font-medium">
+                          {formatCurrency(Math.round(amount))}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+                {projection.deferredInvoiceIds.length > 0 && (
+                  <p className="mt-3 text-xs text-amber-700 dark:text-amber-400">
+                    {projection.deferredInvoiceIds.length} invoice{projection.deferredInvoiceIds.length === 1 ? "" : "s"} deferred — excluded from this FY's projection.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Monthly Income Breakdown */}
           <Card>
