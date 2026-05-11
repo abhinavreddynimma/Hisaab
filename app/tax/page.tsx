@@ -5,7 +5,7 @@ import { requirePageAccess } from "@/lib/auth";
 import type { TaxPaymentAttachment } from "@/lib/types";
 
 interface TaxPageProps {
-  searchParams: Promise<{ fy?: string; pm?: string }>;
+  searchParams: Promise<{ fy?: string; pm?: string; defer?: string }>;
 }
 
 export default async function TaxPage({ searchParams }: TaxPageProps) {
@@ -15,11 +15,15 @@ export default async function TaxPage({ searchParams }: TaxPageProps) {
   const fy = params.fy || getCurrentFinancialYear();
   const projectionMode: TaxProjectionMode =
     params.pm === "calendar" ? "calendar" : "invoice";
+  const deferredInvoiceIds = (params.defer ?? "")
+    .split(",")
+    .map((s) => parseInt(s, 10))
+    .filter((n) => Number.isFinite(n) && n > 0);
   const [payments, summary, computation, projection] = await Promise.all([
     getTaxPayments(fy),
     getTaxSummaryForFY(fy),
     getTaxComputation(fy),
-    getTaxProjection(fy, projectionMode),
+    getTaxProjection(fy, projectionMode, deferredInvoiceIds),
   ]);
 
   // Fetch attachments for all payments
