@@ -228,6 +228,7 @@ export async function getTaxProjection(financialYear: string, mode: TaxProjectio
     actual: number;
     projected: boolean;
     workingDays?: number;
+    leaves?: number;
     invoiceBased?: boolean;
     rate?: number;
     calendarBreakdown?: ProjectionCalendarBreakdown;
@@ -424,6 +425,7 @@ export async function getTaxProjection(financialYear: string, mode: TaxProjectio
   // month's own calendar working-days estimate (no M-1 lag).
   const projectedMonthly: number[] = Array(12).fill(0);
   const projectedWorkingDays: (number | undefined)[] = Array(12).fill(undefined);
+  const projectedLeaves: (number | undefined)[] = Array(12).fill(undefined);
   const projectedCalendarBreakdown: (ProjectionCalendarBreakdown | undefined)[] = Array(12).fill(undefined);
 
   for (let i = 0; i < 12; i++) {
@@ -443,6 +445,7 @@ export async function getTaxProjection(financialYear: string, mode: TaxProjectio
         const augmented = withImplicitWorkingDays(entries as DayEntry[], calYear, calMonth, holidays);
         const summary = calculateMonthSummary(augmented);
         projectedWorkingDays[i] = summary.effectiveWorkingDays;
+        projectedLeaves[i] = summary.leaves + summary.halfDays * 0.5;
         projectedCalendarBreakdown[i] = calculateProjectionCalendarBreakdown(augmented, holidays);
       }
       continue;
@@ -472,6 +475,7 @@ export async function getTaxProjection(financialYear: string, mode: TaxProjectio
 
     projectedMonthly[i] = Math.round(netInr);
     projectedWorkingDays[i] = summary.effectiveWorkingDays;
+    projectedLeaves[i] = summary.leaves + summary.halfDays * 0.5;
     projectedCalendarBreakdown[i] = calendarBreakdown;
   }
 
@@ -482,6 +486,7 @@ export async function getTaxProjection(financialYear: string, mode: TaxProjectio
     actual: projectedMonthly[i],
     projected: !hasInvoiceForMonth[i],
     workingDays: projectedWorkingDays[i],
+    leaves: projectedLeaves[i],
     invoiceBased: hasInvoiceForMonth[i],
     rate: Math.round(rateByMonth[i] * 100) / 100,
     calendarBreakdown: projectedCalendarBreakdown[i],
