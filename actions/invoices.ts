@@ -412,8 +412,26 @@ export async function updatePaymentDetails(
     bankCharges: number;
     netInrAmount: number;
   }
-): Promise<{ success: boolean }> {
+): Promise<{ success: boolean; error?: string }> {
   await assertAdminAccess();
+
+  // Sanity-check inputs at the server-action boundary: this writes directly to
+  // the audit trail so absurd values must not be persisted.
+  if (
+    !Number.isFinite(data.eurToInrRate) ||
+    !Number.isFinite(data.platformCharges) ||
+    !Number.isFinite(data.bankCharges) ||
+    !Number.isFinite(data.netInrAmount)
+  ) {
+    return { success: false, error: "Payment amounts must be valid numbers." };
+  }
+  if (data.eurToInrRate <= 0 || data.eurToInrRate > 1000) {
+    return { success: false, error: "FX rate must be between 0 and 1000." };
+  }
+  if (data.platformCharges < 0 || data.bankCharges < 0 || data.netInrAmount < 0) {
+    return { success: false, error: "Charges and net INR cannot be negative." };
+  }
+
   db.update(invoices)
     .set({
       paidDate: data.paidDate,

@@ -24,6 +24,14 @@ export function getCurrentFinancialYear(): string {
   return `${year - 1}-${String(year).slice(2)}`;
 }
 
+// Section 44ADA presumptive-income limit. Above this, presumptive (50%) does
+// not apply and tax is computed on full gross receipts.
+export const PRESUMPTIVE_LIMIT_44ADA = 7500000;
+
+export function is44AdaEligible(grossReceipts: number): boolean {
+  return grossReceipts <= PRESUMPTIVE_LIMIT_44ADA;
+}
+
 export const INVOICE_STATUSES = {
   draft: { label: "Draft", variant: "outline" as const, className: "bg-stone-50 text-stone-500 border-stone-200 dark:bg-stone-900 dark:text-stone-400 dark:border-stone-700" },
   sent: { label: "Sent", variant: "outline" as const, className: "bg-sky-50 text-sky-600 border-sky-200 dark:bg-sky-950 dark:text-sky-400 dark:border-sky-800" },

@@ -9,7 +9,7 @@ import { getDefaultProjectId } from "./settings";
 import { getEffectiveRate } from "./projects";
 import { calculateMonthSummary, withImplicitWorkingDays } from "@/lib/calculations";
 import { syncTaxPaymentToExpense, removeTaxPaymentExpenseLink } from "./tax-expense-sync";
-import { getFrenchHolidays, TAX_QUARTERS } from "@/lib/constants";
+import { getFrenchHolidays, TAX_QUARTERS, PRESUMPTIVE_LIMIT_44ADA, is44AdaEligible, getCurrentFinancialYear } from "@/lib/constants";
 import { assertAdminAccess, assertAuthenticatedAccess } from "@/lib/auth";
 import { unlink } from "fs/promises";
 import path from "path";
@@ -192,10 +192,8 @@ export async function getTaxComputation(financialYear: string): Promise<{
   // gross receipts (no standard deduction available for self-employed) — this is
   // the worst-case estimate; actual business profit may be lower if expenses are
   // deducted under regular books of account.
-  const PRESUMPTIVE_LIMIT_44ADA = 7500000;
-  const is44AdaEligible = grossReceipts <= PRESUMPTIVE_LIMIT_44ADA;
   const presumptiveIncome = grossReceipts * 0.5;
-  const taxableIncome = Math.max(0, is44AdaEligible ? presumptiveIncome : grossReceipts);
+  const taxableIncome = Math.max(0, is44AdaEligible(grossReceipts) ? presumptiveIncome : grossReceipts);
 
   // Calculate tax
   const { slabBreakdown, totalTax: incomeTax } = calculateIncomeTax(taxableIncome);
@@ -375,14 +373,18 @@ export async function getTaxProjection(
     }
   }
 
-  // Compute average deduction % from paid invoices
+  // Compute average deduction % from paid invoices. Sanity-cap at 10% so a
+  // single bad data point can't distort projections. This pct is applied ONLY
+  // to sent/draft invoices that don't yet have actual payment details — paid
+  // invoices use their stored netInrAmount directly.
   const totalEur = paidInvoices.reduce((s, i) => s + (i.total ?? 0), 0);
   const avgRate = totalEur > 0
     ? paidInvoices.reduce((s, i) => s + (i.eurToInrRate ?? 0) * (i.total ?? 0), 0) / totalEur
     : currentRate;
   const totalGrossInr = totalEur * avgRate;
   const totalDeductions = paidInvoices.reduce((s, i) => s + (i.platformCharges ?? 0) + (i.bankCharges ?? 0), 0);
-  const deductionPct = totalGrossInr > 0 ? totalDeductions / totalGrossInr : 0;
+  const rawDeductionPct = totalGrossInr > 0 ? totalDeductions / totalGrossInr : 0;
+  const deductionPct = Math.min(Math.max(0, rawDeductionPct), 0.10);
 
   // Bucket every invoice (paid/sent/draft) by the month it was *issued*, using
   // issueDate. This is tax-page-specific: April income = invoices generated in April,
@@ -619,12 +621,10 @@ export async function getTaxProjection(
   const projectedGrossReceipts = projectedMonthly.reduce((a, b) => a + b, 0);
   // 44ADA presumptive (50%) only applies up to ₹75L. Above that, tax is computed
   // on full gross receipts.
-  const PRESUMPTIVE_LIMIT_44ADA = 7500000;
-  const projectedIs44AdaEligible = projectedGrossReceipts <= PRESUMPTIVE_LIMIT_44ADA;
   const projectedPresumptiveIncome = projectedGrossReceipts * 0.5;
   const projectedTaxableIncome = Math.max(
     0,
-    projectedIs44AdaEligible ? projectedPresumptiveIncome : projectedGrossReceipts,
+    is44AdaEligible(projectedGrossReceipts) ? projectedPresumptiveIncome : projectedGrossReceipts,
   );
 
   const { slabBreakdown, totalTax } = calculateIncomeTax(projectedTaxableIncome);
@@ -638,7 +638,7 @@ export async function getTaxProjection(
   // can show "save ₹X by deferring" or "saved ₹X by deferring". Honours the
   // 44ADA threshold: above ₹75L, presumptive does not apply.
   function totalTaxForGross(gross: number): number {
-    const taxable = gross <= PRESUMPTIVE_LIMIT_44ADA ? Math.max(0, gross * 0.5) : Math.max(0, gross);
+    const taxable = is44AdaEligible(gross) ? Math.max(0, gross * 0.5) : Math.max(0, gross);
     const { totalTax: slabTax } = calculateIncomeTax(taxable);
     const rebate = taxable <= 1200000 ? Math.min(slabTax, 60000) : 0;
     const afterRebate = slabTax - rebate;
@@ -653,14 +653,14 @@ export async function getTaxProjection(
   const totalPaid = taxSummary.total;
   const projectedBalance = projectedTotalTax - totalPaid;
 
-  // Advance tax schedule: assume gross receipts of ₹74.5L for FY 2026-27 (just under
-  // the 44ADA limit) so the schedule is stable across the year and doesn't drift with
-  // the live projection. For other FYs, fall back to the live projection.
-  const HARDCODED_FY = "2026-27";
-  const HARDCODED_GROSS = 7450000;
-  const isAssumed = financialYear === HARDCODED_FY;
-  const advanceGross = isAssumed ? HARDCODED_GROSS : projectedGrossReceipts;
-  const advanceTaxable = advanceGross <= PRESUMPTIVE_LIMIT_44ADA
+  // Advance tax schedule basis: for the CURRENT FY (still in progress), assume
+  // gross receipts of ₹74.5L (just under the 44ADA limit) so the schedule is
+  // stable across the year and doesn't drift with the live projection. For
+  // past/future FYs, fall back to the live projection.
+  const ASSUMED_GROSS_RECEIPTS = PRESUMPTIVE_LIMIT_44ADA - 50000; // ₹74.5L
+  const isAssumed = financialYear === getCurrentFinancialYear();
+  const advanceGross = isAssumed ? ASSUMED_GROSS_RECEIPTS : projectedGrossReceipts;
+  const advanceTaxable = is44AdaEligible(advanceGross)
     ? Math.max(0, advanceGross * 0.5)
     : Math.max(0, advanceGross);
   const { totalTax: advanceIncomeTax } = calculateIncomeTax(advanceTaxable);
@@ -784,14 +784,8 @@ function getProjectionModeSummary(mode: TaxProjectionMode): string {
 }
 
 async function getLiveRateForCurrency(currency: string): Promise<number | null> {
-  try {
-    const response = await fetch(`https://open.er-api.com/v6/latest/${currency}`, { next: { revalidate: 3600 } });
-    if (!response.ok) return null;
-    const data = await response.json();
-    return data?.rates?.INR ?? null;
-  } catch {
-    return null;
-  }
+  const { getLiveRateToInr } = await import("@/lib/exchange-rates");
+  return getLiveRateToInr(currency);
 }
 
 export async function getTaxSummaryForFY(financialYear: string): Promise<{

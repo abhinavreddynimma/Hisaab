@@ -28,7 +28,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { TAX_QUARTERS } from "@/lib/constants";
+import { TAX_QUARTERS, PRESUMPTIVE_LIMIT_44ADA } from "@/lib/constants";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { deleteTaxPayment } from "@/actions/tax-payments";
 import { TaxPaymentDialog } from "./tax-payment-dialog";
@@ -197,7 +197,7 @@ export function TaxPageClient({
     return Number.isInteger(days) ? String(days) : days.toFixed(1);
   }
 
-  const presumptiveLimit = 7500000;
+  const presumptiveLimit = PRESUMPTIVE_LIMIT_44ADA;
   const actualExceeds44AdaLimit = computation.grossReceipts > presumptiveLimit;
   const projectedExceeds44AdaLimit = projection.projectedGrossReceipts > presumptiveLimit;
   const yearlyCalendarBreakdown = projection.yearlyCalendarBreakdown;
