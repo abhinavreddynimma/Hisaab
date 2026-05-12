@@ -1,5 +1,14 @@
 import type { MonthSummary, DayEntry, LeavePolicy } from "./types";
 
+// Date conventions used across this module and the actions layer:
+// - "Financial year" is the Indian FY: April 1 of `startYear` through March 31
+//   of `startYear + 1`. e.g. FY 2026-27 = [2026-04-01, 2027-03-31].
+// - All dates are stored and compared as ISO `YYYY-MM-DD` strings (lexicographic
+//   comparison is correct for ranges). No `Date` constructors during comparison
+//   to avoid timezone drift.
+// - Month indices are 1-based when stored (Jan = 1, Dec = 12) and 0-based when
+//   passed to the JS `Date` constructor.
+
 export function calculateMonthSummary(entries: DayEntry[]): MonthSummary {
   const summary: MonthSummary = {
     workingDays: 0,
@@ -93,6 +102,13 @@ export function withImplicitWorkingDays(
   month: number,
   holidays: Map<string, string>,
 ): DayEntry[] {
+  // Sanity check: if no holidays loaded for this year, statutory holidays will
+  // be silently counted as working days. Surface during development.
+  if (holidays.size === 0) {
+    console.warn(
+      `[withImplicitWorkingDays] No holidays for ${year} — implicit working days may include public holidays.`,
+    );
+  }
   const entryDates = new Set(entries.map((e) => e.date));
   const daysInMonth = getDaysInMonth(year, month);
   const augmented: DayEntry[] = [...entries];

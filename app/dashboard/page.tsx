@@ -64,6 +64,32 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       getActiveReminders(),
     ]);
 
+  // First-run / empty-state detection: no earnings AND no open invoices means
+  // there's nothing meaningful to show in the dashboard yet.
+  const isEmptyDashboard = stats.totalEarnings === 0 && stats.openInvoices === 0 && recentInvoices.length === 0;
+
+  if (isEmptyDashboard) {
+    return (
+      <div className="space-y-6">
+        <h1 className="font-display text-2xl font-bold tracking-tight">Dashboard</h1>
+        <div className="rounded-xl border border-dashed bg-muted/20 p-10 text-center">
+          <h2 className="text-lg font-semibold mb-1">Welcome to Hisaab</h2>
+          <p className="text-sm text-muted-foreground max-w-md mx-auto mb-6">
+            You haven&apos;t added any clients, projects, or invoices yet. Start with a client, then create your first invoice.
+          </p>
+          <div className="flex items-center justify-center gap-3">
+            <a href="/clients" className="inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+              Add a client
+            </a>
+            <a href="/invoices/new" className="inline-flex items-center rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted">
+              New invoice
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">

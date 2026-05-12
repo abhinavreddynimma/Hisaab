@@ -4,17 +4,7 @@ import { Button } from "@/components/ui/button";
 import { InvoiceList } from "@/components/invoices/invoice-list";
 import { getInvoices, getInvoiceAttachmentCounts } from "@/actions/invoices";
 import { requirePageAccess } from "@/lib/auth";
-
-async function getCurrentEurToInrRate(): Promise<number | null> {
-  try {
-    const res = await fetch("https://open.er-api.com/v6/latest/EUR", { next: { revalidate: 3600 } });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data?.rates?.INR ?? null;
-  } catch {
-    return null;
-  }
-}
+import { getLiveRateToInr } from "@/lib/exchange-rates";
 
 export default async function InvoicesPage() {
   const access = await requirePageAccess({ allowViewer: true });
@@ -22,7 +12,7 @@ export default async function InvoicesPage() {
   const [invoices, attachmentCounts, currentEurToInrRate] = await Promise.all([
     getInvoices(),
     getInvoiceAttachmentCounts(),
-    getCurrentEurToInrRate(),
+    getLiveRateToInr("EUR"),
   ]);
 
   return (

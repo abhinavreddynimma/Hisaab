@@ -657,14 +657,8 @@ export async function getCalendarOverviewData(): Promise<{
 
 export async function getLiveRate(currency: string = "EUR"): Promise<number | null> {
   await assertAdminAccess();
-  try {
-    const res = await fetch(`https://open.er-api.com/v6/latest/${currency}`, { next: { revalidate: 3600 } });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data?.rates?.INR ?? null;
-  } catch {
-    return null;
-  }
+  const { getLiveRateToInr } = await import("@/lib/exchange-rates");
+  return getLiveRateToInr(currency);
 }
 
 export async function getRecentInvoices(limit: number = 5): Promise<

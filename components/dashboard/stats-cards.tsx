@@ -11,7 +11,7 @@ interface StatsCardsProps {
 
 export function StatsCards({ stats, monthlyEarnings }: StatsCardsProps) {
   return (
-    <div className="grid gap-4 grid-cols-3">
+    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
       <Card className="relative overflow-hidden">
         <CardContent className="p-5">
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">Total Earnings</p>
