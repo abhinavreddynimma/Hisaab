@@ -109,7 +109,7 @@ interface TaxProjection {
     publicHolidayWorkingDays: number;
     weekendWorkingDays: number;
   };
-  deferrableInvoices: {
+  marchInvoices: {
     id: number;
     invoiceNumber: string;
     issueDate: string;
@@ -117,7 +117,8 @@ interface TaxProjection {
     total: number | null;
     status: string;
   }[];
-  deferredInvoiceIds: number[];
+  marchDeferralAmount: number;
+  deferMarch: boolean;
 }
 
 interface TaxPageClientProps {
@@ -143,13 +144,13 @@ export function TaxPageClient({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPayment, setEditingPayment] = useState<TaxPayment | null>(null);
 
-  function buildParams(overrides: { mode?: "invoice" | "calendar"; deferIds?: number[] } = {}) {
+  function buildParams(overrides: { mode?: "invoice" | "calendar"; deferMarch?: boolean } = {}) {
     const params = new URLSearchParams();
     params.set("fy", initialFY);
     const mode = overrides.mode ?? initialProjectionMode;
     if (mode !== "invoice") params.set("pm", mode);
-    const deferIds = overrides.deferIds ?? projection.deferredInvoiceIds;
-    if (deferIds.length > 0) params.set("defer", deferIds.join(","));
+    const deferMarch = overrides.deferMarch ?? projection.deferMarch;
+    if (deferMarch) params.set("deferMarch", "1");
     return params;
   }
 
@@ -157,11 +158,8 @@ export function TaxPageClient({
     router.push(`/tax?${buildParams({ mode }).toString()}`);
   }
 
-  function toggleDeferred(invoiceId: number) {
-    const current = new Set(projection.deferredInvoiceIds);
-    if (current.has(invoiceId)) current.delete(invoiceId);
-    else current.add(invoiceId);
-    router.push(`/tax?${buildParams({ deferIds: Array.from(current) }).toString()}`);
+  function toggleDeferMarch() {
+    router.push(`/tax?${buildParams({ deferMarch: !projection.deferMarch }).toString()}`);
   }
 
   function handleAdd() {
@@ -542,57 +540,62 @@ export function TaxPageClient({
             </CardContent>
           </Card>
 
-          {projection.deferrableInvoices.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Defer March invoices (preview)</CardTitle>
-                <p className="text-xs text-muted-foreground">
-                  Simulate moving these March invoices to the next financial year. Affects this projection
-                  only — no invoice data is changed.
-                </p>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {projection.deferrableInvoices.map((inv) => {
-                    const isDeferred = projection.deferredInvoiceIds.includes(inv.id);
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Defer March to next FY (preview)</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Simulate moving March's income — whether actual invoices or the calendar projection
+                — into the next financial year. Affects this projection only; no data is changed.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">
+                    {projection.deferMarch ? "March is deferred" : "March counts in this FY"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {projection.marchInvoices.length > 0
+                      ? `${projection.marchInvoices.length} March invoice${projection.marchInvoices.length === 1 ? "" : "s"}`
+                      : projection.marchDeferralAmount > 0
+                      ? "Calendar projection (no March invoice yet)"
+                      : "Nothing in March to defer"}
+                    {projection.marchDeferralAmount > 0 && (
+                      <> · {formatCurrency(Math.round(projection.marchDeferralAmount))} affected</>
+                    )}
+                  </p>
+                </div>
+                <Button
+                  variant={projection.deferMarch ? "default" : "outline"}
+                  size="sm"
+                  onClick={toggleDeferMarch}
+                  disabled={projection.marchDeferralAmount === 0}
+                >
+                  {projection.deferMarch ? "Undo defer" : "Defer March"}
+                </Button>
+              </div>
+              {projection.marchInvoices.length > 0 && (
+                <ul className="space-y-1 text-xs text-muted-foreground">
+                  {projection.marchInvoices.map((inv) => {
                     const amount = inv.netInrAmount ?? (inv.total ?? 0) * projection.avgRate;
                     return (
-                      <label
-                        key={inv.id}
-                        className={cn(
-                          "flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm cursor-pointer hover:bg-muted/40",
-                          isDeferred && "bg-amber-50/60 border-amber-300/60 dark:bg-amber-950/30 dark:border-amber-700/60"
-                        )}
-                      >
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="checkbox"
-                            checked={isDeferred}
-                            onChange={() => toggleDeferred(inv.id)}
-                            className="h-4 w-4"
-                          />
-                          <div>
-                            <p className="font-medium">{inv.invoiceNumber}</p>
-                            <p className="text-xs text-muted-foreground">
-                              Issued {formatDate(inv.issueDate)} · {inv.status}
-                            </p>
-                          </div>
-                        </div>
-                        <span className="tabular-nums font-medium">
-                          {formatCurrency(Math.round(amount))}
+                      <li key={inv.id} className="flex items-center justify-between gap-3">
+                        <span>
+                          {inv.invoiceNumber} · {formatDate(inv.issueDate)} · {inv.status}
                         </span>
-                      </label>
+                        <span className="tabular-nums">{formatCurrency(Math.round(amount))}</span>
+                      </li>
                     );
                   })}
-                </div>
-                {projection.deferredInvoiceIds.length > 0 && (
-                  <p className="mt-3 text-xs text-amber-700 dark:text-amber-400">
-                    {projection.deferredInvoiceIds.length} invoice{projection.deferredInvoiceIds.length === 1 ? "" : "s"} deferred — excluded from this FY's projection.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          )}
+                </ul>
+              )}
+              {projection.deferMarch && (
+                <p className="text-xs text-amber-700 dark:text-amber-400">
+                  March income excluded from this FY's projection.
+                </p>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Monthly Income Breakdown */}
           <Card>
