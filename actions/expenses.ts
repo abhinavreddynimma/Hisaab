@@ -486,7 +486,7 @@ export async function deleteExpenseTransaction(id: number): Promise<{ success: b
   });
 
   revalidatePath("/expenses");
-  revalidatePath("/expenses-2");
+  revalidatePath("/bank");
   return { success: true };
 }
 

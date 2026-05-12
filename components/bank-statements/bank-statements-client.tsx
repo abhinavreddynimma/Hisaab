@@ -64,7 +64,7 @@ export function BankStatementsClient({
     let y = currentYear;
     if (m > 12) { m = 1; y++; }
     if (m < 1) { m = 12; y--; }
-    router.push(`/expenses-2?month=${m}&year=${y}`);
+    router.push(`/bank?month=${m}&year=${y}`);
   }
 
   function openClassify(entry: BankStatementEntry) {
