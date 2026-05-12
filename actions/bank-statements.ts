@@ -400,7 +400,7 @@ export async function classifyBankStatementEntry(
       .run();
   });
 
-  revalidatePath("/expenses-2");
+  revalidatePath("/bank");
   revalidatePath("/expenses");
 }
 
@@ -487,7 +487,7 @@ export async function classifyBankStatementEntryWithSplits(
       .run();
   });
 
-  revalidatePath("/expenses-2");
+  revalidatePath("/bank");
   revalidatePath("/expenses");
 }
 
@@ -497,7 +497,7 @@ export async function unclassifyBankStatementEntry(id: number) {
     clearBankStatementClassification(tx, id);
   });
 
-  revalidatePath("/expenses-2");
+  revalidatePath("/bank");
   revalidatePath("/expenses");
 }
 
@@ -507,7 +507,7 @@ export async function dismissBankStatementEntry(id: number) {
     clearBankStatementClassification(tx, id, true);
   });
 
-  revalidatePath("/expenses-2");
+  revalidatePath("/bank");
   revalidatePath("/expenses");
 }
 
@@ -560,7 +560,7 @@ export async function importBankStatementEntries(
     })),
   ).run();
 
-  revalidatePath("/expenses-2");
+  revalidatePath("/bank");
 }
 
 export async function getBankStatementStats(startDate?: string, endDate?: string) {
@@ -614,6 +614,6 @@ export async function deleteSplitExpenseTransaction(id: number) {
     syncBankStatementAfterSplitMutation(tx, splitLink.bankStatementEntryId);
   });
 
-  revalidatePath("/expenses-2");
+  revalidatePath("/bank");
   revalidatePath("/expenses");
 }

@@ -236,6 +236,6 @@ export async function seedSBIApril2026() {
     }))
   );
 
-  revalidatePath("/expenses-2");
+  revalidatePath("/bank");
   return { seeded: true, message: `Imported ${SBI_APRIL_2026.length} transactions` };
 }
