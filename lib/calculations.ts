@@ -59,13 +59,19 @@ export function calculateLeaveBalance(
 
   let targetYear: number;
   let targetMonth: number;
+  let targetDay: number;
   if (upToYear !== undefined && upToMonth !== undefined) {
     targetYear = upToYear;
     targetMonth = upToMonth;
+    // For an explicit month, include the full month.
+    targetDay = new Date(upToYear, upToMonth, 0).getDate();
   } else {
     const now = new Date();
     targetYear = now.getFullYear();
     targetMonth = now.getMonth() + 1;
+    // For "now", stop counting at today's date so future-dated leaves planned
+    // later this month aren't subtracted from the current balance.
+    targetDay = now.getDate();
   }
 
   // Count months from start to target (inclusive)
@@ -81,8 +87,9 @@ export function calculateLeaveBalance(
     }
   }
 
-  // Filter entries up to end of target month
-  const cutoff = `${targetYear}-${String(targetMonth).padStart(2, "0")}-31`;
+  // Filter entries up to and including the target day (today, or month-end if
+  // explicit month given).
+  const cutoff = `${targetYear}-${String(targetMonth).padStart(2, "0")}-${String(targetDay).padStart(2, "0")}`;
   const filteredEntries = allEntries.filter((e) => e.date <= cutoff);
 
   const leavesGained = months * policy.leavesPerMonth;

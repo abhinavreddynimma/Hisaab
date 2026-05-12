@@ -404,8 +404,30 @@ export async function updateInvoiceStatus(
     bankCharges: number;
     netInrAmount: number;
   }
-): Promise<{ success: boolean }> {
+): Promise<{ success: boolean; error?: string }> {
   await assertAdminAccess();
+
+  // Domain state machine. Only forward / explicit-cancel transitions allowed.
+  const VALID_TRANSITIONS: Record<InvoiceStatus, InvoiceStatus[]> = {
+    draft: ["sent", "cancelled"],
+    sent: ["paid", "cancelled", "draft"], // allow recall to draft if not yet sent for real
+    paid: ["cancelled"], // can void a paid invoice but not unpay it
+    cancelled: [], // terminal
+  };
+  const current = db
+    .select({ status: invoices.status })
+    .from(invoices)
+    .where(eq(invoices.id, id))
+    .get();
+  if (!current) return { success: false, error: "Invoice not found." };
+  const currentStatus = current.status as InvoiceStatus;
+  if (currentStatus !== status && !VALID_TRANSITIONS[currentStatus].includes(status)) {
+    return {
+      success: false,
+      error: `Cannot move invoice from "${currentStatus}" to "${status}".`,
+    };
+  }
+
   if (status === "paid" && paymentData) {
     db.update(invoices)
       .set({

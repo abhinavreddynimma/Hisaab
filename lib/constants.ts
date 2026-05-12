@@ -16,10 +16,24 @@ export const TAX_QUARTERS = {
   Q4: { label: "Q4 (Jan–Mar)", dueDate: "March 15", cumPercent: 100 },
 } as const;
 
+// Return today's date in Asia/Kolkata as { year, month (1-12), day }. The app
+// is a hosted SaaS for an Indian user, so the FY boundary (Apr 1 IST) must be
+// computed in IST even if the server runs in UTC.
+export function nowInIST(): { year: number; month: number; day: number } {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = formatter.formatToParts(new Date());
+  const lookup = (type: string) =>
+    Number(parts.find((p) => p.type === type)?.value ?? "0");
+  return { year: lookup("year"), month: lookup("month"), day: lookup("day") };
+}
+
 export function getCurrentFinancialYear(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
+  const { year, month } = nowInIST();
   if (month >= 4) return `${year}-${String(year + 1).slice(2)}`;
   return `${year - 1}-${String(year).slice(2)}`;
 }

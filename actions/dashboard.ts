@@ -222,8 +222,10 @@ export async function getDashboardStats(): Promise<DashboardStats> {
         if (proj?.currency) projectCurrency = proj.currency;
       }
 
-      const foreignAmount = summary.effectiveWorkingDays * dailyRate;
-      const grossInr = foreignAmount * avgRate;
+      const baseAmount = summary.effectiveWorkingDays * dailyRate;
+      // If the project bills in INR, the daily rate IS already INR — don't run
+      // it through the EUR-INR conversion.
+      const grossInr = projectCurrency === "INR" ? baseAmount : baseAmount * avgRate;
       const estimatedInr = grossInr * (1 - avgDeductionPct);
 
       nextMonthProjection = {
