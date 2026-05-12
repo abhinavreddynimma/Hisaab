@@ -1,12 +1,13 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { db } from "@/db";
-import { taxPayments, taxPaymentAttachments, invoices, projects } from "@/db/schema";
+import { taxPayments, taxPaymentAttachments, invoices } from "@/db/schema";
 import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
 import type { TaxPayment, TaxPaymentAttachment, TaxQuarter, DayEntry } from "@/lib/types";
 import { getDayEntriesForMonth } from "./day-entries";
 import { getDefaultProjectId } from "./settings";
-import { getEffectiveRate } from "./projects";
+import { getProject, getProjectRateTimeline } from "./projects";
 import { calculateMonthSummary, withImplicitWorkingDays } from "@/lib/calculations";
 import { syncTaxPaymentToExpense, removeTaxPaymentExpenseLink } from "./tax-expense-sync";
 import { getFrenchHolidays, TAX_QUARTERS, PRESUMPTIVE_LIMIT_44ADA, is44AdaEligible, getCurrentFinancialYear } from "@/lib/constants";
@@ -71,6 +72,8 @@ export async function createTaxPayment(data: {
     .run();
   const id = Number(result.lastInsertRowid);
   await syncTaxPaymentToExpense(id);
+  revalidatePath("/tax");
+  revalidatePath("/dashboard");
   return { success: true, id };
 }
 
@@ -98,6 +101,8 @@ export async function updateTaxPayment(
     .where(eq(taxPayments.id, id))
     .run();
   await syncTaxPaymentToExpense(id);
+  revalidatePath("/tax");
+  revalidatePath("/dashboard");
   return { success: true };
 }
 
@@ -119,6 +124,8 @@ export async function deleteTaxPayment(id: number): Promise<{ success: boolean }
 
   await removeTaxPaymentExpenseLink(id);
   db.delete(taxPayments).where(eq(taxPayments.id, id)).run();
+  revalidatePath("/tax");
+  revalidatePath("/dashboard");
   return { success: true };
 }
 
@@ -336,15 +343,29 @@ export async function getTaxProjection(
 
   const defaultProjectId = await getDefaultProjectId();
   let projectCurrency = "EUR";
+  let defaultProjectFallbackRate = 0;
+  // Pre-fetch the project rate timeline ONCE — the per-month loop below would
+  // otherwise issue 12+ queries (one per month + one for the project lookup).
+  let rateTimeline: { monthKey: string; dailyRate: number }[] = [];
   if (defaultProjectId) {
-    const project = db
-      .select({ currency: projects.currency })
-      .from(projects)
-      .where(eq(projects.id, defaultProjectId))
-      .get();
-    if (project?.currency) {
-      projectCurrency = project.currency;
+    const project = await getProject(defaultProjectId);
+    if (project?.currency) projectCurrency = project.currency;
+    defaultProjectFallbackRate = project?.defaultDailyRate ?? 0;
+    const timeline = await getProjectRateTimeline(defaultProjectId);
+    rateTimeline = timeline
+      .map((r) => ({ monthKey: r.monthKey, dailyRate: r.dailyRate }))
+      .sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+  }
+
+  // Resolve the daily rate for a given month from the pre-fetched timeline:
+  // latest entry whose monthKey <= lookupKey, else fall back to project default.
+  function dailyRateForMonth(monthKey: string): number {
+    let selected = defaultProjectFallbackRate;
+    for (const point of rateTimeline) {
+      if (point.monthKey <= monthKey) selected = point.dailyRate;
+      else break;
     }
+    return selected;
   }
 
   // Prefer the live FX rate (same source the dashboard uses), falling back to the
@@ -513,7 +534,7 @@ export async function getTaxProjection(
     const summary = calculateMonthSummary(augmented);
     const calendarBreakdown = calculateProjectionCalendarBreakdown(augmented, holidays);
 
-    const dailyRate = defaultProjectId ? await getEffectiveRate(defaultProjectId, monthKey) : 0;
+    const dailyRate = defaultProjectId ? dailyRateForMonth(monthKey) : 0;
 
     const baseAmount = summary.effectiveWorkingDays * dailyRate;
     const grossInr = projectCurrency === "INR" ? baseAmount : baseAmount * currentRate;
@@ -558,7 +579,7 @@ export async function getTaxProjection(
       const holidays = getFrenchHolidays(marchYear);
       const augmented = withImplicitWorkingDays(entries as DayEntry[], marchYear, 3, holidays);
       const summary = calculateMonthSummary(augmented);
-      const dailyRate = defaultProjectId ? await getEffectiveRate(defaultProjectId, marchKey) : 0;
+      const dailyRate = defaultProjectId ? dailyRateForMonth(marchKey) : 0;
       const baseAmount = summary.effectiveWorkingDays * dailyRate;
       const grossInr = projectCurrency === "INR" ? baseAmount : baseAmount * currentRate;
       marchDeferralAmount = Math.round(grossInr * (1 - deductionPct));

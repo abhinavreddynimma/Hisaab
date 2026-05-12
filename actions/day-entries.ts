@@ -1,11 +1,19 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { dayEntries } from "@/db/schema";
 import { eq, and, gte, lte, like, isNull } from "drizzle-orm";
 import type { DayEntry } from "@/lib/types";
 import type { DayType } from "@/lib/constants";
 import { assertAdminAccess } from "@/lib/auth";
+
+function revalidateDayEntrySurfaces() {
+  revalidatePath("/calendar");
+  revalidatePath("/dashboard");
+  revalidatePath("/tax");
+  revalidatePath("/extra-days");
+}
 
 export async function getDayEntriesForMonth(
   year: number,
@@ -64,12 +72,14 @@ export async function upsertDayEntry(data: {
       .run();
   }
 
+  revalidateDayEntrySurfaces();
   return { success: true };
 }
 
 export async function deleteDayEntry(date: string): Promise<{ success: boolean }> {
   await assertAdminAccess();
   db.delete(dayEntries).where(eq(dayEntries.date, date)).run();
+  revalidateDayEntrySurfaces();
   return { success: true };
 }
 
@@ -107,12 +117,40 @@ export async function bulkUpsertDayEntries(
   entries: { date: string; dayType: DayType; projectId?: number | null; notes?: string }[]
 ): Promise<{ success: boolean; count: number }> {
   await assertAdminAccess();
-  let count = 0;
-  for (const entry of entries) {
-    await upsertDayEntry(entry);
-    count++;
-  }
-  return { success: true, count };
+  if (entries.length === 0) return { success: true, count: 0 };
+
+  // Wrap in a single transaction so N entries = 1 commit instead of N. Each
+  // row uses an upsert (insert or update on conflict on the unique date).
+  db.transaction((tx) => {
+    for (const entry of entries) {
+      const existing = tx
+        .select()
+        .from(dayEntries)
+        .where(eq(dayEntries.date, entry.date))
+        .get();
+      if (existing) {
+        tx.update(dayEntries)
+          .set({
+            dayType: entry.dayType,
+            projectId: entry.projectId ?? null,
+            notes: entry.notes || null,
+          })
+          .where(eq(dayEntries.date, entry.date))
+          .run();
+      } else {
+        tx.insert(dayEntries)
+          .values({
+            date: entry.date,
+            dayType: entry.dayType,
+            projectId: entry.projectId ?? null,
+            notes: entry.notes || null,
+          })
+          .run();
+      }
+    }
+  });
+  revalidateDayEntrySurfaces();
+  return { success: true, count: entries.length };
 }
 
 export async function backfillProjectId(projectId: number): Promise<{ success: boolean; count: number }> {
