@@ -118,6 +118,7 @@ interface TaxProjection {
     status: string;
   }[];
   marchDeferralAmount: number;
+  marchDeferralTaxSavings: number;
   deferMarch: boolean;
 }
 
@@ -276,7 +277,9 @@ export function TaxPageClient({
               <div className="flex items-start gap-2">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 <p>
-                  Gross receipts have crossed ₹75 lakh for FY {initialFY}. Section 44ADA does not apply above this threshold.
+                  Gross receipts have crossed ₹75 lakh for FY {initialFY} — over by{" "}
+                  <span className="font-semibold">{formatCurrency(computation.grossReceipts - presumptiveLimit)}</span>.
+                  Section 44ADA does not apply above this threshold.
                   The ₹75 lakh limit itself applies only when cash receipts are at most 5%; otherwise the limit is ₹50 lakh.
                 </p>
               </div>
@@ -294,10 +297,17 @@ export function TaxPageClient({
                   <span className="text-muted-foreground">Gross Receipts (INR received)</span>
                   <span className="font-medium tabular-nums">{formatCurrency(computation.grossReceipts)}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Presumptive Income (50% u/s 44ADA)</span>
-                  <span className="font-medium tabular-nums">{formatCurrency(computation.presumptiveIncome)}</span>
-                </div>
+                {actualExceeds44AdaLimit ? (
+                  <div className="flex justify-between text-red-700 dark:text-red-400">
+                    <span>44ADA not available above ₹75L — taxable = full receipts</span>
+                    <span className="font-medium tabular-nums">{formatCurrency(computation.grossReceipts)}</span>
+                  </div>
+                ) : (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Presumptive Income (50% u/s 44ADA)</span>
+                    <span className="font-medium tabular-nums">{formatCurrency(computation.presumptiveIncome)}</span>
+                  </div>
+                )}
                 <Separator />
                 <div className="flex justify-between font-semibold">
                   <span>Taxable Income</span>
@@ -501,7 +511,9 @@ export function TaxPageClient({
               <div className="flex items-start gap-2">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 <p>
-                  Projected gross receipts have crossed ₹75 lakh for FY {initialFY}. Section 44ADA does not apply above this threshold.
+                  Projected gross receipts have crossed ₹75 lakh for FY {initialFY} — over by{" "}
+                  <span className="font-semibold">{formatCurrency(projection.projectedGrossReceipts - presumptiveLimit)}</span>.
+                  Section 44ADA does not apply above this threshold.
                   The ₹75 lakh limit itself applies only when cash receipts are at most 5%; otherwise the limit is ₹50 lakh.
                 </p>
               </div>
@@ -557,6 +569,11 @@ export function TaxPageClient({
                       <> · {formatCurrency(Math.round(projection.marchDeferralAmount))} affected</>
                     )}
                   </p>
+                  {projection.marchDeferralTaxSavings > 0 && (
+                    <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400 mt-1">
+                      {projection.deferMarch ? "Saved" : "Save"} {formatCurrency(projection.marchDeferralTaxSavings)} in tax
+                    </p>
+                  )}
                 </div>
                 <Button
                   variant={projection.deferMarch ? "default" : "outline"}
@@ -701,10 +718,17 @@ export function TaxPageClient({
                   <span className="text-muted-foreground">Projected Gross Receipts (12 months)</span>
                   <span className="font-medium tabular-nums">{formatCurrency(projection.projectedGrossReceipts)}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Presumptive Income (50% u/s 44ADA)</span>
-                  <span className="font-medium tabular-nums">{formatCurrency(projection.projectedPresumptiveIncome)}</span>
-                </div>
+                {projectedExceeds44AdaLimit ? (
+                  <div className="flex justify-between text-red-700 dark:text-red-400">
+                    <span>44ADA not available above ₹75L — taxable = full receipts</span>
+                    <span className="font-medium tabular-nums">{formatCurrency(projection.projectedGrossReceipts)}</span>
+                  </div>
+                ) : (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Presumptive Income (50% u/s 44ADA)</span>
+                    <span className="font-medium tabular-nums">{formatCurrency(projection.projectedPresumptiveIncome)}</span>
+                  </div>
+                )}
                 <Separator />
                 <div className="flex justify-between font-semibold">
                   <span>Projected Taxable Income</span>
@@ -784,6 +808,7 @@ export function TaxPageClient({
                 {projection.advanceTaxBasis.isAssumed
                   ? `Based on assumed gross receipts of ${formatCurrency(projection.advanceTaxBasis.grossReceipts)} (just under the 44ADA limit). Total tax: ${formatCurrency(projection.advanceTaxBasis.totalTax)}.`
                   : `Based on projected gross receipts of ${formatCurrency(projection.advanceTaxBasis.grossReceipts)}. Total tax: ${formatCurrency(projection.advanceTaxBasis.totalTax)}.`}
+                {" "}Spread evenly across 12 months: <span className="font-medium">{formatCurrency(Math.round(projection.advanceTaxBasis.totalTax / 12))}/month</span>.
               </p>
             </CardHeader>
             <CardContent>
