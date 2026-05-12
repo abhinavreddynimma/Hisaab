@@ -118,6 +118,7 @@ interface TaxProjection {
     status: string;
   }[];
   marchDeferralAmount: number;
+  marchDeferralTaxSavings: number;
   deferMarch: boolean;
 }
 
@@ -276,7 +277,9 @@ export function TaxPageClient({
               <div className="flex items-start gap-2">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 <p>
-                  Gross receipts have crossed ₹75 lakh for FY {initialFY}. Section 44ADA does not apply above this threshold.
+                  Gross receipts have crossed ₹75 lakh for FY {initialFY} — over by{" "}
+                  <span className="font-semibold">{formatCurrency(computation.grossReceipts - presumptiveLimit)}</span>.
+                  Section 44ADA does not apply above this threshold.
                   The ₹75 lakh limit itself applies only when cash receipts are at most 5%; otherwise the limit is ₹50 lakh.
                 </p>
               </div>
@@ -501,7 +504,9 @@ export function TaxPageClient({
               <div className="flex items-start gap-2">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 <p>
-                  Projected gross receipts have crossed ₹75 lakh for FY {initialFY}. Section 44ADA does not apply above this threshold.
+                  Projected gross receipts have crossed ₹75 lakh for FY {initialFY} — over by{" "}
+                  <span className="font-semibold">{formatCurrency(projection.projectedGrossReceipts - presumptiveLimit)}</span>.
+                  Section 44ADA does not apply above this threshold.
                   The ₹75 lakh limit itself applies only when cash receipts are at most 5%; otherwise the limit is ₹50 lakh.
                 </p>
               </div>
@@ -557,6 +562,11 @@ export function TaxPageClient({
                       <> · {formatCurrency(Math.round(projection.marchDeferralAmount))} affected</>
                     )}
                   </p>
+                  {projection.marchDeferralTaxSavings > 0 && (
+                    <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400 mt-1">
+                      {projection.deferMarch ? "Saved" : "Save"} {formatCurrency(projection.marchDeferralTaxSavings)} in tax
+                    </p>
+                  )}
                 </div>
                 <Button
                   variant={projection.deferMarch ? "default" : "outline"}

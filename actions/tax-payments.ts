@@ -287,6 +287,7 @@ export async function getTaxProjection(
     status: string;
   }[];
   marchDeferralAmount: number;
+  marchDeferralTaxSavings: number;
   deferMarch: boolean;
 }> {
   await assertAdminAccess();
@@ -621,6 +622,21 @@ export async function getTaxProjection(
   const projectedCess = taxAfterRebate * 0.04;
   const projectedTotalTax = taxAfterRebate + projectedCess;
 
+  // Compute the tax delta from deferring (or having deferred) March, so the UI
+  // can show "save ₹X by deferring" or "saved ₹X by deferring".
+  function totalTaxForGross(gross: number): number {
+    const presumptive = gross * 0.5;
+    const taxable = Math.max(0, presumptive);
+    const { totalTax: slabTax } = calculateIncomeTax(taxable);
+    const rebate = taxable <= 1200000 ? Math.min(slabTax, 60000) : 0;
+    const afterRebate = slabTax - rebate;
+    const cess = afterRebate * 0.04;
+    return afterRebate + cess;
+  }
+  const grossWithMarch = deferMarch ? projectedGrossReceipts + marchDeferralAmount : projectedGrossReceipts;
+  const grossWithoutMarch = deferMarch ? projectedGrossReceipts : Math.max(0, projectedGrossReceipts - marchDeferralAmount);
+  const marchDeferralTaxSavings = Math.max(0, totalTaxForGross(grossWithMarch) - totalTaxForGross(grossWithoutMarch));
+
   const taxSummary = await getTaxSummaryForFY(financialYear);
   const totalPaid = taxSummary.total;
   const projectedBalance = projectedTotalTax - totalPaid;
@@ -703,6 +719,7 @@ export async function getTaxProjection(
     yearlyCalendarBreakdown,
     marchInvoices,
     marchDeferralAmount,
+    marchDeferralTaxSavings: Math.round(marchDeferralTaxSavings),
     deferMarch,
   };
 }
