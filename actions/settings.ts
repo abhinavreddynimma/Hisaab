@@ -6,13 +6,16 @@ import { eq } from "drizzle-orm";
 import type { UserProfile, LeavePolicy, InvoiceSettings } from "@/lib/types";
 import { assertAdminAccess, assertAuthenticatedAccess } from "@/lib/auth";
 
-export async function getSetting<T>(key: string): Promise<T | null> {
+// Internal helpers — NOT exported because in a "use server" module every export
+// becomes a remotely callable server action. These are unguarded primitives;
+// the exported wrappers below add the appropriate auth checks.
+async function getSetting<T>(key: string): Promise<T | null> {
   const row = db.select().from(settings).where(eq(settings.key, key)).get();
   if (!row) return null;
   return JSON.parse(row.value) as T;
 }
 
-export async function setSetting(key: string, value: unknown): Promise<void> {
+async function setSetting(key: string, value: unknown): Promise<void> {
   const jsonValue = JSON.stringify(value);
   const existing = db.select().from(settings).where(eq(settings.key, key)).get();
   if (existing) {

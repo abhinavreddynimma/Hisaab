@@ -5,6 +5,7 @@ import { and, asc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { bankStatementEntries, bankStatementSplits, expenseAccounts, expenseTransactions } from "@/db/schema";
 import type { BankStatementEntry, BankStatementSplit, ExpenseTransactionType } from "@/lib/types";
+import { assertAdminAccess, assertAuthenticatedAccess } from "@/lib/auth";
 
 type BankStatementSplitInput = {
   expenseName: string;
@@ -177,6 +178,7 @@ export async function getBankStatementEntries(filters?: {
   startDate?: string;
   endDate?: string;
 }): Promise<BankStatementEntry[]> {
+  await assertAdminAccess();
   const conditions = [eq(bankStatementEntries.isDismissed, false)];
   if (filters?.startDate) conditions.push(gte(bankStatementEntries.date, filters.startDate));
   if (filters?.endDate) conditions.push(lte(bankStatementEntries.date, filters.endDate));
@@ -340,6 +342,7 @@ export async function classifyBankStatementEntry(
     tags?: string[] | null;
   },
 ) {
+  await assertAdminAccess();
   db.transaction((tx) => {
     const entry = tx
       .select()
@@ -405,6 +408,7 @@ export async function classifyBankStatementEntryWithSplits(
   id: number,
   splits: BankStatementSplitInput[],
 ) {
+  await assertAdminAccess();
   const normalizedSplits = splits.map(normalizeSplit);
   if (normalizedSplits.length < 2) {
     throw new Error("At least two split lines are required");
@@ -488,6 +492,7 @@ export async function classifyBankStatementEntryWithSplits(
 }
 
 export async function unclassifyBankStatementEntry(id: number) {
+  await assertAdminAccess();
   db.transaction((tx) => {
     clearBankStatementClassification(tx, id);
   });
@@ -497,6 +502,7 @@ export async function unclassifyBankStatementEntry(id: number) {
 }
 
 export async function dismissBankStatementEntry(id: number) {
+  await assertAdminAccess();
   db.transaction((tx) => {
     clearBankStatementClassification(tx, id, true);
   });
@@ -517,6 +523,7 @@ export async function importBankStatementEntries(
     bankName?: string;
   }[],
 ) {
+  await assertAdminAccess();
   if (entries.length === 0) return;
 
   const existing = db
@@ -557,6 +564,7 @@ export async function importBankStatementEntries(
 }
 
 export async function getBankStatementStats(startDate?: string, endDate?: string) {
+  await assertAdminAccess();
   const conditions = [eq(bankStatementEntries.isDismissed, false)];
   if (startDate) conditions.push(gte(bankStatementEntries.date, startDate));
   if (endDate) conditions.push(lte(bankStatementEntries.date, endDate));
@@ -582,6 +590,7 @@ export async function getBankStatementStats(startDate?: string, endDate?: string
 }
 
 export async function deleteSplitExpenseTransaction(id: number) {
+  await assertAdminAccess();
   db.transaction((tx) => {
     const splitLink = tx
       .select({ bankStatementEntryId: bankStatementSplits.bankStatementEntryId })

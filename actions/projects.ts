@@ -223,6 +223,7 @@ export async function getProjectRates(projectId: number): Promise<ProjectRate[]>
 }
 
 export async function getProjectRateTimeline(projectId: number): Promise<ProjectRate[]> {
+  await assertAdminAccess();
   return getProjectRates(projectId);
 }
 

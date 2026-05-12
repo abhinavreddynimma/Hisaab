@@ -1,8 +1,18 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { invoices, invoiceLineItems, invoiceAttachments, clients, projects } from "@/db/schema";
 import { eq, desc, sql, like } from "drizzle-orm";
+
+// Pages that depend on invoice data — refreshed after every mutation so other
+// tabs/views aren't stale.
+function revalidateInvoiceSurfaces() {
+  revalidatePath("/invoices");
+  revalidatePath("/dashboard");
+  revalidatePath("/tax");
+  revalidatePath("/expenses");
+}
 import { getInvoiceSettings, getUserProfile } from "./settings";
 import { getDayEntriesForRange } from "./day-entries";
 import { getProjectRateTimeline } from "./projects";
@@ -155,13 +165,6 @@ export async function generateInvoiceNumber(issueDate?: string): Promise<string>
   return formatInvoiceNumber(settings.prefix, fyStart, sequence);
 }
 
-async function generateAndIncrementInvoiceNumber(issueDate: string): Promise<string> {
-  const settings = await getInvoiceSettings();
-  const fyStart = financialYearStart(issueDate);
-  const sequence = nextSequenceForFy(settings.prefix, fyStart);
-  return formatInvoiceNumber(settings.prefix, fyStart, sequence);
-}
-
 export async function getAutoPopulatedLineItems(
   projectId: number,
   startDate: string,
@@ -271,11 +274,13 @@ export async function createInvoice(data: {
   }[];
 }): Promise<{ success: boolean; id?: number }> {
   await assertAdminAccess();
-  const invoiceNumber = await generateAndIncrementInvoiceNumber(data.issueDate);
+  const settings = await getInvoiceSettings();
   const profile = await getUserProfile();
   const client = await getClient(data.clientId);
 
   if (!client) return { success: false };
+
+  const fyStart = financialYearStart(data.issueDate);
 
   // Determine currency from project → client → default
   const project = data.projectId ? await getProject(data.projectId) : null;
@@ -295,6 +300,25 @@ export async function createInvoice(data: {
     .join(", ");
 
   const invoiceId = db.transaction((tx) => {
+    // Compute invoice number INSIDE the transaction so concurrent createInvoice
+    // calls serialize and can't both claim the same sequence. better-sqlite3
+    // transactions hold a write lock for the duration, so the read-then-insert
+    // is atomic.
+    const yy = String(fyStart % 100).padStart(2, "0");
+    const pattern = `${settings.prefix}/${yy}/%`;
+    const rows = tx
+      .select({ invoiceNumber: invoices.invoiceNumber })
+      .from(invoices)
+      .where(like(invoices.invoiceNumber, pattern))
+      .all();
+    let max = 0;
+    for (const row of rows) {
+      const parts = row.invoiceNumber.split("/");
+      const n = parseInt(parts[2] ?? "", 10);
+      if (Number.isFinite(n) && n > max) max = n;
+    }
+    const invoiceNumber = formatInvoiceNumber(settings.prefix, fyStart, max + 1);
+
     const result = tx
       .insert(invoices)
       .values({
@@ -366,6 +390,7 @@ export async function createInvoice(data: {
     return id;
   });
 
+  revalidateInvoiceSurfaces();
   return { success: true, id: invoiceId };
 }
 
@@ -400,6 +425,7 @@ export async function updateInvoiceStatus(
   // Sync to expense manager
   await syncInvoiceToExpense(id);
 
+  revalidateInvoiceSurfaces();
   return { success: true };
 }
 
@@ -446,6 +472,7 @@ export async function updatePaymentDetails(
   // Re-sync to expense manager (amount/date may have changed)
   await syncInvoiceToExpense(id);
 
+  revalidateInvoiceSurfaces();
   return { success: true };
 }
 
@@ -454,6 +481,7 @@ export async function resetInvoiceCounter(nextNumber: number = 1): Promise<{ suc
   const settings = await getInvoiceSettings();
   const { saveInvoiceSettings } = await import("./settings");
   await saveInvoiceSettings({ ...settings, nextNumber });
+  revalidatePath("/settings");
   return { success: true };
 }
 
@@ -465,6 +493,7 @@ export async function deleteInvoice(id: number): Promise<{ success: boolean }> {
   // Remove linked expense transaction
   await removeInvoiceExpenseLink(id);
 
+  revalidateInvoiceSurfaces();
   return { success: true };
 }
 
