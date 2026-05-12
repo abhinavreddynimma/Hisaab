@@ -10,7 +10,7 @@ import { getDefaultProjectId } from "./settings";
 import { getProject, getProjectRateTimeline } from "./projects";
 import { calculateMonthSummary, withImplicitWorkingDays } from "@/lib/calculations";
 import { syncTaxPaymentToExpense, removeTaxPaymentExpenseLink } from "./tax-expense-sync";
-import { getFrenchHolidays, TAX_QUARTERS, PRESUMPTIVE_LIMIT_44ADA, is44AdaEligible, getCurrentFinancialYear } from "@/lib/constants";
+import { getFrenchHolidays, TAX_QUARTERS, PRESUMPTIVE_LIMIT_44ADA, is44AdaEligible, getCurrentFinancialYear, nowInIST } from "@/lib/constants";
 import { assertAdminAccess, assertAuthenticatedAccess } from "@/lib/auth";
 import { unlink } from "fs/promises";
 import path from "path";
@@ -328,13 +328,13 @@ export async function getTaxProjection(
 
   const MONTH_LABELS = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
 
-  // Determine elapsed months
-  const now = new Date();
+  // Determine elapsed months (in IST so FY boundary doesn't drift by timezone)
+  const ist = nowInIST();
   let currentIdx: number;
-  if (now.getFullYear() === startYear) {
-    currentIdx = now.getMonth() - 3;
+  if (ist.year === startYear) {
+    currentIdx = ist.month - 1 - 3;
   } else {
-    currentIdx = now.getMonth() + 9;
+    currentIdx = ist.month - 1 + 9;
   }
   // Don't count the current month as elapsed — it's still in progress
   // and we likely haven't received payment yet, so project it instead.
@@ -359,10 +359,17 @@ export async function getTaxProjection(
 
   // Resolve the daily rate for a given month from the pre-fetched timeline:
   // latest entry whose monthKey <= lookupKey, else fall back to project default.
+  // `project_rates.monthKey` is stored as `YYYY-MM-DD` (the day the new rate
+  // takes effect); the per-month lookup uses `YYYY-MM`. We compare to the last
+  // day of the lookup month so a rate that became effective mid-month is still
+  // picked up for that month.
   function dailyRateForMonth(monthKey: string): number {
+    const [y, m] = monthKey.split("-").map(Number);
+    const lastDay = new Date(y, m, 0).getDate();
+    const lookupDate = `${monthKey}-${String(lastDay).padStart(2, "0")}`;
     let selected = defaultProjectFallbackRate;
     for (const point of rateTimeline) {
-      if (point.monthKey <= monthKey) selected = point.dailyRate;
+      if (point.monthKey <= lookupDate) selected = point.dailyRate;
       else break;
     }
     return selected;

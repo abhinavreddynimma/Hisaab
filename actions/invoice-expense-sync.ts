@@ -18,11 +18,14 @@ import type { ExpenseAccountType } from "@/lib/types";
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Estimate net INR for an unpaid EUR invoice using the latest paid invoice's rate and avg deductions. */
+/** Estimate net INR for an unpaid EUR invoice using the most recent paid
+ *  invoice's FX rate, plus a sanity-capped historical deduction percentage.
+ *  Falls back to the EUR amount unchanged when no paid history exists. */
 function estimateNetInr(eurAmount: number): number {
   const paidInvs = db
     .select({
       total: invoices.total,
+      paidDate: invoices.paidDate,
       eurToInrRate: invoices.eurToInrRate,
       platformCharges: invoices.platformCharges,
       bankCharges: invoices.bankCharges,
@@ -36,32 +39,31 @@ function estimateNetInr(eurAmount: number): number {
     )
     .all();
 
-  if (paidInvs.length === 0) return eurAmount; // no history, can't convert
-
-  // Latest rate: use most recent paid invoice's rate
-  // (paidInvs aren't sorted, so find the one with highest paidDate)
   const withRate = paidInvs.filter((i) => i.eurToInrRate);
+  if (withRate.length === 0) return eurAmount;
+
+  // Historical deduction% as a weighted average (capped at 10% so a bad data
+  // point can't blow up estimates).
   const totalEur = withRate.reduce((s, i) => s + (i.total ?? 0), 0);
-  const avgRate =
-    totalEur > 0
-      ? withRate.reduce((s, i) => s + (i.eurToInrRate ?? 0) * (i.total ?? 0), 0) / totalEur
-      : 0;
+  const avgRate = totalEur > 0
+    ? withRate.reduce((s, i) => s + (i.eurToInrRate ?? 0) * (i.total ?? 0), 0) / totalEur
+    : 0;
   const totalGrossInr = totalEur * avgRate;
   const totalDeductions = withRate.reduce(
     (s, i) => s + (i.platformCharges ?? 0) + (i.bankCharges ?? 0),
     0,
   );
-  const deductionPct = totalGrossInr > 0 ? totalDeductions / totalGrossInr : 0;
+  const rawDeductionPct = totalGrossInr > 0 ? totalDeductions / totalGrossInr : 0;
+  const deductionPct = Math.min(Math.max(0, rawDeductionPct), 0.10);
 
-  // Use latest paid invoice's rate for the spot conversion
-  const sortedByRate = [...withRate].sort(
-    (a, b) => (b.eurToInrRate ?? 0) - (a.eurToInrRate ?? 0),
-  );
-  // Actually we want the most recent — but we don't have paidDate here.
-  // Use the same weighted avg rate as tax projection for consistency.
-  const currentRate = avgRate;
+  // Spot rate: use the most-recent paid invoice (by paidDate) for the current
+  // FX rate. This is closer to "today's rate" than the historical average.
+  const sortedByDate = [...withRate]
+    .filter((i) => i.paidDate)
+    .sort((a, b) => (b.paidDate ?? "").localeCompare(a.paidDate ?? ""));
+  const latestRate = sortedByDate[0]?.eurToInrRate ?? avgRate;
 
-  return Math.round(eurAmount * currentRate * (1 - deductionPct));
+  return Math.round(eurAmount * latestRate * (1 - deductionPct));
 }
 
 /** Find or create the "Salary" account used for invoice-linked income. */
