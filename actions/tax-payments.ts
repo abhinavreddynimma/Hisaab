@@ -413,6 +413,12 @@ export async function getTaxProjection(
   const totalDeductions = paidInvoices.reduce((s, i) => s + (i.platformCharges ?? 0) + (i.bankCharges ?? 0), 0);
   const rawDeductionPct = totalGrossInr > 0 ? totalDeductions / totalGrossInr : 0;
   const deductionPct = Math.min(Math.max(0, rawDeductionPct), 0.10);
+  if (rawDeductionPct > 0.10) {
+    console.warn(
+      `[tax-projection] Historical deduction% (${(rawDeductionPct * 100).toFixed(1)}%) ` +
+      `capped at 10% to protect projections. Check invoice charges for outliers.`,
+    );
+  }
 
   // Bucket every invoice (paid/sent/draft) by the month it was *issued*, using
   // issueDate. This is tax-page-specific: April income = invoices generated in April,
@@ -683,10 +689,16 @@ export async function getTaxProjection(
 
   // Advance tax schedule basis: for the CURRENT FY (still in progress), assume
   // gross receipts of ₹74.5L (just under the 44ADA limit) so the schedule is
-  // stable across the year and doesn't drift with the live projection. For
-  // past/future FYs, fall back to the live projection.
+  // stable across the year and doesn't drift with the live projection. BUT
+  // once the live projection exceeds ₹75L, 44ADA stops applying and the real
+  // liability is much higher than the ₹74.5L basis would suggest — keeping the
+  // schedule conservative would dangerously under-prepare the user. In that
+  // case, switch to the live projection so the schedule reflects reality.
+  // For past/future FYs, always use the live projection.
   const ASSUMED_GROSS_RECEIPTS = PRESUMPTIVE_LIMIT_44ADA - 50000; // ₹74.5L
-  const isAssumed = financialYear === getCurrentFinancialYear();
+  const isCurrentFy = financialYear === getCurrentFinancialYear();
+  const projectionExceedsLimit = projectedGrossReceipts > PRESUMPTIVE_LIMIT_44ADA;
+  const isAssumed = isCurrentFy && !projectionExceedsLimit;
   const advanceGross = isAssumed ? ASSUMED_GROSS_RECEIPTS : projectedGrossReceipts;
   const advanceTaxable = is44AdaEligible(advanceGross)
     ? Math.max(0, advanceGross * 0.5)

@@ -55,6 +55,12 @@ function estimateNetInr(eurAmount: number): number {
   );
   const rawDeductionPct = totalGrossInr > 0 ? totalDeductions / totalGrossInr : 0;
   const deductionPct = Math.min(Math.max(0, rawDeductionPct), 0.10);
+  if (rawDeductionPct > 0.10) {
+    console.warn(
+      `[invoice-expense-sync] Historical deduction% (${(rawDeductionPct * 100).toFixed(1)}%) ` +
+      `capped at 10% in estimate. Check invoice charges for outliers.`,
+    );
+  }
 
   // Spot rate: use the most-recent paid invoice (by paidDate) for the current
   // FX rate. This is closer to "today's rate" than the historical average.
