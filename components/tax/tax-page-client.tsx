@@ -541,14 +541,7 @@ export function TaxPageClient({
           </Card>
 
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Defer March to next FY (preview)</CardTitle>
-              <p className="text-xs text-muted-foreground">
-                Simulate moving March's income — whether actual invoices or the calendar projection
-                — into the next financial year. Affects this projection only; no data is changed.
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-3 pt-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium">
