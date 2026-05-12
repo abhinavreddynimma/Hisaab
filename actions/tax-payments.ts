@@ -225,7 +225,7 @@ export async function getTaxComputation(financialYear: string): Promise<{
 export async function getTaxProjection(
   financialYear: string,
   mode: TaxProjectionMode = "invoice",
-  deferredInvoiceIds: number[] = [],
+  deferMarch: boolean = false,
 ): Promise<{
   monthlyBreakdown: {
     month: string;
@@ -278,7 +278,7 @@ export async function getTaxProjection(
     publicHolidayWorkingDays: number;
     weekendWorkingDays: number;
   };
-  deferrableInvoices: {
+  marchInvoices: {
     id: number;
     invoiceNumber: string;
     issueDate: string;
@@ -286,7 +286,8 @@ export async function getTaxProjection(
     total: number | null;
     status: string;
   }[];
-  deferredInvoiceIds: number[];
+  marchDeferralAmount: number;
+  deferMarch: boolean;
 }> {
   await assertAdminAccess();
   const [startYear] = financialYear.split("-").map(Number);
@@ -402,11 +403,10 @@ export async function getTaxProjection(
     )
     .all();
 
-  // Deferrable = invoices issued in the last month of the FY (March of startYear+1).
-  // Allows the user to simulate "what if I delayed this March invoice to April"
-  // for 44ADA-threshold planning without mutating real data.
+  // March invoices for the FY (last month — March of startYear+1). The user can
+  // simulate "what if I defer March income to next FY" without mutating data.
   const fyEndMonthKey = `${startYear + 1}-03`;
-  const deferrableInvoices = fyInvoicesRaw
+  const marchInvoices = fyInvoicesRaw
     .filter((inv) => inv.issueDate && inv.issueDate.startsWith(fyEndMonthKey))
     .map((inv) => ({
       id: inv.id,
@@ -417,8 +417,9 @@ export async function getTaxProjection(
       status: inv.status,
     }));
 
-  const deferredSet = new Set(deferredInvoiceIds);
-  const fyInvoices = fyInvoicesRaw.filter((inv) => !deferredSet.has(inv.id));
+  const fyInvoices = deferMarch
+    ? fyInvoicesRaw.filter((inv) => !inv.issueDate?.startsWith(fyEndMonthKey))
+    : fyInvoicesRaw;
 
   const invoiceByMonth: number[] = Array(12).fill(0);
   const hasInvoiceForMonth: boolean[] = Array(12).fill(false);
@@ -467,6 +468,10 @@ export async function getTaxProjection(
     const monthKey = `${calYear}-${String(calMonth).padStart(2, "0")}`;
     const beforeWorkStart =
       workStartDate !== null && monthKey < workStartDate.slice(0, 7);
+
+    // Defer-March: skip the FY's last month entirely (no invoice contribution,
+    // no calendar fallback). i === 11 is March in the Apr–Mar ordering.
+    if (deferMarch && i === 11) continue;
 
     if (hasInvoiceForMonth[i]) {
       projectedMonthly[i] = invoiceByMonth[i];
@@ -525,6 +530,33 @@ export async function getTaxProjection(
     calendarBreakdown: projectedCalendarBreakdown[i],
   }));
 
+  // Compute how much March income would have contributed if not deferred — shown
+  // in the UI so the user sees the impact of the toggle.
+  let marchDeferralAmount = 0;
+  if (marchInvoices.length > 0) {
+    for (const inv of marchInvoices) {
+      marchDeferralAmount += inv.status === "paid"
+        ? (inv.netInrAmount ?? 0)
+        : Math.round((inv.total ?? 0) * currentRate * (1 - deductionPct));
+    }
+  } else {
+    // No invoices issued in March — estimate calendar-based contribution
+    const marchYear = startYear + 1;
+    const marchKey = `${marchYear}-03`;
+    const beforeStart =
+      workStartDate !== null && marchKey < workStartDate.slice(0, 7);
+    if (!beforeStart) {
+      const entries = await getDayEntriesForMonth(marchYear, 3);
+      const holidays = getFrenchHolidays(marchYear);
+      const augmented = withImplicitWorkingDays(entries as DayEntry[], marchYear, 3, holidays);
+      const summary = calculateMonthSummary(augmented);
+      const dailyRate = defaultProjectId ? await getEffectiveRate(defaultProjectId, marchKey) : 0;
+      const baseAmount = summary.effectiveWorkingDays * dailyRate;
+      const grossInr = projectCurrency === "INR" ? baseAmount : baseAmount * currentRate;
+      marchDeferralAmount = Math.round(grossInr * (1 - deductionPct));
+    }
+  }
+
   // FY-wide day-type totals from day_entries (with implicit weekday working days
   // filled in for unmarked dates). Skip months before the user's work-start month.
   const yearlyDayTotals = {
@@ -547,6 +579,8 @@ export async function getTaxProjection(
     const calMonth = i < 9 ? i + 4 : i - 8;
     const monthKey = `${calYear}-${String(calMonth).padStart(2, "0")}`;
     if (workStartDate && monthKey < workStartDate.slice(0, 7)) continue;
+    // Exclude March from FY day totals when the user is deferring March income.
+    if (deferMarch && i === 11) continue;
 
     const entries = await getDayEntriesForMonth(calYear, calMonth);
     const holidays = getFrenchHolidays(calYear);
@@ -667,10 +701,9 @@ export async function getTaxProjection(
     advanceTaxSchedule,
     yearlyDayTotals,
     yearlyCalendarBreakdown,
-    deferrableInvoices,
-    deferredInvoiceIds: deferredInvoiceIds.filter((id) =>
-      deferrableInvoices.some((inv) => inv.id === id)
-    ),
+    marchInvoices,
+    marchDeferralAmount,
+    deferMarch,
   };
 }
 
