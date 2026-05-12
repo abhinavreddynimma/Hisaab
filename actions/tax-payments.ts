@@ -187,10 +187,15 @@ export async function getTaxComputation(financialYear: string): Promise<{
 
   const grossReceipts = paidInvoices.reduce((sum, inv) => sum + (inv.netInrAmount ?? 0), 0);
 
-  // Section 44ADA: presumptive income = 50% of gross receipts
-  // No standard deduction for self-employed under 44ADA
+  // Section 44ADA: presumptive income = 50% of gross receipts, available only up
+  // to ₹75 lakh. Above that, 44ADA does not apply and tax is computed on full
+  // gross receipts (no standard deduction available for self-employed) — this is
+  // the worst-case estimate; actual business profit may be lower if expenses are
+  // deducted under regular books of account.
+  const PRESUMPTIVE_LIMIT_44ADA = 7500000;
+  const is44AdaEligible = grossReceipts <= PRESUMPTIVE_LIMIT_44ADA;
   const presumptiveIncome = grossReceipts * 0.5;
-  const taxableIncome = Math.max(0, presumptiveIncome);
+  const taxableIncome = Math.max(0, is44AdaEligible ? presumptiveIncome : grossReceipts);
 
   // Calculate tax
   const { slabBreakdown, totalTax: incomeTax } = calculateIncomeTax(taxableIncome);
@@ -612,8 +617,15 @@ export async function getTaxProjection(
   }
 
   const projectedGrossReceipts = projectedMonthly.reduce((a, b) => a + b, 0);
+  // 44ADA presumptive (50%) only applies up to ₹75L. Above that, tax is computed
+  // on full gross receipts.
+  const PRESUMPTIVE_LIMIT_44ADA = 7500000;
+  const projectedIs44AdaEligible = projectedGrossReceipts <= PRESUMPTIVE_LIMIT_44ADA;
   const projectedPresumptiveIncome = projectedGrossReceipts * 0.5;
-  const projectedTaxableIncome = Math.max(0, projectedPresumptiveIncome);
+  const projectedTaxableIncome = Math.max(
+    0,
+    projectedIs44AdaEligible ? projectedPresumptiveIncome : projectedGrossReceipts,
+  );
 
   const { slabBreakdown, totalTax } = calculateIncomeTax(projectedTaxableIncome);
 
@@ -623,10 +635,10 @@ export async function getTaxProjection(
   const projectedTotalTax = taxAfterRebate + projectedCess;
 
   // Compute the tax delta from deferring (or having deferred) March, so the UI
-  // can show "save ₹X by deferring" or "saved ₹X by deferring".
+  // can show "save ₹X by deferring" or "saved ₹X by deferring". Honours the
+  // 44ADA threshold: above ₹75L, presumptive does not apply.
   function totalTaxForGross(gross: number): number {
-    const presumptive = gross * 0.5;
-    const taxable = Math.max(0, presumptive);
+    const taxable = gross <= PRESUMPTIVE_LIMIT_44ADA ? Math.max(0, gross * 0.5) : Math.max(0, gross);
     const { totalTax: slabTax } = calculateIncomeTax(taxable);
     const rebate = taxable <= 1200000 ? Math.min(slabTax, 60000) : 0;
     const afterRebate = slabTax - rebate;
@@ -648,8 +660,9 @@ export async function getTaxProjection(
   const HARDCODED_GROSS = 7450000;
   const isAssumed = financialYear === HARDCODED_FY;
   const advanceGross = isAssumed ? HARDCODED_GROSS : projectedGrossReceipts;
-  const advancePresumptive = advanceGross * 0.5;
-  const advanceTaxable = Math.max(0, advancePresumptive);
+  const advanceTaxable = advanceGross <= PRESUMPTIVE_LIMIT_44ADA
+    ? Math.max(0, advanceGross * 0.5)
+    : Math.max(0, advanceGross);
   const { totalTax: advanceIncomeTax } = calculateIncomeTax(advanceTaxable);
   const advanceRebate = advanceTaxable <= 1200000 ? Math.min(advanceIncomeTax, 60000) : 0;
   const advanceAfterRebate = advanceIncomeTax - advanceRebate;

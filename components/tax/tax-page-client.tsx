@@ -297,10 +297,17 @@ export function TaxPageClient({
                   <span className="text-muted-foreground">Gross Receipts (INR received)</span>
                   <span className="font-medium tabular-nums">{formatCurrency(computation.grossReceipts)}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Presumptive Income (50% u/s 44ADA)</span>
-                  <span className="font-medium tabular-nums">{formatCurrency(computation.presumptiveIncome)}</span>
-                </div>
+                {actualExceeds44AdaLimit ? (
+                  <div className="flex justify-between text-red-700 dark:text-red-400">
+                    <span>44ADA not available above ₹75L — taxable = full receipts</span>
+                    <span className="font-medium tabular-nums">{formatCurrency(computation.grossReceipts)}</span>
+                  </div>
+                ) : (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Presumptive Income (50% u/s 44ADA)</span>
+                    <span className="font-medium tabular-nums">{formatCurrency(computation.presumptiveIncome)}</span>
+                  </div>
+                )}
                 <Separator />
                 <div className="flex justify-between font-semibold">
                   <span>Taxable Income</span>
@@ -711,10 +718,17 @@ export function TaxPageClient({
                   <span className="text-muted-foreground">Projected Gross Receipts (12 months)</span>
                   <span className="font-medium tabular-nums">{formatCurrency(projection.projectedGrossReceipts)}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Presumptive Income (50% u/s 44ADA)</span>
-                  <span className="font-medium tabular-nums">{formatCurrency(projection.projectedPresumptiveIncome)}</span>
-                </div>
+                {projectedExceeds44AdaLimit ? (
+                  <div className="flex justify-between text-red-700 dark:text-red-400">
+                    <span>44ADA not available above ₹75L — taxable = full receipts</span>
+                    <span className="font-medium tabular-nums">{formatCurrency(projection.projectedGrossReceipts)}</span>
+                  </div>
+                ) : (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Presumptive Income (50% u/s 44ADA)</span>
+                    <span className="font-medium tabular-nums">{formatCurrency(projection.projectedPresumptiveIncome)}</span>
+                  </div>
+                )}
                 <Separator />
                 <div className="flex justify-between font-semibold">
                   <span>Projected Taxable Income</span>
@@ -794,6 +808,7 @@ export function TaxPageClient({
                 {projection.advanceTaxBasis.isAssumed
                   ? `Based on assumed gross receipts of ${formatCurrency(projection.advanceTaxBasis.grossReceipts)} (just under the 44ADA limit). Total tax: ${formatCurrency(projection.advanceTaxBasis.totalTax)}.`
                   : `Based on projected gross receipts of ${formatCurrency(projection.advanceTaxBasis.grossReceipts)}. Total tax: ${formatCurrency(projection.advanceTaxBasis.totalTax)}.`}
+                {" "}Spread evenly across 12 months: <span className="font-medium">{formatCurrency(Math.round(projection.advanceTaxBasis.totalTax / 12))}/month</span>.
               </p>
             </CardHeader>
             <CardContent>
