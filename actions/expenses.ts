@@ -316,6 +316,7 @@ export async function createExpenseTransaction(data: {
   note?: string | null;
   tags?: string[] | null;
   excludeFromTax?: boolean;
+  bucketTargetId?: number | null;
 }): Promise<{ success: boolean; id?: number }> {
   await assertAdminAccess();
 
@@ -331,6 +332,7 @@ export async function createExpenseTransaction(data: {
     note: data.note ?? null,
     tags: data.tags ? JSON.stringify(data.tags) : null,
     excludeFromTax: data.type === "income" ? (data.excludeFromTax ?? false) : false,
+    bucketTargetId: data.type === "expense" ? (data.bucketTargetId ?? null) : null,
   }).run();
 
   return { success: true, id: Number(result.lastInsertRowid) };
@@ -348,6 +350,7 @@ export async function updateExpenseTransaction(id: number, data: {
   note?: string | null;
   tags?: string[] | null;
   excludeFromTax?: boolean;
+  bucketTargetId?: number | null;
 }): Promise<{ success: boolean }> {
   await assertAdminAccess();
 
@@ -363,6 +366,7 @@ export async function updateExpenseTransaction(id: number, data: {
     note: data.note ?? null,
     tags: data.tags ? JSON.stringify(data.tags) : null,
     excludeFromTax: data.type === "income" ? (data.excludeFromTax ?? false) : false,
+    bucketTargetId: data.type === "expense" ? (data.bucketTargetId ?? null) : null,
   }).where(eq(expenseTransactions.id, id)).run();
 
   return { success: true };
@@ -1313,6 +1317,22 @@ export async function getTargetMonthlyTrend(targetId: number, financialYear: str
 // PERCENTAGE TARGETS — bucket-style aggregation
 // ============================================================
 
+/**
+ * Active sub-bucket targets — the children of the "Expenses" parent target.
+ * Used by the dialogs to render the per-transaction bucket override control.
+ */
+export async function getBucketTargets(): Promise<{ id: number; name: string; parentTargetId: number | null }[]> {
+  await assertAdminAccess();
+  const all = db.select().from(expenseTargets).where(eq(expenseTargets.isActive, true)).all() as ExpenseTarget[];
+  const expensesParent = all.find((t) => t.parentTargetId == null && t.name === "Expenses");
+  if (!expensesParent) return [];
+  return all
+    .filter((t) => t.parentTargetId === expensesParent.id)
+    .sort((a, b) => (b.percentage ?? 0) - (a.percentage ?? 0))
+    .map((t) => ({ id: t.id, name: t.name, parentTargetId: t.parentTargetId }));
+}
+
+
 function scopeDateRange(scope: TargetScope, ref: string): { start: string | null; end: string | null } {
   if (scope === "all") return { start: null, end: null };
   if (scope === "fy") {
@@ -1408,12 +1428,16 @@ export async function getTargetSummary(scope: TargetScope, ref: string): Promise
   if (end) dateConds.push(sql`${expenseTransactions.date} <= ${end}`);
   const txns = db.select().from(expenseTransactions).where(and(...dateConds)).all();
 
-  // Sum into target buckets (leaf-target sums first)
+  // Sum into target buckets (leaf-target sums first). Per-transaction
+  // bucket_target_id wins over the category-derived mapping when set on an
+  // expense row.
   const leafSums = new Map<number, number>();
   let denominator = 0;
   for (const t of txns) {
     let tid: number | undefined;
-    if (t.type === "expense" && t.categoryId != null) {
+    if (t.type === "expense" && t.bucketTargetId != null) {
+      tid = t.bucketTargetId;
+    } else if (t.type === "expense" && t.categoryId != null) {
       tid = accountToTarget.get(t.categoryId);
     } else if (t.type === "transfer" && t.toAccountId != null) {
       tid = accountToTarget.get(t.toAccountId);
@@ -1522,7 +1546,10 @@ export async function getTargetBreakdown(targetId: number, scope: TargetScope, r
   for (const t of txns) {
     let mappedTid: number | undefined;
     let attributeAccountId: number | null = null;
-    if (t.type === "expense" && t.categoryId != null) {
+    if (t.type === "expense" && t.bucketTargetId != null) {
+      mappedTid = t.bucketTargetId;
+      attributeAccountId = t.categoryId;
+    } else if (t.type === "expense" && t.categoryId != null) {
       mappedTid = accountToTarget.get(t.categoryId);
       attributeAccountId = t.categoryId;
     } else if (t.type === "transfer" && t.toAccountId != null) {
@@ -1621,7 +1648,8 @@ export async function getTargetTransactions(
 
   const matched = txns.filter(t => {
     let tid: number | undefined;
-    if (t.type === "expense" && t.categoryId != null) tid = accountToTarget.get(t.categoryId);
+    if (t.type === "expense" && t.bucketTargetId != null) tid = t.bucketTargetId;
+    else if (t.type === "expense" && t.categoryId != null) tid = accountToTarget.get(t.categoryId);
     else if (t.type === "transfer" && t.toAccountId != null) tid = accountToTarget.get(t.toAccountId);
     return tid != null && includedTargetIds.has(tid);
   });

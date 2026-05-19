@@ -5,6 +5,8 @@ import { Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { classifyBankStatementEntry, classifyBankStatementEntryWithSplits, unclassifyBankStatementEntry } from "@/actions/bank-statements";
+import { getBucketTargets } from "@/actions/expenses";
+import { BucketPicker } from "./bucket-picker";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -71,6 +73,14 @@ export function ClassifyDialog({ open, onClose, entry, accounts }: ClassifyDialo
   const [isSplitMode, setIsSplitMode] = useState(false);
   const [splits, setSplits] = useState<SplitDraft[]>([]);
   const [saving, setSaving] = useState(false);
+  const [bucketTargetId, setBucketTargetId] = useState<number | null>(null);
+  const [bucketTargets, setBucketTargets] = useState<{ id: number; name: string }[]>([]);
+
+  useEffect(() => {
+    if (open && bucketTargets.length === 0) {
+      getBucketTargets().then((res) => setBucketTargets(res.map((t) => ({ id: t.id, name: t.name }))));
+    }
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const incomeAccounts = accounts.filter((account) => account.type === "income" && account.isActive);
   const expenseAccounts = accounts.filter((account) => account.type === "expense" && account.isActive);
@@ -134,6 +144,7 @@ export function ClassifyDialog({ open, onClose, entry, accounts }: ClassifyDialo
       setToAccountId("");
       setNote("");
     }
+    setBucketTargetId(null);
 
     setIsSplitMode(false);
     setSplits([
@@ -277,6 +288,7 @@ export function ClassifyDialog({ open, onClose, entry, accounts }: ClassifyDialo
           fromAccountId: fromAccountId ? parseInt(fromAccountId, 10) : null,
           toAccountId: toAccountId ? parseInt(toAccountId, 10) : null,
           note: note || null,
+          bucketTargetId: type === "expense" ? bucketTargetId : null,
         });
       }
 
@@ -468,6 +480,10 @@ export function ClassifyDialog({ open, onClose, entry, accounts }: ClassifyDialo
                     </Select>
                   </div>
                 </>
+              )}
+
+              {type === "expense" && (
+                <BucketPicker value={bucketTargetId} onChange={setBucketTargetId} buckets={bucketTargets} />
               )}
 
               <div className="space-y-2">
