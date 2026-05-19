@@ -99,6 +99,30 @@ function clearBankStatementClassification(
     .run();
 
   if (linkedTxnIds.length > 0) {
+    // Other bank rows might share the same expense_transaction (merge group).
+    // Break the group atomically so we don't leave dangling expense_transaction_id
+    // refs after deleting the expense_transaction.
+    const siblings: Array<{ id: number }> = tx
+      .select({ id: bankStatementEntries.id })
+      .from(bankStatementEntries)
+      .where(and(
+        inArray(bankStatementEntries.expenseTransactionId, linkedTxnIds),
+        sql`${bankStatementEntries.id} != ${entryId}`,
+      ))
+      .all();
+    if (siblings.length > 0) {
+      tx.update(bankStatementEntries)
+        .set({
+          ...CLEARED_CLASSIFICATION,
+          isDismissed: false,
+        })
+        .where(inArray(bankStatementEntries.id, siblings.map((s) => s.id)))
+        .run();
+      tx.delete(bankStatementSplits)
+        .where(inArray(bankStatementSplits.bankStatementEntryId, siblings.map((s) => s.id)))
+        .run();
+    }
+
     tx.delete(expenseTransactions)
       .where(inArray(expenseTransactions.id, linkedTxnIds))
       .run();
@@ -397,6 +421,116 @@ export async function classifyBankStatementEntry(
         expenseTransactionId: Number(result.lastInsertRowid),
       })
       .where(eq(bankStatementEntries.id, id))
+      .run();
+  });
+
+  revalidatePath("/bank");
+  revalidatePath("/expenses");
+}
+
+/**
+ * Merge-classify: N bank rows → 1 expense_transaction.
+ * Every row gets `expense_transaction_id` pointing to the same new row, and is
+ * marked classified with the supplied label. The expense_transaction's amount
+ * is the sum of the bank-row amounts (all rows must be the same direction —
+ * all debits or all credits — else we reject). Existing classifications on any
+ * of the selected rows are cleared first.
+ */
+export async function classifyBankStatementsTogether(
+  entryIds: number[],
+  data: {
+    expenseName: string;
+    expenseType: ExpenseTransactionType;
+    categoryId?: number | null;
+    accountId?: number | null;
+    fromAccountId?: number | null;
+    toAccountId?: number | null;
+    note?: string | null;
+    tags?: string[] | null;
+  },
+) {
+  await assertAdminAccess();
+  if (entryIds.length < 2) {
+    throw new Error("Select at least two rows to merge");
+  }
+  if (!data.expenseName || !data.expenseName.trim()) {
+    throw new Error("Classification name is required");
+  }
+
+  db.transaction((tx) => {
+    const entries = tx
+      .select()
+      .from(bankStatementEntries)
+      .where(inArray(bankStatementEntries.id, entryIds))
+      .all();
+
+    if (entries.length !== entryIds.length) {
+      throw new Error("Some selected rows were not found");
+    }
+    if (entries.some((e) => e.isDismissed)) {
+      throw new Error("One or more selected rows are dismissed");
+    }
+
+    const hasDebit = entries.some((e) => (e.debit ?? 0) > 0);
+    const hasCredit = entries.some((e) => (e.credit ?? 0) > 0);
+    if (hasDebit && hasCredit) {
+      throw new Error("Cannot merge debit and credit rows together");
+    }
+
+    // Clear any existing classifications on the selected rows first
+    for (const e of entries) {
+      const existingSplitCount = tx
+        .select({ count: sql<number>`count(*)` })
+        .from(bankStatementSplits)
+        .where(eq(bankStatementSplits.bankStatementEntryId, e.id))
+        .get()?.count ?? 0;
+      if (e.isClassified || e.expenseTransactionId || existingSplitCount > 0) {
+        clearBankStatementClassification(tx, e.id);
+      }
+    }
+
+    const totalAmount = roundCurrency(
+      entries.reduce((sum, e) => sum + getEntryAmount(e), 0),
+    );
+    const latestDate = entries.map((e) => e.date).sort().pop()!;
+    const note = data.note?.trim() || null;
+
+    const result = tx
+      .insert(expenseTransactions)
+      .values({
+        type: data.expenseType,
+        date: latestDate,
+        amount: totalAmount,
+        categoryId: data.categoryId ?? null,
+        accountId: data.accountId ?? null,
+        fromAccountId: data.fromAccountId ?? null,
+        toAccountId: data.toAccountId ?? null,
+        note: note || data.expenseName.trim(),
+        tags: data.tags ? JSON.stringify(data.tags) : null,
+        source: "bank_statement",
+        sourceId: `bank_stmt_merge_${entries.map((e) => e.id).join("_")}`,
+        status: "confirmed",
+        createdAt: new Date().toISOString(),
+      })
+      .run();
+
+    const expenseTransactionId = Number(result.lastInsertRowid);
+
+    tx.update(bankStatementEntries)
+      .set({
+        expenseName: data.expenseName.trim(),
+        expenseType: data.expenseType,
+        categoryId: data.categoryId ?? null,
+        accountId: data.accountId ?? null,
+        fromAccountId: data.fromAccountId ?? null,
+        toAccountId: data.toAccountId ?? null,
+        note,
+        tags: data.tags ? JSON.stringify(data.tags) : null,
+        isClassified: true,
+        isDismissed: false,
+        expenseTransactionId,
+      })
+      .where(inArray(bankStatementEntries.id, entries.map((e) => e.id)))
       .run();
   });
 
