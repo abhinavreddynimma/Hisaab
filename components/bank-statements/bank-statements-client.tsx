@@ -19,9 +19,11 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { dismissBankStatementEntry } from "@/actions/bank-statements";
 import { ClassifyDialog } from "./classify-dialog";
+import { MergeClassifyDialog } from "./merge-classify-dialog";
 import type { BankStatementEntry, ExpenseAccount } from "@/lib/types";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -71,6 +73,20 @@ export function BankStatementsClient({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [sortBy, setSortBy] = useState<"date" | "debit" | "credit" | "balance">("date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
+
+  function toggleSelection(id: number) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function clearSelection() { setSelectedIds(new Set()); }
+
+  const selectedEntries = entries.filter((e) => selectedIds.has(e.id));
 
   function toggleSort(col: "date" | "debit" | "credit" | "balance") {
     if (sortBy === col) {
@@ -205,6 +221,26 @@ export function BankStatementsClient({
         </Card>
       </div>
 
+      {/* Selection action bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center justify-between rounded-md border bg-muted/40 px-4 py-2">
+          <span className="text-sm">
+            <span className="font-semibold tabular-nums">{selectedIds.size}</span> selected
+          </span>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={clearSelection}>Clear</Button>
+            <Button
+              size="sm"
+              onClick={() => setMergeDialogOpen(true)}
+              disabled={selectedIds.size < 2}
+              title={selectedIds.size < 2 ? "Select at least 2 rows" : undefined}
+            >
+              Merge &amp; classify ({selectedIds.size})
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Transaction table */}
       <Card>
         <CardContent className="p-0">
@@ -218,6 +254,16 @@ export function BankStatementsClient({
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[40px]">
+                    <Checkbox
+                      aria-label="Select all on this page"
+                      checked={entries.length > 0 && entries.every((e) => selectedIds.has(e.id))}
+                      onCheckedChange={(v) => {
+                        if (v) setSelectedIds(new Set(entries.map((e) => e.id)));
+                        else clearSelection();
+                      }}
+                    />
+                  </TableHead>
                   <TableHead className="w-[40px]"></TableHead>
                   <TableHead className="w-[100px]">
                     <button
@@ -268,9 +314,19 @@ export function BankStatementsClient({
                 {sortedEntries.map((entry) => (
                   <TableRow
                     key={entry.id}
-                    className="cursor-pointer hover:bg-muted/50"
+                    className={cn(
+                      "cursor-pointer hover:bg-muted/50",
+                      selectedIds.has(entry.id) && "bg-primary/5"
+                    )}
                     onClick={() => openClassify(entry)}
                   >
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={selectedIds.has(entry.id)}
+                        onCheckedChange={() => toggleSelection(entry.id)}
+                        aria-label={`Select row ${entry.id}`}
+                      />
+                    </TableCell>
                     <TableCell>
                       {entry.isClassified ? (
                         <div className="flex items-center justify-center">
@@ -414,6 +470,14 @@ export function BankStatementsClient({
         open={dialogOpen}
         onClose={() => { setDialogOpen(false); setSelectedEntry(null); }}
         entry={selectedEntry}
+        accounts={accounts}
+      />
+
+      <MergeClassifyDialog
+        open={mergeDialogOpen}
+        onClose={() => setMergeDialogOpen(false)}
+        onSuccess={() => { setMergeDialogOpen(false); clearSelection(); }}
+        entries={selectedEntries}
         accounts={accounts}
       />
     </div>
