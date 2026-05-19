@@ -272,6 +272,7 @@ export interface ExpenseTransaction {
   source: ExpenseTransactionSource;
   sourceId: string | null;
   status: ExpenseTransactionStatus;
+  excludeFromTax: boolean;
   createdAt: string;
   categoryName?: string;
   accountName?: string;

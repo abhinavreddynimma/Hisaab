@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { createExpenseTransaction, updateExpenseTransaction } from "@/actions/expenses";
 import type { ExpenseAccount, ExpenseTransaction, ExpenseTransactionType } from "@/lib/types";
 
@@ -29,6 +30,7 @@ export function TransactionDialog({ open, onClose, transaction, accounts }: Tran
   const [fees, setFees] = useState("");
   const [note, setNote] = useState("");
   const [selectedTags] = useState<string[]>([]);
+  const [excludeFromTax, setExcludeFromTax] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -42,16 +44,18 @@ export function TransactionDialog({ open, onClose, transaction, accounts }: Tran
       setToAccountId(transaction.toAccountId ? String(transaction.toAccountId) : "");
       setFees(transaction.fees ? String(transaction.fees) : "");
       setNote(transaction.note || "");
+      setExcludeFromTax(transaction.excludeFromTax ?? false);
     } else {
       setType("expense");
       setDate(new Date().toISOString().split("T")[0]);
       setAmount("");
       setCategoryId("");
-      setAccountId("");
-      setFromAccountId("");
+      setAccountId(defaultBankIdStr);
+      setFromAccountId(defaultBankIdStr);
       setToAccountId("");
       setFees("");
       setNote("");
+      setExcludeFromTax(false);
     }
   }, [transaction, open]);
 
@@ -59,6 +63,12 @@ export function TransactionDialog({ open, onClose, transaction, accounts }: Tran
   const expenseAccounts = accounts.filter(a => a.type === "expense" && a.isActive);
   const bankCashAccounts = accounts.filter(a => (a.type === "bank" || a.type === "cash") && a.isActive);
   const transferableAccounts = accounts.filter(a => a.type !== "expense" && a.type !== "income" && a.isActive);
+  const defaultBankAccountId = (
+    bankCashAccounts.find(a => a.type === "bank" && a.name.trim().toLowerCase() === "sbi")
+    ?? bankCashAccounts.find(a => a.type === "bank")
+    ?? bankCashAccounts[0]
+  )?.id;
+  const defaultBankIdStr = defaultBankAccountId ? String(defaultBankAccountId) : "";
 
   // Build 3-level hierarchy for expense categories
   const topLevelExpense = expenseAccounts.filter(a => !a.parentId);
@@ -85,6 +95,7 @@ export function TransactionDialog({ open, onClose, transaction, accounts }: Tran
         fees: fees ? parseFloat(fees) : null,
         note: note || null,
         tags: selectedTags.length > 0 ? selectedTags : null,
+        excludeFromTax: type === "income" ? excludeFromTax : false,
       };
 
       if (transaction) {
@@ -229,6 +240,22 @@ export function TransactionDialog({ open, onClose, transaction, accounts }: Tran
             <Label>Note</Label>
             <Textarea placeholder="Add a note..." value={note} onChange={(e) => setNote(e.target.value)} rows={2} />
           </div>
+
+          {type === "income" && (
+            <label className="flex items-start gap-2 rounded-md border bg-muted/30 p-3 cursor-pointer">
+              <Checkbox
+                checked={excludeFromTax}
+                onCheckedChange={(v) => setExcludeFromTax(v === true)}
+                className="mt-0.5"
+              />
+              <div className="flex-1">
+                <p className="text-sm font-medium">Exclude from tax calculation</p>
+                <p className="text-[11px] text-muted-foreground leading-snug mt-0.5">
+                  Tick for non-taxable income — old savings restored, gifts, refunds, etc. Doesn&apos;t affect dashboards or budget math, only the Tax Overview gross-receipts total.
+                </p>
+              </div>
+            </label>
+          )}
 
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>

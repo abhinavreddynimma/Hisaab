@@ -315,6 +315,7 @@ export async function createExpenseTransaction(data: {
   fees?: number | null;
   note?: string | null;
   tags?: string[] | null;
+  excludeFromTax?: boolean;
 }): Promise<{ success: boolean; id?: number }> {
   await assertAdminAccess();
 
@@ -329,6 +330,7 @@ export async function createExpenseTransaction(data: {
     fees: data.fees ?? 0,
     note: data.note ?? null,
     tags: data.tags ? JSON.stringify(data.tags) : null,
+    excludeFromTax: data.type === "income" ? (data.excludeFromTax ?? false) : false,
   }).run();
 
   return { success: true, id: Number(result.lastInsertRowid) };
@@ -345,6 +347,7 @@ export async function updateExpenseTransaction(id: number, data: {
   fees?: number | null;
   note?: string | null;
   tags?: string[] | null;
+  excludeFromTax?: boolean;
 }): Promise<{ success: boolean }> {
   await assertAdminAccess();
 
@@ -359,6 +362,7 @@ export async function updateExpenseTransaction(id: number, data: {
     fees: data.fees ?? 0,
     note: data.note ?? null,
     tags: data.tags ? JSON.stringify(data.tags) : null,
+    excludeFromTax: data.type === "income" ? (data.excludeFromTax ?? false) : false,
   }).where(eq(expenseTransactions.id, id)).run();
 
   return { success: true };

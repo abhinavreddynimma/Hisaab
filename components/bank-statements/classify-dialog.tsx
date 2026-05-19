@@ -130,7 +130,7 @@ export function ClassifyDialog({ open, onClose, entry, accounts }: ClassifyDialo
       setType(defaultType);
       setCategoryId("");
       setAccountId(defaultAccount);
-      setFromAccountId("");
+      setFromAccountId(defaultAccount);
       setToAccountId("");
       setNote("");
     }
