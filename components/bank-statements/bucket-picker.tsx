@@ -7,6 +7,8 @@ interface BucketPickerProps {
   value: number | null;
   onChange: (value: number | null) => void;
   buckets: { id: number; name: string }[];
+  /** Name of the bucket that "Auto" will resolve to given the current category. */
+  autoResolvesTo?: string | null;
 }
 
 function bucketTone(name: string): string {
@@ -17,8 +19,11 @@ function bucketTone(name: string): string {
   return "bg-slate-100 text-slate-800 border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700";
 }
 
-export function BucketPicker({ value, onChange, buckets }: BucketPickerProps) {
+export function BucketPicker({ value, onChange, buckets, autoResolvesTo }: BucketPickerProps) {
   if (buckets.length === 0) return null;
+  const autoLabel = autoResolvesTo
+    ? `Auto · ${autoResolvesTo}`
+    : "Auto (by category)";
   return (
     <div className="space-y-1.5">
       <Label className="text-xs">Bucket override</Label>
@@ -26,14 +31,15 @@ export function BucketPicker({ value, onChange, buckets }: BucketPickerProps) {
         <button
           type="button"
           onClick={() => onChange(null)}
+          title={autoResolvesTo ? `Selected category maps to ${autoResolvesTo}` : "Pick a category to see which bucket Auto resolves to"}
           className={cn(
-            "px-2.5 py-1 text-xs rounded-md border transition-colors",
+            "px-2.5 py-1 text-xs rounded-md border transition-colors inline-flex items-center gap-1",
             value === null
               ? "bg-foreground text-background border-foreground"
               : "bg-background text-muted-foreground border-muted hover:border-foreground/30"
           )}
         >
-          Auto (by category)
+          {autoLabel}
         </button>
         {buckets.map((b) => (
           <button

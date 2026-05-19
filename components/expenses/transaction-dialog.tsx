@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { createExpenseTransaction, updateExpenseTransaction, getBucketTargets } from "@/actions/expenses";
+import { createExpenseTransaction, updateExpenseTransaction, getBucketTargets, getCategoryBucketMap } from "@/actions/expenses";
 import { BucketPicker } from "@/components/bank-statements/bucket-picker";
 import type { ExpenseAccount, ExpenseTransaction, ExpenseTransactionType } from "@/lib/types";
 
@@ -35,12 +35,18 @@ export function TransactionDialog({ open, onClose, transaction, accounts }: Tran
   const [saving, setSaving] = useState(false);
   const [bucketTargetId, setBucketTargetId] = useState<number | null>(null);
   const [bucketTargets, setBucketTargets] = useState<{ id: number; name: string }[]>([]);
+  const [categoryBucketMap, setCategoryBucketMap] = useState<Record<number, { id: number; name: string }>>({});
 
   useEffect(() => {
     if (open && bucketTargets.length === 0) {
-      getBucketTargets().then((res) => setBucketTargets(res.map((t) => ({ id: t.id, name: t.name }))));
+      Promise.all([getBucketTargets(), getCategoryBucketMap()]).then(([bt, cbm]) => {
+        setBucketTargets(bt.map((t) => ({ id: t.id, name: t.name })));
+        setCategoryBucketMap(cbm);
+      });
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const autoResolvesTo = categoryId ? categoryBucketMap[parseInt(categoryId, 10)]?.name ?? null : null;
 
   useEffect(() => {
     if (transaction) {
@@ -249,7 +255,12 @@ export function TransactionDialog({ open, onClose, transaction, accounts }: Tran
           )}
 
           {type === "expense" && (
-            <BucketPicker value={bucketTargetId} onChange={setBucketTargetId} buckets={bucketTargets} />
+            <BucketPicker
+              value={bucketTargetId}
+              onChange={setBucketTargetId}
+              buckets={bucketTargets}
+              autoResolvesTo={autoResolvesTo}
+            />
           )}
 
           <div className="space-y-2">
