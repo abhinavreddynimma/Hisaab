@@ -202,7 +202,7 @@ export function ExpensesPageClient({
         </TabsContent>
 
         <TabsContent value="targets" className="mt-4">
-          <TargetsView targets={targets} accounts={accounts} financialYear={financialYear} />
+          <TargetsView accounts={accounts} financialYear={financialYear} />
         </TabsContent>
 
         <TabsContent value="recurring" className="mt-4">

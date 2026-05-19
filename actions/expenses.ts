@@ -6,7 +6,18 @@ import { eq, desc, and, sql, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { assertAdminAccess } from "@/lib/auth";
 import { DEFAULT_EXPENSE_CATEGORIES, getFYDateRange, getMonthDateRange } from "@/lib/constants";
-import type { ExpenseAccount, ExpenseAccountType, ExpenseTransaction, ExpenseTransactionType, ExpenseBudget, ExpenseTarget } from "@/lib/types";
+import type {
+  ExpenseAccount,
+  ExpenseAccountType,
+  ExpenseTransaction,
+  ExpenseTransactionType,
+  ExpenseBudget,
+  ExpenseTarget,
+  TargetScope,
+  TargetSummaryRow,
+  TargetTrendPoint,
+  TargetTransactionRow,
+} from "@/lib/types";
 
 // ============================================================
 // ACCOUNTS
@@ -1292,6 +1303,349 @@ export async function getTargetMonthlyTrend(targetId: number, financialYear: str
     .sort((a, b) => b.amount - a.amount);
 
   return { months, average, accountBreakdown };
+}
+
+// ============================================================
+// PERCENTAGE TARGETS — bucket-style aggregation
+// ============================================================
+
+function scopeDateRange(scope: TargetScope, ref: string): { start: string | null; end: string | null } {
+  if (scope === "all") return { start: null, end: null };
+  if (scope === "fy") {
+    const { start, end } = getFYDateRange(ref);
+    return { start, end };
+  }
+  // month: ref is "YYYY-MM"
+  const [yStr, mStr] = ref.split("-");
+  const y = parseInt(yStr, 10);
+  const m = parseInt(mStr, 10);
+  const { start, end } = getMonthDateRange(y, m);
+  return { start, end };
+}
+
+function expandAccountSubtree(rootIds: number[], allAccounts: ExpenseAccount[]): Set<number> {
+  const out = new Set<number>(rootIds);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const a of allAccounts) {
+      if (a.parentId && out.has(a.parentId) && !out.has(a.id)) {
+        out.add(a.id);
+        changed = true;
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Build a map: accountId -> targetId, where targetId is the LEAF target
+ * (a sub-bucket like Essential) whose account set contains this account.
+ *
+ * Accounts that fall under a target's subtree but are also linked to a more
+ * specific child target prefer the child. We process targets in deepest-first
+ * order to enforce this.
+ */
+function buildAccountToTarget(
+  targets: ExpenseTarget[],
+  links: { targetId: number; accountId: number }[],
+  allAccounts: ExpenseAccount[],
+): Map<number, number> {
+  // depth = distance from a parentless target
+  const depthOf = new Map<number, number>();
+  function depth(t: ExpenseTarget): number {
+    if (depthOf.has(t.id)) return depthOf.get(t.id)!;
+    if (!t.parentTargetId) { depthOf.set(t.id, 0); return 0; }
+    const parent = targets.find(x => x.id === t.parentTargetId);
+    const d = parent ? depth(parent) + 1 : 0;
+    depthOf.set(t.id, d);
+    return d;
+  }
+  for (const t of targets) depth(t);
+
+  const linksByTarget = new Map<number, number[]>();
+  for (const l of links) {
+    const arr = linksByTarget.get(l.targetId) ?? [];
+    arr.push(l.accountId);
+    linksByTarget.set(l.targetId, arr);
+  }
+
+  // Process deepest first so child takes precedence over parent
+  const ordered = [...targets].sort((a, b) => (depthOf.get(b.id) ?? 0) - (depthOf.get(a.id) ?? 0));
+  const out = new Map<number, number>();
+  for (const t of ordered) {
+    const roots = linksByTarget.get(t.id) ?? [];
+    if (roots.length === 0) continue;
+    const subtree = expandAccountSubtree(roots, allAccounts);
+    for (const aid of subtree) {
+      if (!out.has(aid)) out.set(aid, t.id);
+    }
+  }
+  return out;
+}
+
+/**
+ * Return one row per active target with the actual bucket amount and
+ * actual % of total outflow (denominator = sum of all bucket-mapped txns).
+ */
+export async function getTargetSummary(scope: TargetScope, ref: string): Promise<TargetSummaryRow[]> {
+  await assertAdminAccess();
+
+  const targets = db.select().from(expenseTargets).where(eq(expenseTargets.isActive, true)).all() as ExpenseTarget[];
+  const allAccounts = db.select().from(expenseAccounts).all() as ExpenseAccount[];
+  const links = db.select().from(expenseTargetAccounts).all();
+
+  const accountToTarget = buildAccountToTarget(targets, links, allAccounts);
+
+  // Pull transactions in scope
+  const { start, end } = scopeDateRange(scope, ref);
+  const dateConds = [eq(expenseTransactions.status, "confirmed")];
+  if (start) dateConds.push(sql`${expenseTransactions.date} >= ${start}`);
+  if (end) dateConds.push(sql`${expenseTransactions.date} <= ${end}`);
+  const txns = db.select().from(expenseTransactions).where(and(...dateConds)).all();
+
+  // Sum into target buckets (leaf-target sums first)
+  const leafSums = new Map<number, number>();
+  let denominator = 0;
+  for (const t of txns) {
+    let tid: number | undefined;
+    if (t.type === "expense" && t.categoryId != null) {
+      tid = accountToTarget.get(t.categoryId);
+    } else if (t.type === "transfer" && t.toAccountId != null) {
+      tid = accountToTarget.get(t.toAccountId);
+    }
+    if (tid != null) {
+      leafSums.set(tid, (leafSums.get(tid) ?? 0) + t.amount);
+      denominator += t.amount;
+    }
+  }
+
+  // Roll up child amounts into parents
+  const sumByTarget = new Map<number, number>(leafSums);
+  for (const t of targets) {
+    if (t.parentTargetId != null) {
+      const childSum = sumByTarget.get(t.id) ?? 0;
+      sumByTarget.set(t.parentTargetId, (sumByTarget.get(t.parentTargetId) ?? 0) + childSum);
+    }
+  }
+
+  // Build per-target account list (own + subtree leaves)
+  const linksByTarget = new Map<number, number[]>();
+  for (const l of links) {
+    const arr = linksByTarget.get(l.targetId) ?? [];
+    arr.push(l.accountId);
+    linksByTarget.set(l.targetId, arr);
+  }
+
+  return targets.map(t => {
+    const amount = sumByTarget.get(t.id) ?? 0;
+    const accountIds = linksByTarget.get(t.id) ?? [];
+    let denom = denominator;
+    if (t.parentTargetId != null) {
+      // Sub-bucket: percentage is relative to parent's total, not global
+      const parentSum = sumByTarget.get(t.parentTargetId) ?? 0;
+      denom = parentSum;
+    }
+    return {
+      id: t.id,
+      name: t.name,
+      parentTargetId: t.parentTargetId,
+      percentageTarget: t.percentage,
+      actualAmount: Math.round(amount),
+      actualPercentage: denom > 0 ? +(amount / denom * 100).toFixed(1) : 0,
+      denominatorAmount: Math.round(denom),
+      accountIds,
+    };
+  });
+}
+
+/**
+ * Per-month line-chart data for a single target across a scope window.
+ * "amount" is the bucket value for that month; "percentage" is bucket / total-outflow-that-month.
+ */
+export async function getTargetBreakdown(targetId: number, scope: TargetScope, ref: string): Promise<{
+  points: TargetTrendPoint[];
+  accountSplit: { id: number; name: string; amount: number; color: string | null }[];
+  totalAmount: number;
+  totalDenominator: number;
+}> {
+  await assertAdminAccess();
+
+  const targets = db.select().from(expenseTargets).where(eq(expenseTargets.isActive, true)).all() as ExpenseTarget[];
+  const target = targets.find(t => t.id === targetId);
+  if (!target) return { points: [], accountSplit: [], totalAmount: 0, totalDenominator: 0 };
+
+  const allAccounts = db.select().from(expenseAccounts).all() as ExpenseAccount[];
+  const accountMap = new Map(allAccounts.map(a => [a.id, a]));
+  const links = db.select().from(expenseTargetAccounts).all();
+  const accountToTarget = buildAccountToTarget(targets, links, allAccounts);
+
+  // Set of leaf-target ids included by this target (self + any descendants)
+  const includedTargetIds = new Set<number>([targetId]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const t of targets) {
+      if (t.parentTargetId && includedTargetIds.has(t.parentTargetId) && !includedTargetIds.has(t.id)) {
+        includedTargetIds.add(t.id);
+        changed = true;
+      }
+    }
+  }
+
+  const { start, end } = scopeDateRange(scope, ref);
+  const dateConds = [eq(expenseTransactions.status, "confirmed")];
+  if (start) dateConds.push(sql`${expenseTransactions.date} >= ${start}`);
+  if (end) dateConds.push(sql`${expenseTransactions.date} <= ${end}`);
+  const txns = db.select().from(expenseTransactions).where(and(...dateConds)).all();
+
+  // Bucket per month
+  const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function monthKey(date: string): string {
+    return date.slice(0, 7); // YYYY-MM
+  }
+  function monthLabel(key: string): string {
+    const [y, m] = key.split("-");
+    return `${MONTH_LABELS[parseInt(m, 10) - 1]} ${y.slice(2)}`;
+  }
+
+  const monthBucket = new Map<string, number>();
+  const monthDenom = new Map<string, number>();
+  const accountAgg = new Map<number, number>();
+  let totalAmount = 0;
+  let totalDenominator = 0;
+
+  for (const t of txns) {
+    let mappedTid: number | undefined;
+    let attributeAccountId: number | null = null;
+    if (t.type === "expense" && t.categoryId != null) {
+      mappedTid = accountToTarget.get(t.categoryId);
+      attributeAccountId = t.categoryId;
+    } else if (t.type === "transfer" && t.toAccountId != null) {
+      mappedTid = accountToTarget.get(t.toAccountId);
+      attributeAccountId = t.toAccountId;
+    }
+    if (mappedTid == null) continue;
+
+    const mk = monthKey(t.date);
+    monthDenom.set(mk, (monthDenom.get(mk) ?? 0) + t.amount);
+    totalDenominator += t.amount;
+
+    if (!includedTargetIds.has(mappedTid)) continue;
+
+    monthBucket.set(mk, (monthBucket.get(mk) ?? 0) + t.amount);
+    totalAmount += t.amount;
+
+    // Account split rolls up to whichever target-linked ancestor is closest
+    if (attributeAccountId != null) {
+      // Find the direct linked ancestor (one of this target's link list or a descendant's)
+      let walker: number | null = attributeAccountId;
+      let rolledUp = attributeAccountId;
+      const ownLinkSet = new Set(
+        links.filter(l => includedTargetIds.has(l.targetId)).map(l => l.accountId)
+      );
+      while (walker) {
+        if (ownLinkSet.has(walker)) { rolledUp = walker; break; }
+        const parentId: number | null = accountMap.get(walker)?.parentId ?? null;
+        if (!parentId) break;
+        walker = parentId;
+      }
+      accountAgg.set(rolledUp, (accountAgg.get(rolledUp) ?? 0) + t.amount);
+    }
+  }
+
+  // Build chronologically sorted points
+  const monthKeys = Array.from(new Set([...monthBucket.keys(), ...monthDenom.keys()])).sort();
+  const points: TargetTrendPoint[] = monthKeys.map(mk => {
+    const a = monthBucket.get(mk) ?? 0;
+    const d = monthDenom.get(mk) ?? 0;
+    return {
+      bucket: monthLabel(mk),
+      amount: Math.round(a),
+      percentage: d > 0 ? +(a / d * 100).toFixed(1) : 0,
+    };
+  });
+
+  const accountSplit = Array.from(accountAgg.entries())
+    .map(([id, amount]) => ({
+      id,
+      name: accountMap.get(id)?.name ?? "Unknown",
+      amount: Math.round(amount),
+      color: accountMap.get(id)?.color ?? null,
+    }))
+    .sort((a, b) => b.amount - a.amount);
+
+  return { points, accountSplit, totalAmount: Math.round(totalAmount), totalDenominator: Math.round(totalDenominator) };
+}
+
+/**
+ * Paginated transaction list for a target (and its descendants) in scope.
+ */
+export async function getTargetTransactions(
+  targetId: number,
+  scope: TargetScope,
+  ref: string,
+  opts?: { limit?: number; offset?: number },
+): Promise<{ rows: TargetTransactionRow[]; total: number }> {
+  await assertAdminAccess();
+
+  const targets = db.select().from(expenseTargets).where(eq(expenseTargets.isActive, true)).all() as ExpenseTarget[];
+  if (!targets.find(t => t.id === targetId)) return { rows: [], total: 0 };
+
+  const allAccounts = db.select().from(expenseAccounts).all() as ExpenseAccount[];
+  const accountMap = new Map(allAccounts.map(a => [a.id, a]));
+  const links = db.select().from(expenseTargetAccounts).all();
+  const accountToTarget = buildAccountToTarget(targets, links, allAccounts);
+
+  const includedTargetIds = new Set<number>([targetId]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const t of targets) {
+      if (t.parentTargetId && includedTargetIds.has(t.parentTargetId) && !includedTargetIds.has(t.id)) {
+        includedTargetIds.add(t.id);
+        changed = true;
+      }
+    }
+  }
+
+  const { start, end } = scopeDateRange(scope, ref);
+  const dateConds = [eq(expenseTransactions.status, "confirmed")];
+  if (start) dateConds.push(sql`${expenseTransactions.date} >= ${start}`);
+  if (end) dateConds.push(sql`${expenseTransactions.date} <= ${end}`);
+  const txns = db.select().from(expenseTransactions).where(and(...dateConds)).all();
+
+  const matched = txns.filter(t => {
+    let tid: number | undefined;
+    if (t.type === "expense" && t.categoryId != null) tid = accountToTarget.get(t.categoryId);
+    else if (t.type === "transfer" && t.toAccountId != null) tid = accountToTarget.get(t.toAccountId);
+    return tid != null && includedTargetIds.has(tid);
+  });
+
+  matched.sort((a, b) => b.date.localeCompare(a.date));
+
+  const offset = opts?.offset ?? 0;
+  const limit = opts?.limit ?? 100;
+  const page = matched.slice(offset, offset + limit);
+
+  const rows: TargetTransactionRow[] = page.map(t => {
+    const accountId = t.type === "transfer" ? t.toAccountId : t.accountId;
+    const accountName = accountId != null ? (accountMap.get(accountId)?.name ?? null) : null;
+    const categoryName = t.categoryId != null ? (accountMap.get(t.categoryId)?.name ?? null) : null;
+    return {
+      id: t.id,
+      date: t.date,
+      amount: t.amount,
+      type: t.type as "expense" | "transfer" | "income",
+      note: t.note,
+      accountName,
+      categoryName,
+      source: t.source ?? null,
+      status: t.status,
+    };
+  });
+
+  return { rows, total: matched.length };
 }
 
 // ============================================================

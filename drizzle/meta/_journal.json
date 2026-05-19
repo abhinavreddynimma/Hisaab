@@ -120,6 +120,13 @@
       "when": 1776902400000,
       "tag": "0014_bank_statement_splits",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1779494400000,
+      "tag": "0015_target_percentages",
+      "breakpoints": true
     }
   ]
 }

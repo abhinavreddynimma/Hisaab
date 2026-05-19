@@ -262,6 +262,8 @@ export const expenseTargets = sqliteTable("expense_targets", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
   monthlyAmount: real("monthly_amount").notNull(),
+  percentage: real("percentage"),
+  parentTargetId: integer("parent_target_id"),
   financialYear: text("financial_year").notNull(),
   isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
   createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),

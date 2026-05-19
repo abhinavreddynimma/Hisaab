@@ -295,6 +295,8 @@ export interface ExpenseTarget {
   id: number;
   name: string;
   monthlyAmount: number;
+  percentage: number | null;
+  parentTargetId: number | null;
   financialYear: string;
   isActive: boolean;
   createdAt: string;
@@ -302,6 +304,37 @@ export interface ExpenseTarget {
   accountNames?: string[];
   thisMonthActual?: number;
   fyAverage?: number;
+}
+
+export type TargetScope = "all" | "fy" | "month";
+
+export interface TargetSummaryRow {
+  id: number;
+  name: string;
+  parentTargetId: number | null;
+  percentageTarget: number | null;
+  actualAmount: number;
+  actualPercentage: number;
+  denominatorAmount: number;
+  accountIds: number[];
+}
+
+export interface TargetTrendPoint {
+  bucket: string; // "Apr 2025", "May 2025", ...
+  amount: number;
+  percentage: number; // share of that month's outflow
+}
+
+export interface TargetTransactionRow {
+  id: number;
+  date: string;
+  amount: number;
+  type: "expense" | "transfer" | "income";
+  note: string | null;
+  accountName: string | null;
+  categoryName: string | null;
+  source: string | null;
+  status: string;
 }
 
 // Bank Statement types
