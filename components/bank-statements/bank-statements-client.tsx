@@ -5,8 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Check, ChevronLeft, ChevronRight,
-  FileSpreadsheet, CircleDot, Trash2,
+  FileSpreadsheet, CircleDot, Trash2, Landmark, Smartphone, Pencil, HelpCircle,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,6 +24,24 @@ import { ClassifyDialog } from "./classify-dialog";
 import type { BankStatementEntry, ExpenseAccount } from "@/lib/types";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+type SourceMeta = { icon: LucideIcon; label: string; className: string };
+
+function getSourceMeta(bankName: string | null): SourceMeta {
+  switch (bankName) {
+    case "SBI":
+    case "State Bank of India":
+      return { icon: Landmark, label: "SBI bank statement", className: "text-indigo-600 dark:text-indigo-400" };
+    case "PhonePe":
+      return { icon: Smartphone, label: "PhonePe statement", className: "text-violet-600 dark:text-violet-400" };
+    case "Money Manager":
+      return { icon: FileSpreadsheet, label: "Imported from Money Manager (xlsx)", className: "text-amber-600 dark:text-amber-400" };
+    case "Manual Entry":
+      return { icon: Pencil, label: "Manual entry", className: "text-slate-600 dark:text-slate-400" };
+    default:
+      return { icon: HelpCircle, label: bankName ?? "Unknown source", className: "text-muted-foreground" };
+  }
+}
 
 interface BankStatementsClientProps {
   entries: BankStatementEntry[];
@@ -185,25 +204,42 @@ export function BankStatementsClient({
                       )}
                     </TableCell>
                     <TableCell>
-                      {entry.isClassified && entry.splits && entry.splits.length > 1 ? (
-                        <>
-                          <p className="text-sm font-medium">{entry.expenseName || `Split into ${entry.splits.length} transactions`}</p>
-                          <p className="text-[11px] font-light text-muted-foreground/60 leading-tight line-clamp-1 mt-0.5">
-                            {entry.splits.slice(0, 3).map((split) => split.expenseName).join(" • ")}
-                          </p>
-                        </>
-                      ) : entry.isClassified && entry.expenseName ? (
-                        <>
-                          <p className="text-sm font-medium">{entry.expenseName}</p>
-                          <p className="text-[11px] font-light text-muted-foreground/60 leading-tight line-clamp-1 mt-0.5">
-                            {entry.description.replace(/\n/g, " ").trim()}
-                          </p>
-                        </>
-                      ) : (
-                        <p className="text-sm leading-tight line-clamp-2">
-                          {entry.description.replace(/\n/g, " ").trim()}
-                        </p>
-                      )}
+                      {(() => {
+                        const src = getSourceMeta(entry.bankName);
+                        const Icon = src.icon;
+                        return (
+                          <div className="flex items-start gap-2">
+                            <span
+                              title={src.label}
+                              aria-label={src.label}
+                              className="mt-0.5 shrink-0 inline-flex"
+                            >
+                              <Icon className={`h-3.5 w-3.5 ${src.className}`} />
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              {entry.isClassified && entry.splits && entry.splits.length > 1 ? (
+                                <>
+                                  <p className="text-sm font-medium">{entry.expenseName || `Split into ${entry.splits.length} transactions`}</p>
+                                  <p className="text-[11px] font-light text-muted-foreground/60 leading-tight line-clamp-1 mt-0.5">
+                                    {entry.splits.slice(0, 3).map((split) => split.expenseName).join(" • ")}
+                                  </p>
+                                </>
+                              ) : entry.isClassified && entry.expenseName ? (
+                                <>
+                                  <p className="text-sm font-medium">{entry.expenseName}</p>
+                                  <p className="text-[11px] font-light text-muted-foreground/60 leading-tight line-clamp-1 mt-0.5">
+                                    {entry.description.replace(/\n/g, " ").trim()}
+                                  </p>
+                                </>
+                              ) : (
+                                <p className="text-sm leading-tight line-clamp-2">
+                                  {entry.description.replace(/\n/g, " ").trim()}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell className="text-right font-medium tabular-nums text-rose-600">
                       {entry.debit ? formatCurrency(entry.debit) : ""}
