@@ -580,12 +580,25 @@ export async function getBankStatementStats(startDate?: string, endDate?: string
     .where(and(...conditions))
     .all();
 
+  // Cumulative balance: all non-dismissed entries from the earliest record up
+  // to (and including) endDate. Defined as sum(credit) - sum(debit).
+  const cumulativeConditions = [eq(bankStatementEntries.isDismissed, false)];
+  if (endDate) cumulativeConditions.push(lte(bankStatementEntries.date, endDate));
+  const [balanceRow] = db
+    .select({
+      cumulativeBalance: sql<number>`coalesce(sum(${bankStatementEntries.credit}), 0) - coalesce(sum(${bankStatementEntries.debit}), 0)`,
+    })
+    .from(bankStatementEntries)
+    .where(and(...cumulativeConditions))
+    .all();
+
   return {
     total: stats?.total || 0,
     classified: stats?.classified || 0,
     unclassified: (stats?.total || 0) - (stats?.classified || 0),
     totalDebit: stats?.totalDebit || 0,
     totalCredit: stats?.totalCredit || 0,
+    cumulativeBalance: balanceRow?.cumulativeBalance || 0,
   };
 }
 
