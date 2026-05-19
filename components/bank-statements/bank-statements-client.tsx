@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
   ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Check, ChevronLeft, ChevronRight,
   FileSpreadsheet, CircleDot, Trash2, Landmark, Smartphone, Pencil, HelpCircle,
+  ArrowUp, ArrowDown, ArrowUpDown,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -68,6 +69,44 @@ export function BankStatementsClient({
   const router = useRouter();
   const [selectedEntry, setSelectedEntry] = useState<BankStatementEntry | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [sortBy, setSortBy] = useState<"date" | "debit" | "credit" | "balance">("date");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  function toggleSort(col: "date" | "debit" | "credit" | "balance") {
+    if (sortBy === col) {
+      setSortDir(sortDir === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(col);
+      // Date defaults to asc (chronological), amounts default to desc (largest first)
+      setSortDir(col === "date" ? "asc" : "desc");
+    }
+  }
+
+  const sortedEntries = [...entries].sort((a, b) => {
+    let cmp = 0;
+    if (sortBy === "date") {
+      cmp = a.date.localeCompare(b.date);
+      if (cmp === 0) cmp = (a.time ?? "").localeCompare(b.time ?? "");
+    } else if (sortBy === "debit") {
+      cmp = (a.debit ?? 0) - (b.debit ?? 0);
+    } else if (sortBy === "credit") {
+      cmp = (a.credit ?? 0) - (b.credit ?? 0);
+    } else if (sortBy === "balance") {
+      // Null balances sink to the end of asc / top of desc deliberately
+      const aBal = a.balance ?? Number.NEGATIVE_INFINITY;
+      const bBal = b.balance ?? Number.NEGATIVE_INFINITY;
+      cmp = aBal - bBal;
+    }
+    if (cmp === 0) cmp = a.id - b.id;
+    return sortDir === "asc" ? cmp : -cmp;
+  });
+
+  function SortIndicator({ col }: { col: "date" | "debit" | "credit" | "balance" }) {
+    if (sortBy !== col) return <ArrowUpDown className="h-3 w-3 text-muted-foreground/40 inline ml-1" />;
+    return sortDir === "asc"
+      ? <ArrowUp className="h-3 w-3 inline ml-1" />
+      : <ArrowDown className="h-3 w-3 inline ml-1" />;
+  }
 
   async function handleDismiss(id: number) {
     try {
@@ -180,17 +219,53 @@ export function BankStatementsClient({
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[40px]"></TableHead>
-                  <TableHead className="w-[100px]">Date</TableHead>
+                  <TableHead className="w-[100px]">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort("date")}
+                      className="inline-flex items-center hover:text-foreground"
+                    >
+                      Date
+                      <SortIndicator col="date" />
+                    </button>
+                  </TableHead>
                   <TableHead>Description</TableHead>
-                  <TableHead className="text-right w-[120px]">Debit</TableHead>
-                  <TableHead className="text-right w-[120px]">Credit</TableHead>
-                  <TableHead className="text-right w-[130px]">Balance</TableHead>
+                  <TableHead className="text-right w-[120px]">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort("debit")}
+                      className="inline-flex items-center hover:text-foreground ml-auto"
+                    >
+                      Debit
+                      <SortIndicator col="debit" />
+                    </button>
+                  </TableHead>
+                  <TableHead className="text-right w-[120px]">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort("credit")}
+                      className="inline-flex items-center hover:text-foreground ml-auto"
+                    >
+                      Credit
+                      <SortIndicator col="credit" />
+                    </button>
+                  </TableHead>
+                  <TableHead className="text-right w-[130px]">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort("balance")}
+                      className="inline-flex items-center hover:text-foreground ml-auto"
+                    >
+                      Balance
+                      <SortIndicator col="balance" />
+                    </button>
+                  </TableHead>
                   <TableHead className="w-[180px]">Classification</TableHead>
                   <TableHead className="w-[40px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {entries.map((entry) => (
+                {sortedEntries.map((entry) => (
                   <TableRow
                     key={entry.id}
                     className="cursor-pointer hover:bg-muted/50"
