@@ -273,6 +273,7 @@ export interface ExpenseTransaction {
   sourceId: string | null;
   status: ExpenseTransactionStatus;
   excludeFromTax: boolean;
+  bucketTargetId: number | null;
   createdAt: string;
   categoryName?: string;
   accountName?: string;

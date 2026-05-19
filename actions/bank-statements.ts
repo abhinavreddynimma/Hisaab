@@ -17,6 +17,7 @@ type BankStatementSplitInput = {
   toAccountId?: number | null;
   note?: string | null;
   tags?: string[] | null;
+  bucketTargetId?: number | null;
 };
 
 const CLEARED_CLASSIFICATION = {
@@ -55,6 +56,7 @@ function normalizeSplit(split: BankStatementSplitInput) {
     toAccountId: split.toAccountId ?? null,
     note: split.note?.trim() || null,
     tags: split.tags ?? null,
+    bucketTargetId: split.bucketTargetId ?? null,
   };
 }
 
@@ -364,6 +366,7 @@ export async function classifyBankStatementEntry(
     toAccountId?: number | null;
     note?: string | null;
     tags?: string[] | null;
+    bucketTargetId?: number | null;
   },
 ) {
   await assertAdminAccess();
@@ -403,6 +406,7 @@ export async function classifyBankStatementEntry(
       source: "bank_statement",
       sourceId: `bank_stmt_${id}`,
       status: "confirmed",
+      bucketTargetId: data.expenseType === "expense" ? (data.bucketTargetId ?? null) : null,
       createdAt: new Date().toISOString(),
     }).run();
 
@@ -447,6 +451,7 @@ export async function classifyBankStatementsTogether(
     toAccountId?: number | null;
     note?: string | null;
     tags?: string[] | null;
+    bucketTargetId?: number | null;
   },
 ) {
   await assertAdminAccess();
@@ -510,6 +515,7 @@ export async function classifyBankStatementsTogether(
         source: "bank_statement",
         sourceId: `bank_stmt_merge_${entries.map((e) => e.id).join("_")}`,
         status: "confirmed",
+        bucketTargetId: data.expenseType === "expense" ? (data.bucketTargetId ?? null) : null,
         createdAt: new Date().toISOString(),
       })
       .run();
@@ -597,6 +603,7 @@ export async function classifyBankStatementEntryWithSplits(
         source: "bank_statement",
         sourceId: `bank_stmt_${id}_split_${index + 1}`,
         status: "confirmed",
+        bucketTargetId: split.expenseType === "expense" ? split.bucketTargetId : null,
         createdAt,
       }).run();
 

@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { classifyBankStatementsTogether } from "@/actions/bank-statements";
+import { getBucketTargets } from "@/actions/expenses";
+import { BucketPicker } from "./bucket-picker";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -31,6 +33,14 @@ export function MergeClassifyDialog({ open, onClose, onSuccess, entries, account
   const [toAccountId, setToAccountId] = useState("");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const [bucketTargetId, setBucketTargetId] = useState<number | null>(null);
+  const [bucketTargets, setBucketTargets] = useState<{ id: number; name: string }[]>([]);
+
+  useEffect(() => {
+    if (open && bucketTargets.length === 0) {
+      getBucketTargets().then((res) => setBucketTargets(res.map((t) => ({ id: t.id, name: t.name }))));
+    }
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const incomeAccounts = accounts.filter((a) => a.type === "income" && a.isActive);
   const expenseAccountsList = accounts.filter((a) => a.type === "expense" && a.isActive);
@@ -65,6 +75,7 @@ export function MergeClassifyDialog({ open, onClose, onSuccess, entries, account
     setFromAccountId(defaultBankStr);
     setToAccountId("");
     setNote("");
+    setBucketTargetId(null);
   }, [open, entries, defaultType, defaultBankStr]);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -90,6 +101,7 @@ export function MergeClassifyDialog({ open, onClose, onSuccess, entries, account
           fromAccountId: type === "transfer" && fromAccountId ? parseInt(fromAccountId) : null,
           toAccountId: type === "transfer" && toAccountId ? parseInt(toAccountId) : null,
           note: note.trim() || null,
+          bucketTargetId: type === "expense" ? bucketTargetId : null,
         },
       );
       toast.success(`Merged ${entries.length} transactions into one`);
@@ -245,6 +257,10 @@ export function MergeClassifyDialog({ open, onClose, onSuccess, entries, account
                 </Select>
               </div>
             </>
+          )}
+
+          {type === "expense" && (
+            <BucketPicker value={bucketTargetId} onChange={setBucketTargetId} buckets={bucketTargets} />
           )}
 
           <div className="space-y-2">

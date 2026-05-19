@@ -215,6 +215,10 @@ export const expenseTransactions = sqliteTable("expense_transactions", {
   // Income only: mark an income row as not part of the tax base (gifts, old
   // savings restored, refunds, etc.). Has no effect on expense/transfer rows.
   excludeFromTax: integer("exclude_from_tax", { mode: "boolean" }).notNull().default(false),
+  // Per-transaction target override. When set, the row counts toward this
+  // bucket target instead of the one derived from its category. NULL → fall
+  // back to category-based mapping via expense_target_accounts.
+  bucketTargetId: integer("bucket_target_id"),
   createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
 });
 

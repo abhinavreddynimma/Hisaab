@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { createExpenseTransaction, updateExpenseTransaction } from "@/actions/expenses";
+import { createExpenseTransaction, updateExpenseTransaction, getBucketTargets } from "@/actions/expenses";
+import { BucketPicker } from "@/components/bank-statements/bucket-picker";
 import type { ExpenseAccount, ExpenseTransaction, ExpenseTransactionType } from "@/lib/types";
 
 interface TransactionDialogProps {
@@ -32,6 +33,14 @@ export function TransactionDialog({ open, onClose, transaction, accounts }: Tran
   const [selectedTags] = useState<string[]>([]);
   const [excludeFromTax, setExcludeFromTax] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [bucketTargetId, setBucketTargetId] = useState<number | null>(null);
+  const [bucketTargets, setBucketTargets] = useState<{ id: number; name: string }[]>([]);
+
+  useEffect(() => {
+    if (open && bucketTargets.length === 0) {
+      getBucketTargets().then((res) => setBucketTargets(res.map((t) => ({ id: t.id, name: t.name }))));
+    }
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (transaction) {
@@ -45,6 +54,7 @@ export function TransactionDialog({ open, onClose, transaction, accounts }: Tran
       setFees(transaction.fees ? String(transaction.fees) : "");
       setNote(transaction.note || "");
       setExcludeFromTax(transaction.excludeFromTax ?? false);
+      setBucketTargetId(transaction.bucketTargetId ?? null);
     } else {
       setType("expense");
       setDate(new Date().toISOString().split("T")[0]);
@@ -56,6 +66,7 @@ export function TransactionDialog({ open, onClose, transaction, accounts }: Tran
       setFees("");
       setNote("");
       setExcludeFromTax(false);
+      setBucketTargetId(null);
     }
   }, [transaction, open]);
 
@@ -96,6 +107,7 @@ export function TransactionDialog({ open, onClose, transaction, accounts }: Tran
         note: note || null,
         tags: selectedTags.length > 0 ? selectedTags : null,
         excludeFromTax: type === "income" ? excludeFromTax : false,
+        bucketTargetId: type === "expense" ? bucketTargetId : null,
       };
 
       if (transaction) {
@@ -234,6 +246,10 @@ export function TransactionDialog({ open, onClose, transaction, accounts }: Tran
                 <Input type="number" step="0.01" min="0" placeholder="0.00" value={fees} onChange={(e) => setFees(e.target.value)} />
               </div>
             </>
+          )}
+
+          {type === "expense" && (
+            <BucketPicker value={bucketTargetId} onChange={setBucketTargetId} buckets={bucketTargets} />
           )}
 
           <div className="space-y-2">
