@@ -179,20 +179,43 @@ export async function getTaxComputation(financialYear: string): Promise<{
   const fyStart = `${startYear}-04-01`;
   const fyEnd = `${startYear + 1}-03-31`;
 
-  // Get all paid invoices whose paidDate falls within the FY
-  const paidInvoices = db
-    .select({ netInrAmount: invoices.netInrAmount })
+  // Accrual basis: tax is owed on income recognised when the invoice is RAISED,
+  // not when it is later received. Include every non-cancelled invoice whose
+  // issueDate lands in the FY — paid invoices contribute their actual
+  // netInrAmount, open invoices contribute an estimate (total × avg paid FX
+  // rate × (1 - avg deduction%)) so unbilled-but-issued income is reflected.
+  const fyInvoices = db
+    .select({
+      netInrAmount: invoices.netInrAmount,
+      total: invoices.total,
+      eurToInrRate: invoices.eurToInrRate,
+      platformCharges: invoices.platformCharges,
+      bankCharges: invoices.bankCharges,
+      status: invoices.status,
+    })
     .from(invoices)
     .where(
       and(
-        eq(invoices.status, "paid"),
-        sql`${invoices.paidDate} >= ${fyStart}`,
-        sql`${invoices.paidDate} <= ${fyEnd}`,
+        sql`${invoices.status} IN ('paid', 'sent', 'draft')`,
+        sql`${invoices.issueDate} >= ${fyStart}`,
+        sql`${invoices.issueDate} <= ${fyEnd}`,
       )
     )
     .all();
 
-  const grossReceipts = paidInvoices.reduce((sum, inv) => sum + (inv.netInrAmount ?? 0), 0);
+  const paid = fyInvoices.filter((i) => i.status === "paid");
+  const paidEur = paid.reduce((s, i) => s + (i.total ?? 0), 0);
+  const paidWeightedInr = paid.reduce((s, i) => s + (i.total ?? 0) * (i.eurToInrRate ?? 0), 0);
+  const avgRate = paidEur > 0 ? paidWeightedInr / paidEur : 90;
+  const paidGrossInr = paidEur * avgRate;
+  const totalDeductions = paid.reduce((s, i) => s + (i.platformCharges ?? 0) + (i.bankCharges ?? 0), 0);
+  const rawDeductionPct = paidGrossInr > 0 ? totalDeductions / paidGrossInr : 0;
+  const deductionPct = Math.min(Math.max(0, rawDeductionPct), 0.10);
+
+  const grossReceipts = fyInvoices.reduce((s, i) => {
+    if (i.status === "paid") return s + (i.netInrAmount ?? 0);
+    return s + (i.total ?? 0) * avgRate * (1 - deductionPct);
+  }, 0);
 
   // Section 44ADA: presumptive income = 50% of gross receipts, available only up
   // to ₹75 lakh. Above that, 44ADA does not apply and tax is computed on full
