@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Trash2, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Plus, Link2, Check, Repeat, Pencil, ArrowDownUp } from "lucide-react";
+import { Trash2, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Plus, Link2, Check, Repeat, Pencil, ArrowDownUp, Layers } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -46,12 +46,31 @@ export function TransactionList({ transactions, totalIncome, totalExpenses, bala
   const router = useRouter();
   const [filter, setFilter] = useState<FilterType>("all");
   const [sort, setSort] = useState<"date" | "amount">("date");
+  const [groupBy, setGroupBy] = useState<"none" | "category">("none");
 
   const typeFiltered = filter === "all" ? transactions : transactions.filter(t => t.type === filter);
   const filtered = sort === "amount"
     ? [...typeFiltered].sort((a, b) => b.amount - a.amount)
     : typeFiltered;
   const filteredTotal = filter !== "all" ? filtered.filter(t => t.status === "confirmed").reduce((sum, t) => sum + t.amount, 0) : 0;
+
+  // Build category groups when grouping. Groups by categoryName (or
+  // "Uncategorized" for transfers / rows with no category), then sorts
+  // groups by total amount desc within each, rows by date desc.
+  const groups = (() => {
+    if (groupBy !== "category") return null;
+    const map = new Map<string, { name: string; rows: ExpenseTransaction[]; total: number }>();
+    for (const t of filtered) {
+      const key = t.categoryName ?? (t.type === "transfer" ? "Transfer" : "Uncategorized");
+      const g = map.get(key) ?? { name: key, rows: [], total: 0 };
+      g.rows.push(t);
+      if (t.status === "confirmed") g.total += t.amount;
+      map.set(key, g);
+    }
+    return Array.from(map.values())
+      .map((g) => ({ ...g, rows: [...g.rows].sort((a, b) => b.date.localeCompare(a.date)) }))
+      .sort((a, b) => b.total - a.total);
+  })();
 
   async function handleDelete(id: number) {
     try {
@@ -149,12 +168,24 @@ export function TransactionList({ transactions, totalIncome, totalExpenses, bala
             <span className="ml-1 opacity-60">({filtered.length} txns)</span>
           </span>
         )}
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-1">
+          <Button
+            variant={groupBy === "category" ? "default" : "ghost"}
+            size="sm"
+            className="h-7 text-xs gap-1"
+            onClick={() => setGroupBy(g => g === "category" ? "none" : "category")}
+            title="Group by category"
+          >
+            <Layers className="h-3 w-3" />
+            {groupBy === "category" ? "Grouped" : "Group"}
+          </Button>
           <Button
             variant="ghost"
             size="sm"
             className="h-7 text-xs gap-1"
             onClick={() => setSort(s => s === "date" ? "amount" : "date")}
+            disabled={groupBy === "category"}
+            title={groupBy === "category" ? "Sort is per-group when grouped" : undefined}
           >
             <ArrowDownUp className="h-3 w-3" />
             {sort === "date" ? "Date" : "Amount"}
@@ -185,7 +216,30 @@ export function TransactionList({ transactions, totalIncome, totalExpenses, bala
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((txn) => {
+                {groups && groups.flatMap((g) => [
+                  (
+                    <TableRow key={`__group_${g.name}`} className="bg-muted/30 hover:bg-muted/30">
+                      <TableCell colSpan={5} className="py-1.5">
+                        <span className="text-xs font-semibold uppercase tracking-wider">{g.name}</span>
+                        <span className="text-[10px] text-muted-foreground ml-2">({g.rows.length} txns)</span>
+                      </TableCell>
+                      <TableCell className="text-right py-1.5">
+                        <span className="text-xs font-semibold tabular-nums text-rose-600">{formatCurrency(g.total)}</span>
+                      </TableCell>
+                    </TableRow>
+                  ),
+                  ...g.rows.map((txn) => renderTxnRow(txn)),
+                ])}
+                {!groups && filtered.map((txn) => renderTxnRow(txn))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  function renderTxnRow(txn: ExpenseTransaction) {
                   const config = TYPE_CONFIG[txn.type];
                   const Icon = config.icon;
                   return (
@@ -366,12 +420,5 @@ export function TransactionList({ transactions, totalIncome, totalExpenses, bala
                       </TableCell>
                     </TableRow>
                   );
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
+  }
 }
