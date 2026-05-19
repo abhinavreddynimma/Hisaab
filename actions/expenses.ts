@@ -1332,6 +1332,35 @@ export async function getBucketTargets(): Promise<{ id: number; name: string; pa
     .map((t) => ({ id: t.id, name: t.name, parentTargetId: t.parentTargetId }));
 }
 
+/**
+ * Map every expense-type account to the leaf bucket target it resolves to via
+ * the expense_target_accounts links (walking subtree). Used by classify dialogs
+ * to show what "Auto" will resolve to for the currently selected category.
+ */
+export async function getCategoryBucketMap(): Promise<Record<number, { id: number; name: string }>> {
+  await assertAdminAccess();
+  const targets = db.select().from(expenseTargets).where(eq(expenseTargets.isActive, true)).all() as ExpenseTarget[];
+  const links = db.select().from(expenseTargetAccounts).all();
+  const allAccounts = db.select().from(expenseAccounts).all() as ExpenseAccount[];
+
+  const expensesParent = targets.find((t) => t.parentTargetId == null && t.name === "Expenses");
+  const bucketIds = new Set(
+    expensesParent ? targets.filter((t) => t.parentTargetId === expensesParent.id).map((t) => t.id) : [],
+  );
+
+  const accountToTarget = buildAccountToTarget(targets, links, allAccounts);
+  const targetById = new Map(targets.map((t) => [t.id, t]));
+
+  const out: Record<number, { id: number; name: string }> = {};
+  for (const [accId, tid] of accountToTarget.entries()) {
+    if (!bucketIds.has(tid)) continue;
+    const t = targetById.get(tid);
+    if (!t) continue;
+    out[accId] = { id: t.id, name: t.name };
+  }
+  return out;
+}
+
 
 function scopeDateRange(scope: TargetScope, ref: string): { start: string | null; end: string | null } {
   if (scope === "all") return { start: null, end: null };

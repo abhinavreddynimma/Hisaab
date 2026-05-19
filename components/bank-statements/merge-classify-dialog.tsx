@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { classifyBankStatementsTogether } from "@/actions/bank-statements";
-import { getBucketTargets } from "@/actions/expenses";
+import { getBucketTargets, getCategoryBucketMap } from "@/actions/expenses";
 import { BucketPicker } from "./bucket-picker";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -35,12 +35,18 @@ export function MergeClassifyDialog({ open, onClose, onSuccess, entries, account
   const [saving, setSaving] = useState(false);
   const [bucketTargetId, setBucketTargetId] = useState<number | null>(null);
   const [bucketTargets, setBucketTargets] = useState<{ id: number; name: string }[]>([]);
+  const [categoryBucketMap, setCategoryBucketMap] = useState<Record<number, { id: number; name: string }>>({});
 
   useEffect(() => {
     if (open && bucketTargets.length === 0) {
-      getBucketTargets().then((res) => setBucketTargets(res.map((t) => ({ id: t.id, name: t.name }))));
+      Promise.all([getBucketTargets(), getCategoryBucketMap()]).then(([bt, cbm]) => {
+        setBucketTargets(bt.map((t) => ({ id: t.id, name: t.name })));
+        setCategoryBucketMap(cbm);
+      });
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const autoResolvesTo = categoryId ? categoryBucketMap[parseInt(categoryId, 10)]?.name ?? null : null;
 
   const incomeAccounts = accounts.filter((a) => a.type === "income" && a.isActive);
   const expenseAccountsList = accounts.filter((a) => a.type === "expense" && a.isActive);
@@ -260,7 +266,12 @@ export function MergeClassifyDialog({ open, onClose, onSuccess, entries, account
           )}
 
           {type === "expense" && (
-            <BucketPicker value={bucketTargetId} onChange={setBucketTargetId} buckets={bucketTargets} />
+            <BucketPicker
+              value={bucketTargetId}
+              onChange={setBucketTargetId}
+              buckets={bucketTargets}
+              autoResolvesTo={autoResolvesTo}
+            />
           )}
 
           <div className="space-y-2">
