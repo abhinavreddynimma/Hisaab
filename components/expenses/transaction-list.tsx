@@ -16,10 +16,11 @@ import {
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { deleteExpenseTransaction } from "@/actions/expenses";
 import { confirmRecurringTransaction, skipRecurringTransactionForMonth } from "@/actions/recurring-expenses";
-import type { ExpenseTransaction } from "@/lib/types";
+import type { ExpenseTransaction, ExpenseAccount } from "@/lib/types";
 
 interface TransactionListProps {
   transactions: ExpenseTransaction[];
+  accounts?: ExpenseAccount[];
   totalIncome: number;
   totalExpenses: number;
   balance: number;
@@ -42,7 +43,15 @@ const FILTER_OPTIONS = [
 
 type FilterType = (typeof FILTER_OPTIONS)[number]["value"];
 
-export function TransactionList({ transactions, totalIncome, totalExpenses, balance, onEdit, onAddNew }: TransactionListProps) {
+export function TransactionList({ transactions, accounts, totalIncome, totalExpenses, balance, onEdit, onAddNew }: TransactionListProps) {
+  const inScopeAccountIds = new Set(
+    (accounts ?? []).filter((a) => a.type === "bank" || a.type === "cash").map((a) => a.id),
+  );
+
+  function modIsInScope(txn: ExpenseTransaction): boolean {
+    const destId = txn.type === "transfer" ? txn.toAccountId : txn.accountId;
+    return destId != null && inScopeAccountIds.has(destId);
+  }
   const router = useRouter();
   const [filter, setFilter] = useState<FilterType>("all");
   const [sort, setSort] = useState<"date" | "amount">("date");
@@ -259,10 +268,11 @@ export function TransactionList({ transactions, totalIncome, totalExpenses, bala
                   const config = TYPE_CONFIG[txn.type];
                   const Icon = config.icon;
                   const isMod = !!txn.isModification;
+                  const isModInScope = isMod && modIsInScope(txn);
                   return (
                     <TableRow
                       key={txn.id}
-                      className={`hover:bg-muted/50 ${canEditTransaction(txn) ? "cursor-pointer" : "opacity-80"} ${txn.status === "estimated" ? "opacity-40" : ""} ${isMod ? "text-muted-foreground" : ""}`}
+                      className={`hover:bg-muted/50 ${canEditTransaction(txn) ? "cursor-pointer" : "opacity-80"} ${txn.status === "estimated" ? "opacity-40" : ""} ${isMod && !isModInScope ? "text-muted-foreground" : ""}`}
                       onClick={() => canEditTransaction(txn) && onEdit(txn)}
                     >
                       <TableCell className="text-sm tabular-nums">
@@ -278,7 +288,11 @@ export function TransactionList({ transactions, totalIncome, totalExpenses, bala
                       <TableCell>
                         <div className="flex items-center gap-1.5">
                           {isMod ? (
-                            <div className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700 border border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
+                            <div className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium border ${
+                              isModInScope
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800"
+                                : "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700"
+                            }`}>
                               Modification
                             </div>
                           ) : (
@@ -319,8 +333,14 @@ export function TransactionList({ transactions, totalIncome, totalExpenses, bala
                           </div>
                         )}
                       </TableCell>
-                      <TableCell className={`text-right font-medium tabular-nums ${isMod ? "text-muted-foreground" : txn.type === "income" ? "text-emerald-600" : txn.type === "expense" ? "text-rose-600" : ""}`}>
-                        {isMod ? "" : txn.type === "income" ? "+" : txn.type === "expense" ? "-" : ""}{formatCurrency(txn.amount)}
+                      <TableCell className={`text-right font-medium tabular-nums ${
+                        isModInScope ? "text-emerald-600"
+                        : isMod ? "text-muted-foreground"
+                        : txn.type === "income" ? "text-emerald-600"
+                        : txn.type === "expense" ? "text-rose-600"
+                        : ""
+                      }`}>
+                        {isModInScope ? "+" : isMod ? "" : txn.type === "income" ? "+" : txn.type === "expense" ? "-" : ""}{formatCurrency(txn.amount)}
                         {txn.type === "transfer" && txn.fees && txn.fees > 0 && (
                           <span className="text-xs text-muted-foreground ml-1">(+{formatCurrency(txn.fees)} fees)</span>
                         )}
