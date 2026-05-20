@@ -677,9 +677,15 @@ export async function getExpenseStats(startDate: string, endDate: string): Promi
   for (const txn of txns) {
     if (txn.type !== "transfer") continue;
 
-    // Headline outflow counts every transfer — money leaving the source account
-    // is money leaving, regardless of whether we know the destination type or
-    // whether it landed in an invest/savings account vs another bank.
+    // A transfer with no source account is an opening-balance adjustment
+    // (e.g., xlsx "Modified Bal." imports), not real outflow — skip it from
+    // the headline Expenses card. Real transfers always have a from_account.
+    if (txn.fromAccountId == null) continue;
+
+    // Headline outflow counts every transfer with a known source — money
+    // leaving the source account is money leaving, regardless of whether we
+    // know the destination type or whether it landed in an invest/savings
+    // account vs another bank.
     totalTransfersOut += txn.amount;
 
     // Categorize for the Investments / Savings breakdown only when we can
