@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, asc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { bankStatementEntries, bankStatementSplits, expenseAccounts, expenseTransactions } from "@/db/schema";
 import type { BankStatementEntry, BankStatementSplit, ExpenseTransactionType } from "@/lib/types";
@@ -101,33 +101,47 @@ function clearBankStatementClassification(
     .run();
 
   if (linkedTxnIds.length > 0) {
-    // Other bank rows might share the same expense_transaction (merge group).
-    // Break the group atomically so we don't leave dangling expense_transaction_id
-    // refs after deleting the expense_transaction.
-    const siblings: Array<{ id: number }> = tx
-      .select({ id: bankStatementEntries.id })
-      .from(bankStatementEntries)
-      .where(and(
-        inArray(bankStatementEntries.expenseTransactionId, linkedTxnIds),
-        sql`${bankStatementEntries.id} != ${entryId}`,
-      ))
+    // Only DELETE expense_transactions that were created by bank-row
+    // classification. Rows linked to invoice / manual / tax_payment /
+    // recurring transactions (where the bank row is just a pointer) should
+    // be left in place — clearing the bank row's classification just
+    // removes the pointer.
+    const linkedTxns: Array<{ id: number; source: string | null }> = tx
+      .select({ id: expenseTransactions.id, source: expenseTransactions.source })
+      .from(expenseTransactions)
+      .where(inArray(expenseTransactions.id, linkedTxnIds))
       .all();
-    if (siblings.length > 0) {
-      tx.update(bankStatementEntries)
-        .set({
-          ...CLEARED_CLASSIFICATION,
-          isDismissed: false,
-        })
-        .where(inArray(bankStatementEntries.id, siblings.map((s) => s.id)))
-        .run();
-      tx.delete(bankStatementSplits)
-        .where(inArray(bankStatementSplits.bankStatementEntryId, siblings.map((s) => s.id)))
+    const toDeleteIds = linkedTxns.filter((t) => t.source === "bank_statement").map((t) => t.id);
+
+    // Other bank rows might share the same expense_transaction (merge group).
+    // Break the group atomically when we're about to delete the shared tx so
+    // we don't leave dangling expense_transaction_id refs.
+    if (toDeleteIds.length > 0) {
+      const siblings: Array<{ id: number }> = tx
+        .select({ id: bankStatementEntries.id })
+        .from(bankStatementEntries)
+        .where(and(
+          inArray(bankStatementEntries.expenseTransactionId, toDeleteIds),
+          sql`${bankStatementEntries.id} != ${entryId}`,
+        ))
+        .all();
+      if (siblings.length > 0) {
+        tx.update(bankStatementEntries)
+          .set({
+            ...CLEARED_CLASSIFICATION,
+            isDismissed: false,
+          })
+          .where(inArray(bankStatementEntries.id, siblings.map((s) => s.id)))
+          .run();
+        tx.delete(bankStatementSplits)
+          .where(inArray(bankStatementSplits.bankStatementEntryId, siblings.map((s) => s.id)))
+          .run();
+      }
+
+      tx.delete(expenseTransactions)
+        .where(inArray(expenseTransactions.id, toDeleteIds))
         .run();
     }
-
-    tx.delete(expenseTransactions)
-      .where(inArray(expenseTransactions.id, linkedTxnIds))
-      .run();
   }
 }
 
@@ -651,6 +665,143 @@ export async function classifyBankStatementEntryWithSplits(
         isDismissed: false,
       })
       .where(eq(bankStatementEntries.id, id))
+      .run();
+  });
+
+  revalidatePath("/bank");
+  revalidatePath("/expenses");
+}
+
+/**
+ * List existing income expense_transactions a bank row could be linked to —
+ * invoice-derived rows (and any other non-bank-statement income) that aren't
+ * already linked to a bank row. Used by the Classify dialog's "Link to
+ * existing income" mode so the user can avoid creating a duplicate income tx.
+ */
+export async function getLinkableIncomeTransactions(opts?: {
+  startDate?: string;
+  endDate?: string;
+}): Promise<Array<{
+  id: number;
+  date: string;
+  amount: number;
+  source: string;
+  sourceId: string | null;
+  note: string | null;
+  categoryName: string | null;
+  accountName: string | null;
+}>> {
+  await assertAdminAccess();
+
+  const conditions = [
+    eq(expenseTransactions.type, "income"),
+    eq(expenseTransactions.status, "confirmed"),
+    sql`${expenseTransactions.source} != 'bank_statement'`,
+  ];
+  if (opts?.startDate) conditions.push(sql`${expenseTransactions.date} >= ${opts.startDate}`);
+  if (opts?.endDate) conditions.push(sql`${expenseTransactions.date} <= ${opts.endDate}`);
+
+  const candidates = db
+    .select({
+      id: expenseTransactions.id,
+      date: expenseTransactions.date,
+      amount: expenseTransactions.amount,
+      source: expenseTransactions.source,
+      sourceId: expenseTransactions.sourceId,
+      note: expenseTransactions.note,
+      categoryId: expenseTransactions.categoryId,
+      accountId: expenseTransactions.accountId,
+    })
+    .from(expenseTransactions)
+    .where(and(...conditions))
+    .orderBy(desc(expenseTransactions.date))
+    .all();
+
+  // Exclude income txns that are already pointed at by a bank row
+  const linkedRows = db
+    .select({ expenseTransactionId: bankStatementEntries.expenseTransactionId })
+    .from(bankStatementEntries)
+    .where(sql`${bankStatementEntries.expenseTransactionId} IS NOT NULL`)
+    .all();
+  const alreadyLinked = new Set(linkedRows.map((r) => r.expenseTransactionId).filter((v): v is number => v != null));
+
+  const accounts = db.select().from(expenseAccounts).all();
+  const accountMap = new Map(accounts.map((a) => [a.id, a.name]));
+
+  return candidates
+    .filter((c) => !alreadyLinked.has(c.id))
+    .map((c) => ({
+      id: c.id,
+      date: c.date,
+      amount: c.amount,
+      source: c.source,
+      sourceId: c.sourceId,
+      note: c.note,
+      categoryName: c.categoryId ? accountMap.get(c.categoryId) ?? null : null,
+      accountName: c.accountId ? accountMap.get(c.accountId) ?? null : null,
+    }));
+}
+
+/**
+ * Link a bank-statement row to an existing income expense_transaction
+ * without creating a new one. Useful when a salary credit on /bank
+ * matches an income row already synced from an invoice payment.
+ * Amounts on either side are intentionally not modified.
+ */
+export async function linkBankStatementToIncome(
+  bankEntryId: number,
+  expenseTransactionId: number,
+) {
+  await assertAdminAccess();
+  db.transaction((tx) => {
+    const entry = tx.select().from(bankStatementEntries).where(eq(bankStatementEntries.id, bankEntryId)).get();
+    if (!entry) throw new Error("Bank entry not found");
+    if (entry.isDismissed) throw new Error("Bank entry is dismissed");
+
+    const target = tx.select().from(expenseTransactions).where(eq(expenseTransactions.id, expenseTransactionId)).get();
+    if (!target) throw new Error("Income transaction not found");
+    if (target.type !== "income") throw new Error("Can only link to an income transaction");
+    if (target.source === "bank_statement") throw new Error("That income row was already created from a bank classification");
+
+    // Anything else already pointing at this expense tx?
+    const alreadyLinked = tx
+      .select({ id: bankStatementEntries.id })
+      .from(bankStatementEntries)
+      .where(and(
+        eq(bankStatementEntries.expenseTransactionId, expenseTransactionId),
+        sql`${bankStatementEntries.id} != ${bankEntryId}`,
+      ))
+      .get();
+    if (alreadyLinked) throw new Error("That income transaction is already linked to another bank row");
+
+    // Clear any current classification on this bank row first
+    const existingSplitCount = tx
+      .select({ count: sql<number>`count(*)` })
+      .from(bankStatementSplits)
+      .where(eq(bankStatementSplits.bankStatementEntryId, bankEntryId))
+      .get()?.count ?? 0;
+    if (entry.isClassified || entry.expenseTransactionId || existingSplitCount > 0) {
+      clearBankStatementClassification(tx, bankEntryId);
+    }
+
+    // Copy display metadata from the target expense_transaction onto the
+    // bank row so the table shows category / account / note without having
+    // to refetch the target every render. Amounts are NOT touched.
+    tx.update(bankStatementEntries)
+      .set({
+        expenseName: target.note?.trim() || "Linked income",
+        expenseType: "income",
+        categoryId: target.categoryId ?? null,
+        accountId: target.accountId ?? null,
+        fromAccountId: null,
+        toAccountId: null,
+        note: target.note ?? null,
+        tags: target.tags ?? null,
+        isClassified: true,
+        isDismissed: false,
+        expenseTransactionId,
+      })
+      .where(eq(bankStatementEntries.id, bankEntryId))
       .run();
   });
 
