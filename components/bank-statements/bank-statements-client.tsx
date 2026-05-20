@@ -306,7 +306,7 @@ export function BankStatementsClient({
                       <SortIndicator col="balance" />
                     </button>
                   </TableHead>
-                  <TableHead className="w-[180px]">Classification</TableHead>
+                  <TableHead className="w-[260px]">Classification</TableHead>
                   <TableHead className="w-[40px]"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -397,14 +397,22 @@ export function BankStatementsClient({
                           <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-800">
                             {entry.splits.length} splits
                           </Badge>
-                          <p className="text-[11px] text-muted-foreground line-clamp-2">
-                            {entry.splits.map((split) => `${split.expenseName} (${formatCurrency(split.amount)})`).join(" • ")}
-                          </p>
+                          {entry.splits.map((split) => (
+                            <div key={split.id} className="text-[11px] leading-snug">
+                              <span className="font-medium">{split.expenseName}</span>
+                              <span className="text-muted-foreground"> · {formatCurrency(split.amount)}</span>
+                              {split.categoryName && (
+                                <span className="text-muted-foreground"> · {split.categoryName}</span>
+                              )}
+                              {split.accountName && (
+                                <span className="text-muted-foreground"> · {split.accountName}</span>
+                              )}
+                            </div>
+                          ))}
                         </div>
                       ) : entry.isClassified ? (
                         <div className="space-y-0.5">
-                          <p className="text-sm font-medium">{entry.expenseName}</p>
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1 flex-wrap">
                             {entry.expenseType === "income" && (
                               <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800">
                                 <ArrowDownLeft className="h-2.5 w-2.5 mr-0.5" />
@@ -423,10 +431,31 @@ export function BankStatementsClient({
                                 Transfer
                               </Badge>
                             )}
-                            {entry.categoryName && (
-                              <span className="text-[10px] text-muted-foreground">{entry.categoryName}</span>
-                            )}
+                            <p className="text-sm font-medium truncate">{entry.expenseName || "—"}</p>
                           </div>
+                          {entry.expenseType === "transfer" ? (
+                            <p className="text-[11px] text-muted-foreground leading-snug">
+                              {entry.fromAccountName ?? "—"} → {entry.toAccountName ?? "—"}
+                            </p>
+                          ) : (
+                            <>
+                              {entry.categoryName && (
+                                <p className="text-[11px] text-muted-foreground leading-snug">
+                                  <span className="text-foreground/70">Category:</span> {entry.categoryName}
+                                </p>
+                              )}
+                              {entry.accountName && (
+                                <p className="text-[11px] text-muted-foreground leading-snug">
+                                  <span className="text-foreground/70">Account:</span> {entry.accountName}
+                                </p>
+                              )}
+                            </>
+                          )}
+                          {entry.note && (
+                            <p className="text-[11px] text-muted-foreground/80 leading-snug line-clamp-2">
+                              <span className="text-foreground/70">Note:</span> {entry.note}
+                            </p>
+                          )}
                         </div>
                       ) : (
                         <span className="text-xs text-muted-foreground italic">Click to classify</span>
