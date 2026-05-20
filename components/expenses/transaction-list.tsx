@@ -126,27 +126,27 @@ export function TransactionList({ transactions, totalIncome, totalExpenses, bala
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Card>
           <CardContent className="p-4 text-center">
-            <p className="text-xs text-muted-foreground mb-1">Income</p>
+            <p className="text-xs text-muted-foreground mb-1">Monthly Income</p>
             <p className="text-lg font-bold tabular-nums text-emerald-600">{formatCurrency(totalIncome)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <p className="text-xs text-muted-foreground mb-1">Expenses</p>
+            <p className="text-xs text-muted-foreground mb-1">Monthly Expense</p>
             <p className="text-lg font-bold tabular-nums text-rose-600">{formatCurrency(totalExpenses)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <p className="text-xs text-muted-foreground mb-1">Net</p>
+            <p className="text-xs text-muted-foreground mb-1">Monthly Net</p>
             <p className={`text-lg font-bold tabular-nums ${net >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
               {formatCurrency(Math.abs(net))}
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card title="Total money currently held across your bank, cash, and savings accounts (transfers between in-scope accounts net out).">
           <CardContent className="p-4 text-center">
-            <p className="text-xs text-muted-foreground mb-1">Balance</p>
+            <p className="text-xs text-muted-foreground mb-1">Cumulative Balance</p>
             <p className={`text-lg font-bold tabular-nums ${balance >= 0 ? "text-blue-600" : "text-rose-600"}`}>
               {formatCurrency(balance)}
             </p>
