@@ -537,19 +537,20 @@ function getExpenseTransferOutflow(txn: ExpenseTransaction, accountMap: Map<numb
 }
 
 /**
- * Cumulative balance card: total money sitting in the user's bank + cash +
- * savings accounts as of each cutoff date.
+ * Cumulative balance card: total money sitting in the user's bank + cash
+ * accounts as of each cutoff date. Savings accounts (P2P Lending, Personal
+ * Savings, Dad (Savings), etc.) are out of scope — money transferred there
+ * is treated as having left the spendable pool.
  *
  * Each confirmed transaction is applied per-account: income credits the
  * receiving account, expense debits it, and transfers credit `to_account_id`
  * + debit `from_account_id` (with fees on the debit side). Sum is then
- * restricted to accounts of type bank | cash | savings, so:
+ * restricted to accounts of type bank | cash, so:
  *   - Income landing in SBI bumps Balance.
  *   - Spending from SBI on Groceries drops Balance.
- *   - Transferring SBI → Mutual Funds (investment) drops Balance (money
- *     left scope).
- *   - Transferring SBI → Cash or SBI → P2P Lending (savings) nets to zero
- *     (one side debited, the other credited, both in scope).
+ *   - Transferring SBI → Mutual Funds / P2P Lending / Personal Savings drops
+ *     Balance (money left the spendable pool).
+ *   - Transferring SBI → Cash nets to zero (both in scope).
  */
 async function getExpenseRunningBalances(endDates: string[]): Promise<Map<string, number>> {
   const sortedEndDates = Array.from(new Set(endDates)).sort((a, b) => a.localeCompare(b));
@@ -573,7 +574,7 @@ async function getExpenseRunningBalances(endDates: string[]): Promise<Map<string
   const inScope = (id: number | null | undefined): boolean => {
     if (id == null) return false;
     const a = accountMap.get(id);
-    return a != null && (a.type === "bank" || a.type === "cash" || a.type === "savings");
+    return a != null && (a.type === "bank" || a.type === "cash");
   };
 
   let runningBalance = 0;
