@@ -736,24 +736,31 @@ export async function getBankStatementStats(startDate?: string, endDate?: string
   if (startDate) conditions.push(gte(bankStatementEntries.date, startDate));
   if (endDate) conditions.push(lte(bankStatementEntries.date, endDate));
 
+  // Rows whose linked expense_transaction is a modification (opening balance /
+  // adjustment) should be counted in `total` and `classified` but excluded
+  // from the Credit / Debit / cumulative-balance sums — they're meant to
+  // affect per-account balances, not bank-period flows.
+  const isModificationSql = sql<number>`coalesce((select ${expenseTransactions.isModification} from ${expenseTransactions} where ${expenseTransactions.id} = ${bankStatementEntries.expenseTransactionId}), 0)`;
+
   const [stats] = db
     .select({
       total: sql<number>`count(*)`,
       classified: sql<number>`sum(case when ${bankStatementEntries.isClassified} = 1 then 1 else 0 end)`,
-      totalDebit: sql<number>`coalesce(sum(${bankStatementEntries.debit}), 0)`,
-      totalCredit: sql<number>`coalesce(sum(${bankStatementEntries.credit}), 0)`,
+      totalDebit: sql<number>`coalesce(sum(case when ${isModificationSql} = 1 then 0 else ${bankStatementEntries.debit} end), 0)`,
+      totalCredit: sql<number>`coalesce(sum(case when ${isModificationSql} = 1 then 0 else ${bankStatementEntries.credit} end), 0)`,
     })
     .from(bankStatementEntries)
     .where(and(...conditions))
     .all();
 
   // Cumulative balance: all non-dismissed entries from the earliest record up
-  // to (and including) endDate. Defined as sum(credit) - sum(debit).
+  // to (and including) endDate. Defined as sum(credit) - sum(debit). Excludes
+  // modification rows for the same reason as the Credit / Debit cards above.
   const cumulativeConditions = [eq(bankStatementEntries.isDismissed, false)];
   if (endDate) cumulativeConditions.push(lte(bankStatementEntries.date, endDate));
   const [balanceRow] = db
     .select({
-      cumulativeBalance: sql<number>`coalesce(sum(${bankStatementEntries.credit}), 0) - coalesce(sum(${bankStatementEntries.debit}), 0)`,
+      cumulativeBalance: sql<number>`coalesce(sum(case when ${isModificationSql} = 1 then 0 else ${bankStatementEntries.credit} end), 0) - coalesce(sum(case when ${isModificationSql} = 1 then 0 else ${bankStatementEntries.debit} end), 0)`,
     })
     .from(bankStatementEntries)
     .where(and(...cumulativeConditions))
