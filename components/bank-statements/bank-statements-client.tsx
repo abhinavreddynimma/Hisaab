@@ -171,7 +171,7 @@ export function BankStatementsClient({
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-7 gap-4">
         <Card>
           <CardContent className="p-4 text-center">
             <p className="text-xs text-muted-foreground mb-1">Transactions</p>
@@ -188,6 +188,15 @@ export function BankStatementsClient({
           <CardContent className="p-4 text-center">
             <p className="text-xs text-muted-foreground mb-1">Debit</p>
             <p className="text-lg font-bold tabular-nums text-rose-600">{formatCurrency(stats.totalDebit)}</p>
+          </CardContent>
+        </Card>
+        <Card title="Credit minus Debit for the displayed month (modifications excluded).">
+          <CardContent className="p-4 text-center">
+            <p className="text-xs text-muted-foreground mb-1">Monthly Net</p>
+            <p className={cn(
+              "text-lg font-bold tabular-nums",
+              (stats.totalCredit - stats.totalDebit) >= 0 ? "text-emerald-600" : "text-rose-600",
+            )}>{formatCurrency(stats.totalCredit - stats.totalDebit)}</p>
           </CardContent>
         </Card>
         <Card title="Cumulative net position: sum of all credits minus debits from the earliest entry up to the end of this month.">
