@@ -258,10 +258,11 @@ export function TransactionList({ transactions, totalIncome, totalExpenses, bala
   function renderTxnRow(txn: ExpenseTransaction) {
                   const config = TYPE_CONFIG[txn.type];
                   const Icon = config.icon;
+                  const isMod = !!txn.isModification;
                   return (
                     <TableRow
                       key={txn.id}
-                      className={`hover:bg-muted/50 ${canEditTransaction(txn) ? "cursor-pointer" : "opacity-80"} ${txn.status === "estimated" ? "opacity-40" : ""}`}
+                      className={`hover:bg-muted/50 ${canEditTransaction(txn) ? "cursor-pointer" : "opacity-80"} ${txn.status === "estimated" ? "opacity-40" : ""} ${isMod ? "text-muted-foreground" : ""}`}
                       onClick={() => canEditTransaction(txn) && onEdit(txn)}
                     >
                       <TableCell className="text-sm tabular-nums">
@@ -276,10 +277,16 @@ export function TransactionList({ transactions, totalIncome, totalExpenses, bala
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1.5">
-                          <div className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${config.bg} ${config.color}`}>
-                            <Icon className="h-3 w-3" />
-                            {config.label}
-                          </div>
+                          {isMod ? (
+                            <div className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700 border border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
+                              Modification
+                            </div>
+                          ) : (
+                            <div className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${config.bg} ${config.color}`}>
+                              <Icon className="h-3 w-3" />
+                              {config.label}
+                            </div>
+                          )}
                           {txn.source === "invoice" && (
                             <div className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${txn.status === "estimated" ? "bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-400" : "bg-sky-50 text-sky-600 dark:bg-sky-950 dark:text-sky-400"}`}>
                               <Link2 className="h-2.5 w-2.5" />
@@ -312,8 +319,8 @@ export function TransactionList({ transactions, totalIncome, totalExpenses, bala
                           </div>
                         )}
                       </TableCell>
-                      <TableCell className={`text-right font-medium tabular-nums ${txn.type === "income" ? "text-emerald-600" : txn.type === "expense" ? "text-rose-600" : ""}`}>
-                        {txn.type === "income" ? "+" : txn.type === "expense" ? "-" : ""}{formatCurrency(txn.amount)}
+                      <TableCell className={`text-right font-medium tabular-nums ${isMod ? "text-muted-foreground" : txn.type === "income" ? "text-emerald-600" : txn.type === "expense" ? "text-rose-600" : ""}`}>
+                        {isMod ? "" : txn.type === "income" ? "+" : txn.type === "expense" ? "-" : ""}{formatCurrency(txn.amount)}
                         {txn.type === "transfer" && txn.fees && txn.fees > 0 && (
                           <span className="text-xs text-muted-foreground ml-1">(+{formatCurrency(txn.fees)} fees)</span>
                         )}
