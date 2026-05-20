@@ -1,5 +1,5 @@
 import { getBankStatementEntriesWithNames, getBankStatementStats } from "@/actions/bank-statements";
-import { getExpenseAccounts } from "@/actions/expenses";
+import { getExpenseAccounts, getExpenseCumulativeBalance } from "@/actions/expenses";
 import { BankStatementsClient } from "@/components/bank-statements/bank-statements-client";
 import { requirePageAccess } from "@/lib/auth";
 
@@ -19,11 +19,18 @@ export default async function BankPage({ searchParams }: BankPageProps) {
   const startDate = `${currentYear}-${String(currentMonth).padStart(2, "0")}-01`;
   const endDate = `${currentYear}-${String(currentMonth).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
 
-  const [entries, accounts, stats] = await Promise.all([
+  const [entries, accounts, bankStats, accountBalance] = await Promise.all([
     getBankStatementEntriesWithNames({ startDate, endDate }),
     getExpenseAccounts(),
     getBankStatementStats(startDate, endDate),
+    // Cumulative Balance is the per-account walk over confirmed
+    // expense_transactions restricted to bank+cash accounts — same number
+    // /expenses Cumulative Balance shows. Includes modifications targeting
+    // bank/cash accounts (they bump the running balance) while keeping
+    // Credit / Debit / Monthly Net free of modifications.
+    getExpenseCumulativeBalance(endDate),
   ]);
+  const stats = { ...bankStats, cumulativeBalance: accountBalance };
 
   return (
     <BankStatementsClient
