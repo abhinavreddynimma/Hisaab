@@ -178,6 +178,7 @@ export function ExpensesPageClient({
         <TabsContent value="transactions" className="mt-4">
           <TransactionList
             transactions={transactions}
+            accounts={accounts}
             totalIncome={stats.totalIncome}
             totalExpenses={stats.totalExpenses + stats.totalTransfersOut}
             balance={stats.balance}
