@@ -673,12 +673,17 @@ export async function classifyBankStatementEntryWithSplits(
 }
 
 /**
- * List existing income expense_transactions a bank row could be linked to —
- * invoice-derived rows (and any other non-bank-statement income) that aren't
- * already linked to a bank row. Used by the Classify dialog's "Link to
- * existing income" mode so the user can avoid creating a duplicate income tx.
+ * List existing expense_transactions a bank row could be linked to — rows
+ * created by another sync (invoice payment, tax payment, manual entry, etc.)
+ * that aren't already linked to any bank row. Used by the Classify dialog's
+ * "Link to existing" mode so the user can avoid creating a duplicate when a
+ * bank-statement entry corresponds to an already-tracked transaction.
+ *
+ * Pass `type` to constrain matches — "income" lists invoice / manual income
+ * rows; "expense" lists tax_payment / manual expense rows.
  */
-export async function getLinkableIncomeTransactions(opts?: {
+export async function getLinkableExpenseTransactions(opts: {
+  type: "income" | "expense";
   startDate?: string;
   endDate?: string;
 }): Promise<Array<{
@@ -694,12 +699,12 @@ export async function getLinkableIncomeTransactions(opts?: {
   await assertAdminAccess();
 
   const conditions = [
-    eq(expenseTransactions.type, "income"),
+    eq(expenseTransactions.type, opts.type),
     eq(expenseTransactions.status, "confirmed"),
     sql`${expenseTransactions.source} != 'bank_statement'`,
   ];
-  if (opts?.startDate) conditions.push(sql`${expenseTransactions.date} >= ${opts.startDate}`);
-  if (opts?.endDate) conditions.push(sql`${expenseTransactions.date} <= ${opts.endDate}`);
+  if (opts.startDate) conditions.push(sql`${expenseTransactions.date} >= ${opts.startDate}`);
+  if (opts.endDate) conditions.push(sql`${expenseTransactions.date} <= ${opts.endDate}`);
 
   const candidates = db
     .select({
@@ -743,12 +748,12 @@ export async function getLinkableIncomeTransactions(opts?: {
 }
 
 /**
- * Link a bank-statement row to an existing income expense_transaction
- * without creating a new one. Useful when a salary credit on /bank
- * matches an income row already synced from an invoice payment.
- * Amounts on either side are intentionally not modified.
+ * Link a bank-statement row to an existing expense_transaction without
+ * creating a new one. Works for both income (salary → invoice income row)
+ * and expense (bank tax debit → tax_payment expense row). Amounts on either
+ * side are intentionally not modified.
  */
-export async function linkBankStatementToIncome(
+export async function linkBankStatementToTransaction(
   bankEntryId: number,
   expenseTransactionId: number,
 ) {
@@ -759,9 +764,11 @@ export async function linkBankStatementToIncome(
     if (entry.isDismissed) throw new Error("Bank entry is dismissed");
 
     const target = tx.select().from(expenseTransactions).where(eq(expenseTransactions.id, expenseTransactionId)).get();
-    if (!target) throw new Error("Income transaction not found");
-    if (target.type !== "income") throw new Error("Can only link to an income transaction");
-    if (target.source === "bank_statement") throw new Error("That income row was already created from a bank classification");
+    if (!target) throw new Error("Target transaction not found");
+    if (target.type !== "income" && target.type !== "expense") {
+      throw new Error("Can only link to an income or expense transaction");
+    }
+    if (target.source === "bank_statement") throw new Error("That row was already created from a bank classification");
 
     // Anything else already pointing at this expense tx?
     const alreadyLinked = tx
@@ -772,7 +779,7 @@ export async function linkBankStatementToIncome(
         sql`${bankStatementEntries.id} != ${bankEntryId}`,
       ))
       .get();
-    if (alreadyLinked) throw new Error("That income transaction is already linked to another bank row");
+    if (alreadyLinked) throw new Error("That transaction is already linked to another bank row");
 
     // Clear any current classification on this bank row first
     const existingSplitCount = tx
@@ -787,10 +794,11 @@ export async function linkBankStatementToIncome(
     // Copy display metadata from the target expense_transaction onto the
     // bank row so the table shows category / account / note without having
     // to refetch the target every render. Amounts are NOT touched.
+    const fallbackName = target.type === "income" ? "Linked income" : "Linked expense";
     tx.update(bankStatementEntries)
       .set({
-        expenseName: target.note?.trim() || "Linked income",
-        expenseType: "income",
+        expenseName: target.note?.trim() || fallbackName,
+        expenseType: target.type,
         categoryId: target.categoryId ?? null,
         accountId: target.accountId ?? null,
         fromAccountId: null,
