@@ -651,26 +651,30 @@ export async function getExpenseStats(startDate: string, endDate: string): Promi
   let investmentTransfers = 0;
   let savingsTransfers = 0;
   for (const txn of txns) {
-    if (txn.type === "transfer" && txn.toAccountId) {
-      const toAccount = accountMap.get(txn.toAccountId);
-      const rootId = getExpenseRootAncestor(accountMap, txn.toAccountId);
-      const rootAccount = accountMap.get(rootId);
-      const accountType = rootAccount?.type ?? toAccount?.type;
+    if (txn.type !== "transfer") continue;
 
-      if (accountType === "investment" || accountType === "savings") {
-        const typeLabel = accountType === "investment" ? "Investments" : "Savings";
-        transferTypeMap.set(typeLabel, (transferTypeMap.get(typeLabel) ?? 0) + txn.amount);
-        totalTransfersOut += txn.amount;
-        if (accountType === "investment") investmentTransfers += txn.amount;
-        if (accountType === "savings") savingsTransfers += txn.amount;
+    // Headline outflow counts every transfer — money leaving the source account
+    // is money leaving, regardless of whether we know the destination type or
+    // whether it landed in an invest/savings account vs another bank.
+    totalTransfersOut += txn.amount;
 
-        // Track individual account within type
-        if (!transferSubMap.has(typeLabel)) transferSubMap.set(typeLabel, new Map());
-        const subMap = transferSubMap.get(typeLabel)!;
-        // Use the direct toAccountId (not root) for granular view
-        const trackId = txn.toAccountId;
-        subMap.set(trackId, (subMap.get(trackId) ?? 0) + txn.amount);
-      }
+    // Categorize for the Investments / Savings breakdown only when we can
+    // resolve the destination type from a known to_account_id.
+    if (!txn.toAccountId) continue;
+    const toAccount = accountMap.get(txn.toAccountId);
+    const rootId = getExpenseRootAncestor(accountMap, txn.toAccountId);
+    const rootAccount = accountMap.get(rootId);
+    const accountType = rootAccount?.type ?? toAccount?.type;
+
+    if (accountType === "investment" || accountType === "savings") {
+      const typeLabel = accountType === "investment" ? "Investments" : "Savings";
+      transferTypeMap.set(typeLabel, (transferTypeMap.get(typeLabel) ?? 0) + txn.amount);
+      if (accountType === "investment") investmentTransfers += txn.amount;
+      if (accountType === "savings") savingsTransfers += txn.amount;
+
+      if (!transferSubMap.has(typeLabel)) transferSubMap.set(typeLabel, new Map());
+      const subMap = transferSubMap.get(typeLabel)!;
+      subMap.set(txn.toAccountId, (subMap.get(txn.toAccountId) ?? 0) + txn.amount);
     }
   }
 
