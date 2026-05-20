@@ -317,6 +317,7 @@ export async function createExpenseTransaction(data: {
   tags?: string[] | null;
   excludeFromTax?: boolean;
   bucketTargetId?: number | null;
+  isModification?: boolean;
 }): Promise<{ success: boolean; id?: number }> {
   await assertAdminAccess();
 
@@ -333,6 +334,7 @@ export async function createExpenseTransaction(data: {
     tags: data.tags ? JSON.stringify(data.tags) : null,
     excludeFromTax: data.type === "income" ? (data.excludeFromTax ?? false) : false,
     bucketTargetId: data.type === "expense" ? (data.bucketTargetId ?? null) : null,
+    isModification: data.isModification ?? false,
   }).run();
 
   return { success: true, id: Number(result.lastInsertRowid) };
@@ -351,6 +353,7 @@ export async function updateExpenseTransaction(id: number, data: {
   tags?: string[] | null;
   excludeFromTax?: boolean;
   bucketTargetId?: number | null;
+  isModification?: boolean;
 }): Promise<{ success: boolean }> {
   await assertAdminAccess();
 
@@ -367,6 +370,7 @@ export async function updateExpenseTransaction(id: number, data: {
     tags: data.tags ? JSON.stringify(data.tags) : null,
     excludeFromTax: data.type === "income" ? (data.excludeFromTax ?? false) : false,
     bucketTargetId: data.type === "expense" ? (data.bucketTargetId ?? null) : null,
+    isModification: data.isModification ?? false,
   }).where(eq(expenseTransactions.id, id)).run();
 
   return { success: true };
@@ -625,6 +629,9 @@ export async function getExpenseStats(startDate: string, endDate: string): Promi
       sql`${expenseTransactions.date} >= ${startDate}`,
       sql`${expenseTransactions.date} <= ${endDate}`,
       eq(expenseTransactions.status, "confirmed"),
+      // Modifications (opening balances / one-off adjustments) affect per-
+      // account balances but never roll into monthly income / expense / net.
+      eq(expenseTransactions.isModification, false),
     ))
     .all();
 
@@ -677,15 +684,10 @@ export async function getExpenseStats(startDate: string, endDate: string): Promi
   for (const txn of txns) {
     if (txn.type !== "transfer") continue;
 
-    // A transfer with no source account is an opening-balance adjustment
-    // (e.g., xlsx "Modified Bal." imports), not real outflow — skip it from
-    // the headline Expenses card. Real transfers always have a from_account.
-    if (txn.fromAccountId == null) continue;
-
-    // Headline outflow counts every transfer with a known source — money
-    // leaving the source account is money leaving, regardless of whether we
-    // know the destination type or whether it landed in an invest/savings
-    // account vs another bank.
+    // Headline outflow counts every confirmed, non-modification transfer.
+    // Modifications were filtered out of `txns` already. A transfer with no
+    // resolvable destination type still contributes to outflow here; the
+    // Investments/Savings sub-breakdown below requires a known destination.
     totalTransfersOut += txn.amount;
 
     // Categorize for the Investments / Savings breakdown only when we can

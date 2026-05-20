@@ -36,6 +36,7 @@ export function TransactionDialog({ open, onClose, transaction, accounts }: Tran
   const [bucketTargetId, setBucketTargetId] = useState<number | null>(null);
   const [bucketTargets, setBucketTargets] = useState<{ id: number; name: string }[]>([]);
   const [categoryBucketMap, setCategoryBucketMap] = useState<Record<number, { id: number; name: string }>>({});
+  const [isModification, setIsModification] = useState(false);
 
   useEffect(() => {
     if (open && bucketTargets.length === 0) {
@@ -61,6 +62,7 @@ export function TransactionDialog({ open, onClose, transaction, accounts }: Tran
       setNote(transaction.note || "");
       setExcludeFromTax(transaction.excludeFromTax ?? false);
       setBucketTargetId(transaction.bucketTargetId ?? null);
+      setIsModification(transaction.isModification ?? false);
     } else {
       setType("expense");
       setDate(new Date().toISOString().split("T")[0]);
@@ -73,6 +75,7 @@ export function TransactionDialog({ open, onClose, transaction, accounts }: Tran
       setNote("");
       setExcludeFromTax(false);
       setBucketTargetId(null);
+      setIsModification(false);
     }
   }, [transaction, open]);
 
@@ -114,6 +117,7 @@ export function TransactionDialog({ open, onClose, transaction, accounts }: Tran
         tags: selectedTags.length > 0 ? selectedTags : null,
         excludeFromTax: type === "income" ? excludeFromTax : false,
         bucketTargetId: type === "expense" ? bucketTargetId : null,
+        isModification,
       };
 
       if (transaction) {
@@ -262,6 +266,20 @@ export function TransactionDialog({ open, onClose, transaction, accounts }: Tran
               autoResolvesTo={autoResolvesTo}
             />
           )}
+
+          <label className="flex items-start gap-2 rounded-md border bg-muted/30 p-3 cursor-pointer">
+            <Checkbox
+              checked={isModification}
+              onCheckedChange={(v) => setIsModification(v === true)}
+              className="mt-0.5"
+            />
+            <div className="flex-1">
+              <p className="text-sm font-medium">Mark as modification</p>
+              <p className="text-[11px] text-muted-foreground leading-snug mt-0.5">
+                Opening balance / one-off adjustment. Affects the account balance but is excluded from Monthly stats.
+              </p>
+            </div>
+          </label>
 
           <div className="space-y-2">
             <Label>Note</Label>

@@ -219,6 +219,9 @@ export const expenseTransactions = sqliteTable("expense_transactions", {
   // bucket target instead of the one derived from its category. NULL → fall
   // back to category-based mapping via expense_target_accounts.
   bucketTargetId: integer("bucket_target_id"),
+  // Opening-balance / adjustment marker. Modifications affect per-account
+  // balances but are excluded from monthly income / expense / net stats.
+  isModification: integer("is_modification", { mode: "boolean" }).notNull().default(false),
   createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
 });
 
