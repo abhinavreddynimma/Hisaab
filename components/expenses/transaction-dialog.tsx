@@ -110,7 +110,7 @@ export function TransactionDialog({ open, onClose, transaction, accounts }: Tran
         amount: parseFloat(amount),
         categoryId: categoryId ? parseInt(categoryId) : null,
         accountId: accountId ? parseInt(accountId) : null,
-        fromAccountId: fromAccountId ? parseInt(fromAccountId) : null,
+        fromAccountId: isModification ? null : (fromAccountId ? parseInt(fromAccountId) : null),
         toAccountId: toAccountId ? parseInt(toAccountId) : null,
         fees: fees ? parseFloat(fees) : null,
         note: note || null,
@@ -229,17 +229,19 @@ export function TransactionDialog({ open, onClose, transaction, accounts }: Tran
 
           {type === "transfer" && (
             <>
-              <div className="space-y-2">
-                <Label>From</Label>
-                <Select value={fromAccountId} onValueChange={setFromAccountId}>
-                  <SelectTrigger><SelectValue placeholder="From account" /></SelectTrigger>
-                  <SelectContent>
-                    {transferableAccounts.map(a => (
-                      <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {!isModification && (
+                <div className="space-y-2">
+                  <Label>From</Label>
+                  <Select value={fromAccountId} onValueChange={setFromAccountId}>
+                    <SelectTrigger><SelectValue placeholder="From account" /></SelectTrigger>
+                    <SelectContent>
+                      {transferableAccounts.map(a => (
+                        <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label>To</Label>
                 <Select value={toAccountId} onValueChange={setToAccountId}>

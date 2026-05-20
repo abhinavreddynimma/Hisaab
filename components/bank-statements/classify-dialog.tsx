@@ -296,7 +296,7 @@ export function ClassifyDialog({ open, onClose, entry, accounts }: ClassifyDialo
           expenseType: type,
           categoryId: categoryId ? parseInt(categoryId, 10) : null,
           accountId: accountId ? parseInt(accountId, 10) : null,
-          fromAccountId: fromAccountId ? parseInt(fromAccountId, 10) : null,
+          fromAccountId: isModification ? null : (fromAccountId ? parseInt(fromAccountId, 10) : null),
           toAccountId: toAccountId ? parseInt(toAccountId, 10) : null,
           note: note || null,
           bucketTargetId: type === "expense" ? bucketTargetId : null,
@@ -484,17 +484,19 @@ export function ClassifyDialog({ open, onClose, entry, accounts }: ClassifyDialo
 
               {type === "transfer" && (
                 <>
-                  <div className="space-y-2">
-                    <Label>From</Label>
-                    <Select value={fromAccountId} onValueChange={setFromAccountId}>
-                      <SelectTrigger><SelectValue placeholder="From account" /></SelectTrigger>
-                      <SelectContent>
-                        {transferableAccounts.map((account) => (
-                          <SelectItem key={account.id} value={String(account.id)}>{account.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {!isModification && (
+                    <div className="space-y-2">
+                      <Label>From</Label>
+                      <Select value={fromAccountId} onValueChange={setFromAccountId}>
+                        <SelectTrigger><SelectValue placeholder="From account" /></SelectTrigger>
+                        <SelectContent>
+                          {transferableAccounts.map((account) => (
+                            <SelectItem key={account.id} value={String(account.id)}>{account.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   <div className="space-y-2">
                     <Label>To</Label>
                     <Select value={toAccountId} onValueChange={setToAccountId}>

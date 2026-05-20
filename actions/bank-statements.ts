@@ -413,13 +413,14 @@ export async function classifyBankStatementEntry(
 
     const amount = getEntryAmount(entry);
     const note = data.note?.trim() || null;
+    const isMod = data.isModification ?? false;
     const result = tx.insert(expenseTransactions).values({
       type: data.expenseType,
       date: data.date && /^\d{4}-\d{2}-\d{2}$/.test(data.date) ? data.date : entry.date,
       amount,
       categoryId: data.categoryId ?? null,
       accountId: data.accountId ?? null,
-      fromAccountId: data.fromAccountId ?? null,
+      fromAccountId: isMod ? null : (data.fromAccountId ?? null),
       toAccountId: data.toAccountId ?? null,
       note: note || data.expenseName.trim(),
       tags: data.tags ? JSON.stringify(data.tags) : null,
@@ -427,7 +428,7 @@ export async function classifyBankStatementEntry(
       sourceId: `bank_stmt_${id}`,
       status: "confirmed",
       bucketTargetId: data.expenseType === "expense" ? (data.bucketTargetId ?? null) : null,
-      isModification: data.isModification ?? false,
+      isModification: isMod,
       createdAt: new Date().toISOString(),
     }).run();
 
@@ -437,7 +438,7 @@ export async function classifyBankStatementEntry(
         expenseType: data.expenseType,
         categoryId: data.categoryId ?? null,
         accountId: data.accountId ?? null,
-        fromAccountId: data.fromAccountId ?? null,
+        fromAccountId: isMod ? null : (data.fromAccountId ?? null),
         toAccountId: data.toAccountId ?? null,
         note,
         tags: data.tags ? JSON.stringify(data.tags) : null,
@@ -522,6 +523,7 @@ export async function classifyBankStatementsTogether(
     );
     const latestDate = entries.map((e) => e.date).sort().pop()!;
     const note = data.note?.trim() || null;
+    const isMod = data.isModification ?? false;
 
     const result = tx
       .insert(expenseTransactions)
@@ -531,7 +533,7 @@ export async function classifyBankStatementsTogether(
         amount: totalAmount,
         categoryId: data.categoryId ?? null,
         accountId: data.accountId ?? null,
-        fromAccountId: data.fromAccountId ?? null,
+        fromAccountId: isMod ? null : (data.fromAccountId ?? null),
         toAccountId: data.toAccountId ?? null,
         note: note || data.expenseName.trim(),
         tags: data.tags ? JSON.stringify(data.tags) : null,
@@ -539,7 +541,7 @@ export async function classifyBankStatementsTogether(
         sourceId: `bank_stmt_merge_${entries.map((e) => e.id).join("_")}`,
         status: "confirmed",
         bucketTargetId: data.expenseType === "expense" ? (data.bucketTargetId ?? null) : null,
-        isModification: data.isModification ?? false,
+        isModification: isMod,
         createdAt: new Date().toISOString(),
       })
       .run();
@@ -552,7 +554,7 @@ export async function classifyBankStatementsTogether(
         expenseType: data.expenseType,
         categoryId: data.categoryId ?? null,
         accountId: data.accountId ?? null,
-        fromAccountId: data.fromAccountId ?? null,
+        fromAccountId: isMod ? null : (data.fromAccountId ?? null),
         toAccountId: data.toAccountId ?? null,
         note,
         tags: data.tags ? JSON.stringify(data.tags) : null,
