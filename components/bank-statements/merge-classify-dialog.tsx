@@ -38,6 +38,9 @@ export function MergeClassifyDialog({ open, onClose, onSuccess, entries, account
   const [bucketTargets, setBucketTargets] = useState<{ id: number; name: string }[]>([]);
   const [categoryBucketMap, setCategoryBucketMap] = useState<Record<number, { id: number; name: string }>>({});
   const [isModification, setIsModification] = useState(false);
+  const [expenseDate, setExpenseDate] = useState<string>("");
+
+  const latestEntryDate = entries.map((e) => e.date).sort().pop() ?? "";
 
   useEffect(() => {
     if (open && bucketTargets.length === 0) {
@@ -85,7 +88,8 @@ export function MergeClassifyDialog({ open, onClose, onSuccess, entries, account
     setNote("");
     setBucketTargetId(null);
     setIsModification(false);
-  }, [open, entries, defaultType, defaultBankStr]);
+    setExpenseDate(latestEntryDate);
+  }, [open, entries, defaultType, defaultBankStr, latestEntryDate]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -112,6 +116,7 @@ export function MergeClassifyDialog({ open, onClose, onSuccess, entries, account
           note: note.trim() || null,
           bucketTargetId: type === "expense" ? bucketTargetId : null,
           isModification,
+          date: expenseDate && expenseDate !== latestEntryDate ? expenseDate : undefined,
         },
       );
       toast.success(`Merged ${entries.length} transactions into one`);
@@ -181,6 +186,16 @@ export function MergeClassifyDialog({ open, onClose, onSuccess, entries, account
                 {t.charAt(0).toUpperCase() + t.slice(1)}
               </button>
             ))}
+          </div>
+
+          <div className="space-y-2">
+            <Label>
+              Date on /expenses
+              <span className="ml-2 text-[10px] font-normal text-muted-foreground">
+                defaults to latest selected ({formatDate(latestEntryDate)})
+              </span>
+            </Label>
+            <Input type="date" value={expenseDate} onChange={(e) => setExpenseDate(e.target.value)} />
           </div>
 
           <div className="space-y-2">
