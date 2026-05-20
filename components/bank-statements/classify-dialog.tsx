@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { classifyBankStatementEntry, classifyBankStatementEntryWithSplits, unclassifyBankStatementEntry } from "@/actions/bank-statements";
+import { classifyBankStatementEntry, classifyBankStatementEntryWithSplits, unclassifyBankStatementEntry, getLinkableIncomeTransactions, linkBankStatementToIncome } from "@/actions/bank-statements";
 import { getBucketTargets, getCategoryBucketMap } from "@/actions/expenses";
 import { BucketPicker } from "./bucket-picker";
 import { Button } from "@/components/ui/button";
@@ -79,6 +79,15 @@ export function ClassifyDialog({ open, onClose, entry, accounts }: ClassifyDialo
   const [categoryBucketMap, setCategoryBucketMap] = useState<Record<number, { id: number; name: string }>>({});
   const [isModification, setIsModification] = useState(false);
   const [expenseDate, setExpenseDate] = useState<string>("");
+  const [linkMode, setLinkMode] = useState(false);
+  const [linkTargetId, setLinkTargetId] = useState<string>("");
+  const [linkCandidates, setLinkCandidates] = useState<Array<{ id: number; date: string; amount: number; source: string; sourceId: string | null; note: string | null; categoryName: string | null; accountName: string | null }>>([]);
+
+  useEffect(() => {
+    if (open && type === "income" && linkCandidates.length === 0) {
+      getLinkableIncomeTransactions().then(setLinkCandidates);
+    }
+  }, [open, type]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (open && bucketTargets.length === 0) {
@@ -156,6 +165,8 @@ export function ClassifyDialog({ open, onClose, entry, accounts }: ClassifyDialo
     setBucketTargetId(null);
     setIsModification(false);
     setExpenseDate(entry.date);
+    setLinkMode(false);
+    setLinkTargetId("");
 
     setIsSplitMode(false);
     setSplits([
@@ -291,18 +302,27 @@ export function ClassifyDialog({ open, onClose, entry, accounts }: ClassifyDialo
           return;
         }
 
-        await classifyBankStatementEntry(entry.id, {
-          expenseName: expenseName.trim(),
-          expenseType: type,
-          categoryId: categoryId ? parseInt(categoryId, 10) : null,
-          accountId: accountId ? parseInt(accountId, 10) : null,
-          fromAccountId: isModification ? null : (fromAccountId ? parseInt(fromAccountId, 10) : null),
-          toAccountId: toAccountId ? parseInt(toAccountId, 10) : null,
-          note: note || null,
-          bucketTargetId: type === "expense" ? bucketTargetId : null,
-          isModification,
-          date: expenseDate && expenseDate !== entry.date ? expenseDate : undefined,
-        });
+        if (type === "income" && linkMode) {
+          if (!linkTargetId) {
+            toast.error("Pick an income transaction to link to");
+            setSaving(false);
+            return;
+          }
+          await linkBankStatementToIncome(entry.id, parseInt(linkTargetId, 10));
+        } else {
+          await classifyBankStatementEntry(entry.id, {
+            expenseName: expenseName.trim(),
+            expenseType: type,
+            categoryId: categoryId ? parseInt(categoryId, 10) : null,
+            accountId: accountId ? parseInt(accountId, 10) : null,
+            fromAccountId: isModification ? null : (fromAccountId ? parseInt(fromAccountId, 10) : null),
+            toAccountId: toAccountId ? parseInt(toAccountId, 10) : null,
+            note: note || null,
+            bucketTargetId: type === "expense" ? bucketTargetId : null,
+            isModification,
+            date: expenseDate && expenseDate !== entry.date ? expenseDate : undefined,
+          });
+        }
       }
 
       toast.success("Transaction classified");
@@ -399,6 +419,66 @@ export function ClassifyDialog({ open, onClose, entry, accounts }: ClassifyDialo
                 ))}
               </div>
 
+              {type === "income" && linkCandidates.length > 0 && (
+                <div className="space-y-2 rounded-md border bg-sky-50/40 dark:bg-sky-950/20 p-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm">Link to an existing income</Label>
+                    <div className="inline-flex rounded-md border p-0.5 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setLinkMode(false)}
+                        className={!linkMode ? "px-2 py-0.5 rounded bg-background shadow-sm" : "px-2 py-0.5 text-muted-foreground"}
+                      >New</button>
+                      <button
+                        type="button"
+                        onClick={() => setLinkMode(true)}
+                        className={linkMode ? "px-2 py-0.5 rounded bg-background shadow-sm" : "px-2 py-0.5 text-muted-foreground"}
+                      >Link</button>
+                    </div>
+                  </div>
+                  {linkMode ? (
+                    <>
+                      <p className="text-[11px] text-muted-foreground leading-snug">
+                        Skip creating a new income row and instead point this bank entry at an existing income transaction (e.g., an invoice payment that was already synced). Amounts stay as-is on both sides.
+                      </p>
+                      <Select value={linkTargetId} onValueChange={setLinkTargetId}>
+                        <SelectTrigger><SelectValue placeholder="Pick an income transaction…" /></SelectTrigger>
+                        <SelectContent className="max-h-72">
+                          {linkCandidates.map((c) => {
+                            const tag = c.source === "invoice" && c.sourceId ? `INV-${String(c.sourceId).padStart(4, "0")}` : c.source;
+                            return (
+                              <SelectItem key={c.id} value={String(c.id)}>
+                                {formatDate(c.date)} · {formatCurrency(c.amount)} · {tag}
+                                {c.note ? ` — ${c.note.slice(0, 40)}` : ""}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                      {linkTargetId && (() => {
+                        const sel = linkCandidates.find((c) => String(c.id) === linkTargetId);
+                        if (!sel) return null;
+                        const delta = Math.abs(sel.amount - amount);
+                        return (
+                          <p className="text-[11px] text-muted-foreground">
+                            Bank: <span className="font-medium">{formatCurrency(amount)}</span>
+                            {" · "}Income: <span className="font-medium">{formatCurrency(sel.amount)}</span>
+                            {delta > 0.5 && (
+                              <span className="text-amber-700 dark:text-amber-400 ml-1">(₹{delta.toFixed(2)} difference — kept as-is on both sides)</span>
+                            )}
+                          </p>
+                        );
+                      })()}
+                    </>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground leading-snug">
+                      Switch to <span className="font-medium">Link</span> to attach this bank row to an existing income transaction (invoices, manual incomes) without creating a duplicate.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {!linkMode && (
               <div className="space-y-2">
                 <Label>
                   Date on /expenses
@@ -412,7 +492,9 @@ export function ClassifyDialog({ open, onClose, entry, accounts }: ClassifyDialo
                   onChange={(e) => setExpenseDate(e.target.value)}
                 />
               </div>
+              )}
 
+              {!linkMode && (<>
               <div className="space-y-2">
                 <Label>Expense Name</Label>
                 <Input
@@ -538,6 +620,7 @@ export function ClassifyDialog({ open, onClose, entry, accounts }: ClassifyDialo
                 <Label>Note (optional)</Label>
                 <Textarea placeholder="Add a note..." value={note} onChange={(event) => setNote(event.target.value)} rows={2} />
               </div>
+              </>)}
             </>
           ) : (
             <div className="space-y-4">
