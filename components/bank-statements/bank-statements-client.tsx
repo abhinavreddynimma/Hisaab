@@ -193,10 +193,7 @@ export function BankStatementsClient({
         <Card title="Cumulative net position: sum of all credits minus debits from the earliest entry up to the end of this month.">
           <CardContent className="p-4 text-center">
             <p className="text-xs text-muted-foreground mb-1">Balance · end of {MONTHS[currentMonth - 1]}</p>
-            <p className={cn(
-              "text-lg font-bold tabular-nums",
-              stats.cumulativeBalance >= 0 ? "text-emerald-600" : "text-rose-600",
-            )}>{formatCurrency(stats.cumulativeBalance)}</p>
+            <p className="text-lg font-bold tabular-nums text-foreground">{formatCurrency(stats.cumulativeBalance)}</p>
           </CardContent>
         </Card>
         <Card>
