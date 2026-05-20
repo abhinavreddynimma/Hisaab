@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { BankStatementEntry, ExpenseAccount, ExpenseTransactionType } from "@/lib/types";
 
@@ -36,6 +37,7 @@ export function MergeClassifyDialog({ open, onClose, onSuccess, entries, account
   const [bucketTargetId, setBucketTargetId] = useState<number | null>(null);
   const [bucketTargets, setBucketTargets] = useState<{ id: number; name: string }[]>([]);
   const [categoryBucketMap, setCategoryBucketMap] = useState<Record<number, { id: number; name: string }>>({});
+  const [isModification, setIsModification] = useState(false);
 
   useEffect(() => {
     if (open && bucketTargets.length === 0) {
@@ -82,6 +84,7 @@ export function MergeClassifyDialog({ open, onClose, onSuccess, entries, account
     setToAccountId("");
     setNote("");
     setBucketTargetId(null);
+    setIsModification(false);
   }, [open, entries, defaultType, defaultBankStr]);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -108,6 +111,7 @@ export function MergeClassifyDialog({ open, onClose, onSuccess, entries, account
           toAccountId: type === "transfer" && toAccountId ? parseInt(toAccountId) : null,
           note: note.trim() || null,
           bucketTargetId: type === "expense" ? bucketTargetId : null,
+          isModification,
         },
       );
       toast.success(`Merged ${entries.length} transactions into one`);
@@ -273,6 +277,20 @@ export function MergeClassifyDialog({ open, onClose, onSuccess, entries, account
               autoResolvesTo={autoResolvesTo}
             />
           )}
+
+          <label className="flex items-start gap-2 rounded-md border bg-muted/30 p-3 cursor-pointer">
+            <Checkbox
+              checked={isModification}
+              onCheckedChange={(v) => setIsModification(v === true)}
+              className="mt-0.5"
+            />
+            <div className="flex-1">
+              <p className="text-sm font-medium">Mark as modification</p>
+              <p className="text-[11px] text-muted-foreground leading-snug mt-0.5">
+                Opening balance / one-off adjustment. Updates the account balance but doesn&apos;t count in Monthly stats.
+              </p>
+            </div>
+          </label>
 
           <div className="space-y-2">
             <Label>Note (optional)</Label>

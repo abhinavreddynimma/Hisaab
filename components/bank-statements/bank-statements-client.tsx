@@ -382,10 +382,16 @@ export function BankStatementsClient({
                         );
                       })()}
                     </TableCell>
-                    <TableCell className="text-right font-medium tabular-nums text-rose-600">
+                    <TableCell className={cn(
+                      "text-right font-medium tabular-nums",
+                      entry.isModification ? "text-muted-foreground" : "text-rose-600",
+                    )}>
                       {entry.debit ? formatCurrency(entry.debit) : ""}
                     </TableCell>
-                    <TableCell className="text-right font-medium tabular-nums text-emerald-600">
+                    <TableCell className={cn(
+                      "text-right font-medium tabular-nums",
+                      entry.isModification ? "text-muted-foreground" : "text-emerald-600",
+                    )}>
                       {entry.credit ? formatCurrency(entry.credit) : ""}
                     </TableCell>
                     <TableCell className="text-right font-medium tabular-nums">
@@ -413,25 +419,33 @@ export function BankStatementsClient({
                       ) : entry.isClassified ? (
                         <div className="space-y-0.5">
                           <div className="flex items-center gap-1 flex-wrap">
-                            {entry.expenseType === "income" && (
-                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800">
-                                <ArrowDownLeft className="h-2.5 w-2.5 mr-0.5" />
-                                Income
+                            {entry.isModification ? (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
+                                Modification
                               </Badge>
+                            ) : (
+                              <>
+                                {entry.expenseType === "income" && (
+                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800">
+                                    <ArrowDownLeft className="h-2.5 w-2.5 mr-0.5" />
+                                    Income
+                                  </Badge>
+                                )}
+                                {entry.expenseType === "expense" && (
+                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950 dark:text-rose-400 dark:border-rose-800">
+                                    <ArrowUpRight className="h-2.5 w-2.5 mr-0.5" />
+                                    Expense
+                                  </Badge>
+                                )}
+                                {entry.expenseType === "transfer" && (
+                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-400 dark:border-blue-800">
+                                    <ArrowLeftRight className="h-2.5 w-2.5 mr-0.5" />
+                                    Transfer
+                                  </Badge>
+                                )}
+                              </>
                             )}
-                            {entry.expenseType === "expense" && (
-                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950 dark:text-rose-400 dark:border-rose-800">
-                                <ArrowUpRight className="h-2.5 w-2.5 mr-0.5" />
-                                Expense
-                              </Badge>
-                            )}
-                            {entry.expenseType === "transfer" && (
-                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-400 dark:border-blue-800">
-                                <ArrowLeftRight className="h-2.5 w-2.5 mr-0.5" />
-                                Transfer
-                              </Badge>
-                            )}
-                            <p className="text-sm font-medium truncate">{entry.expenseName || "—"}</p>
+                            <p className={cn("text-sm font-medium truncate", entry.isModification && "text-muted-foreground")}>{entry.expenseName || "—"}</p>
                           </div>
                           {entry.expenseType === "transfer" ? (
                             <p className="text-[11px] text-muted-foreground leading-snug">

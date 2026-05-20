@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { BankStatementEntry, ExpenseAccount, ExpenseTransactionType } from "@/lib/types";
 import { extractTitle } from "./utils";
@@ -76,6 +77,7 @@ export function ClassifyDialog({ open, onClose, entry, accounts }: ClassifyDialo
   const [bucketTargetId, setBucketTargetId] = useState<number | null>(null);
   const [bucketTargets, setBucketTargets] = useState<{ id: number; name: string }[]>([]);
   const [categoryBucketMap, setCategoryBucketMap] = useState<Record<number, { id: number; name: string }>>({});
+  const [isModification, setIsModification] = useState(false);
 
   useEffect(() => {
     if (open && bucketTargets.length === 0) {
@@ -151,6 +153,7 @@ export function ClassifyDialog({ open, onClose, entry, accounts }: ClassifyDialo
       setNote("");
     }
     setBucketTargetId(null);
+    setIsModification(false);
 
     setIsSplitMode(false);
     setSplits([
@@ -295,6 +298,7 @@ export function ClassifyDialog({ open, onClose, entry, accounts }: ClassifyDialo
           toAccountId: toAccountId ? parseInt(toAccountId, 10) : null,
           note: note || null,
           bucketTargetId: type === "expense" ? bucketTargetId : null,
+          isModification,
         });
       }
 
@@ -496,6 +500,20 @@ export function ClassifyDialog({ open, onClose, entry, accounts }: ClassifyDialo
                   autoResolvesTo={autoResolvesTo}
                 />
               )}
+
+              <label className="flex items-start gap-2 rounded-md border bg-muted/30 p-3 cursor-pointer">
+                <Checkbox
+                  checked={isModification}
+                  onCheckedChange={(v) => setIsModification(v === true)}
+                  className="mt-0.5"
+                />
+                <div className="flex-1">
+                  <p className="text-sm font-medium">Mark as modification</p>
+                  <p className="text-[11px] text-muted-foreground leading-snug mt-0.5">
+                    For opening balances and one-off adjustments. Updates the destination account&apos;s balance but is excluded from Monthly Income / Expense / Net stats.
+                  </p>
+                </div>
+              </label>
 
               <div className="space-y-2">
                 <Label>Note (optional)</Label>

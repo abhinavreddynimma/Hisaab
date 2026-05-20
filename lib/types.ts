@@ -274,6 +274,7 @@ export interface ExpenseTransaction {
   status: ExpenseTransactionStatus;
   excludeFromTax: boolean;
   bucketTargetId: number | null;
+  isModification: boolean;
   createdAt: string;
   categoryName?: string;
   accountName?: string;
@@ -363,6 +364,7 @@ export interface BankStatementEntry {
   isClassified: boolean;
   isDismissed: boolean;
   expenseTransactionId: number | null;
+  isModification?: boolean;
   createdAt: string;
   splitCount?: number;
   splits?: BankStatementSplit[];

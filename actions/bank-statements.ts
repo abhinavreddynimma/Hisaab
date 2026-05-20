@@ -253,6 +253,19 @@ export async function getBankStatementEntriesWithNames(filters?: {
   const accounts = db.select().from(expenseAccounts).all();
   const accountMap = new Map(accounts.map((account) => [account.id, account.name]));
 
+  // Lookup is_modification on the linked expense_transaction so the bank
+  // page can style modification rows neutrally.
+  const txnIds = entries.map((e) => e.expenseTransactionId).filter((v): v is number => v != null);
+  const modByTxnId = new Map<number, boolean>();
+  if (txnIds.length > 0) {
+    const modRows = db
+      .select({ id: expenseTransactions.id, isModification: expenseTransactions.isModification })
+      .from(expenseTransactions)
+      .where(inArray(expenseTransactions.id, txnIds))
+      .all();
+    for (const r of modRows) modByTxnId.set(r.id, !!r.isModification);
+  }
+
   const splitRows = db
     .select({
       id: bankStatementSplits.id,
@@ -312,6 +325,7 @@ export async function getBankStatementEntriesWithNames(filters?: {
       accountName: entry.accountId ? accountMap.get(entry.accountId) ?? undefined : undefined,
       fromAccountName: entry.fromAccountId ? accountMap.get(entry.fromAccountId) ?? undefined : undefined,
       toAccountName: entry.toAccountId ? accountMap.get(entry.toAccountId) ?? undefined : undefined,
+      isModification: entry.expenseTransactionId != null ? (modByTxnId.get(entry.expenseTransactionId) ?? false) : false,
       splitCount: splits.length || undefined,
       splits: splits.length > 0 ? splits : undefined,
     };
@@ -367,6 +381,7 @@ export async function classifyBankStatementEntry(
     note?: string | null;
     tags?: string[] | null;
     bucketTargetId?: number | null;
+    isModification?: boolean;
   },
 ) {
   await assertAdminAccess();
@@ -407,6 +422,7 @@ export async function classifyBankStatementEntry(
       sourceId: `bank_stmt_${id}`,
       status: "confirmed",
       bucketTargetId: data.expenseType === "expense" ? (data.bucketTargetId ?? null) : null,
+      isModification: data.isModification ?? false,
       createdAt: new Date().toISOString(),
     }).run();
 
@@ -452,6 +468,7 @@ export async function classifyBankStatementsTogether(
     note?: string | null;
     tags?: string[] | null;
     bucketTargetId?: number | null;
+    isModification?: boolean;
   },
 ) {
   await assertAdminAccess();
@@ -516,6 +533,7 @@ export async function classifyBankStatementsTogether(
         sourceId: `bank_stmt_merge_${entries.map((e) => e.id).join("_")}`,
         status: "confirmed",
         bucketTargetId: data.expenseType === "expense" ? (data.bucketTargetId ?? null) : null,
+        isModification: data.isModification ?? false,
         createdAt: new Date().toISOString(),
       })
       .run();
