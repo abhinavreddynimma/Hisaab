@@ -532,6 +532,21 @@ function getExpenseTransferOutflow(txn: ExpenseTransaction, accountMap: Map<numb
   return 0;
 }
 
+/**
+ * Cumulative balance card: total money sitting in the user's bank + cash +
+ * savings accounts as of each cutoff date.
+ *
+ * Each confirmed transaction is applied per-account: income credits the
+ * receiving account, expense debits it, and transfers credit `to_account_id`
+ * + debit `from_account_id` (with fees on the debit side). Sum is then
+ * restricted to accounts of type bank | cash | savings, so:
+ *   - Income landing in SBI bumps Balance.
+ *   - Spending from SBI on Groceries drops Balance.
+ *   - Transferring SBI → Mutual Funds (investment) drops Balance (money
+ *     left scope).
+ *   - Transferring SBI → Cash or SBI → P2P Lending (savings) nets to zero
+ *     (one side debited, the other credited, both in scope).
+ */
 async function getExpenseRunningBalances(endDates: string[]): Promise<Map<string, number>> {
   const sortedEndDates = Array.from(new Set(endDates)).sort((a, b) => a.localeCompare(b));
   const balances = new Map<string, number>();
@@ -551,27 +566,36 @@ async function getExpenseRunningBalances(endDates: string[]): Promise<Map<string
 
   const allAccounts = db.select().from(expenseAccounts).all() as ExpenseAccount[];
   const accountMap = new Map(allAccounts.map(a => [a.id, a]));
+  const inScope = (id: number | null | undefined): boolean => {
+    if (id == null) return false;
+    const a = accountMap.get(id);
+    return a != null && (a.type === "bank" || a.type === "cash" || a.type === "savings");
+  };
 
-  let totalIncome = 0;
-  let totalOutflow = 0;
+  let runningBalance = 0;
   let txnIndex = 0;
 
   for (const endDate of sortedEndDates) {
     while (txnIndex < txns.length && txns[txnIndex].date <= endDate) {
       const txn = txns[txnIndex];
 
-      if (txn.type === "income") {
-        totalIncome += txn.amount;
-      } else if (txn.type === "expense") {
-        totalOutflow += txn.amount;
-      } else {
-        totalOutflow += getExpenseTransferOutflow(txn, accountMap);
+      if (txn.type === "income" && inScope(txn.accountId)) {
+        runningBalance += txn.amount;
+      } else if (txn.type === "expense" && inScope(txn.accountId)) {
+        runningBalance -= txn.amount;
+      } else if (txn.type === "transfer") {
+        if (inScope(txn.fromAccountId)) {
+          runningBalance -= txn.amount + (txn.fees ?? 0);
+        }
+        if (inScope(txn.toAccountId)) {
+          runningBalance += txn.amount;
+        }
       }
 
       txnIndex += 1;
     }
 
-    balances.set(endDate, totalIncome - totalOutflow);
+    balances.set(endDate, runningBalance);
   }
 
   return balances;
