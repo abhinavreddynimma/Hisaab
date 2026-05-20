@@ -382,6 +382,11 @@ export async function classifyBankStatementEntry(
     tags?: string[] | null;
     bucketTargetId?: number | null;
     isModification?: boolean;
+    /**
+     * Override date for the expense_transaction. When omitted, the bank
+     * row's own date is used. The bank row's date itself is never modified.
+     */
+    date?: string;
   },
 ) {
   await assertAdminAccess();
@@ -410,7 +415,7 @@ export async function classifyBankStatementEntry(
     const note = data.note?.trim() || null;
     const result = tx.insert(expenseTransactions).values({
       type: data.expenseType,
-      date: entry.date,
+      date: data.date && /^\d{4}-\d{2}-\d{2}$/.test(data.date) ? data.date : entry.date,
       amount,
       categoryId: data.categoryId ?? null,
       accountId: data.accountId ?? null,
@@ -469,6 +474,7 @@ export async function classifyBankStatementsTogether(
     tags?: string[] | null;
     bucketTargetId?: number | null;
     isModification?: boolean;
+    date?: string;
   },
 ) {
   await assertAdminAccess();
@@ -521,7 +527,7 @@ export async function classifyBankStatementsTogether(
       .insert(expenseTransactions)
       .values({
         type: data.expenseType,
-        date: latestDate,
+        date: data.date && /^\d{4}-\d{2}-\d{2}$/.test(data.date) ? data.date : latestDate,
         amount: totalAmount,
         categoryId: data.categoryId ?? null,
         accountId: data.accountId ?? null,

@@ -78,6 +78,7 @@ export function ClassifyDialog({ open, onClose, entry, accounts }: ClassifyDialo
   const [bucketTargets, setBucketTargets] = useState<{ id: number; name: string }[]>([]);
   const [categoryBucketMap, setCategoryBucketMap] = useState<Record<number, { id: number; name: string }>>({});
   const [isModification, setIsModification] = useState(false);
+  const [expenseDate, setExpenseDate] = useState<string>("");
 
   useEffect(() => {
     if (open && bucketTargets.length === 0) {
@@ -154,6 +155,7 @@ export function ClassifyDialog({ open, onClose, entry, accounts }: ClassifyDialo
     }
     setBucketTargetId(null);
     setIsModification(false);
+    setExpenseDate(entry.date);
 
     setIsSplitMode(false);
     setSplits([
@@ -299,6 +301,7 @@ export function ClassifyDialog({ open, onClose, entry, accounts }: ClassifyDialo
           note: note || null,
           bucketTargetId: type === "expense" ? bucketTargetId : null,
           isModification,
+          date: expenseDate && expenseDate !== entry.date ? expenseDate : undefined,
         });
       }
 
@@ -394,6 +397,20 @@ export function ClassifyDialog({ open, onClose, entry, accounts }: ClassifyDialo
                     {option.charAt(0).toUpperCase() + option.slice(1)}
                   </button>
                 ))}
+              </div>
+
+              <div className="space-y-2">
+                <Label>
+                  Date on /expenses
+                  <span className="ml-2 text-[10px] font-normal text-muted-foreground">
+                    bank date {formatDate(entry.date)} — change here if the expense actually happened on a different day
+                  </span>
+                </Label>
+                <Input
+                  type="date"
+                  value={expenseDate}
+                  onChange={(e) => setExpenseDate(e.target.value)}
+                />
               </div>
 
               <div className="space-y-2">
