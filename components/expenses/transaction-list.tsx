@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Trash2, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Plus, Link2, Check, Repeat, Pencil, ArrowDownUp, Layers } from "lucide-react";
+import { Trash2, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Plus, Link2, Check, Repeat, Pencil, ArrowDownUp, Layers, ChevronRight, ChevronDown } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -47,6 +47,15 @@ export function TransactionList({ transactions, totalIncome, totalExpenses, bala
   const [filter, setFilter] = useState<FilterType>("all");
   const [sort, setSort] = useState<"date" | "amount">("date");
   const [groupBy, setGroupBy] = useState<"none" | "category">("none");
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+  function toggleGroup(name: string) {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name); else next.add(name);
+      return next;
+    });
+  }
 
   const typeFiltered = filter === "all" ? transactions : transactions.filter(t => t.type === filter);
   const filtered = sort === "amount"
@@ -216,20 +225,32 @@ export function TransactionList({ transactions, totalIncome, totalExpenses, bala
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {groups && groups.flatMap((g) => [
-                  (
-                    <TableRow key={`__group_${g.name}`} className="bg-muted/30 hover:bg-muted/30">
-                      <TableCell colSpan={5} className="py-1.5">
-                        <span className="text-xs font-semibold uppercase tracking-wider">{g.name}</span>
-                        <span className="text-[10px] text-muted-foreground ml-2">({g.rows.length} txns)</span>
-                      </TableCell>
-                      <TableCell className="text-right py-1.5">
-                        <span className="text-xs font-semibold tabular-nums text-rose-600">{formatCurrency(g.total)}</span>
-                      </TableCell>
-                    </TableRow>
-                  ),
-                  ...g.rows.map((txn) => renderTxnRow(txn)),
-                ])}
+                {groups && groups.flatMap((g) => {
+                  const isOpen = expandedGroups.has(g.name);
+                  return [
+                    (
+                      <TableRow
+                        key={`__group_${g.name}`}
+                        className="bg-muted/30 hover:bg-muted/40 cursor-pointer"
+                        onClick={() => toggleGroup(g.name)}
+                      >
+                        <TableCell colSpan={5} className="py-1.5">
+                          <div className="flex items-center gap-1.5">
+                            {isOpen
+                              ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                              : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+                            <span className="text-xs font-semibold uppercase tracking-wider">{g.name}</span>
+                            <span className="text-[10px] text-muted-foreground ml-1">({g.rows.length} txns)</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right py-1.5">
+                          <span className="text-xs font-semibold tabular-nums text-rose-600">{formatCurrency(g.total)}</span>
+                        </TableCell>
+                      </TableRow>
+                    ),
+                    ...(isOpen ? g.rows.map((txn) => renderTxnRow(txn)) : []),
+                  ];
+                })}
                 {!groups && filtered.map((txn) => renderTxnRow(txn))}
               </TableBody>
             </Table>
