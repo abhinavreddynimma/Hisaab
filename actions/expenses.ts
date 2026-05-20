@@ -779,7 +779,10 @@ export async function getExpenseStats(startDate: string, endDate: string): Promi
 
   return {
     totalIncome,
-    totalExpenses: nonTaxExpenses,
+    // Monthly Expense headline counts ALL non-modification expenses
+    // (tax included) plus non-modification transfers. Tax is also
+    // surfaced separately via totalTax for the Stats summary cards.
+    totalExpenses,
     totalTax: taxExpenses,
     totalTransfersOut,
     net: totalIncome - totalExpenses - totalTransfersOut,
