@@ -212,31 +212,14 @@ export async function getTaxComputation(financialYear: string): Promise<{
   const rawDeductionPct = paidGrossInr > 0 ? totalDeductions / paidGrossInr : 0;
   const deductionPct = Math.min(Math.max(0, rawDeductionPct), 0.10);
 
-  const invoiceGross = fyInvoices.reduce((s, i) => {
+  // Tax base is invoice-derived only — manual /expenses income rows do not
+  // contribute to gross receipts. The `excludeFromTax` flag on
+  // expense_transactions is preserved for future use (and the dialog
+  // checkbox still writes to it), but it's not currently consulted here.
+  const grossReceipts = fyInvoices.reduce((s, i) => {
     if (i.status === "paid") return s + (i.netInrAmount ?? 0);
     return s + (i.total ?? 0) * avgRate * (1 - deductionPct);
   }, 0);
-
-  // Manual incomes (entered via /expenses → Add Transaction → Income) also
-  // count toward gross receipts unless the row is explicitly excluded.
-  // We restrict to source='manual' so invoice-synced incomes aren't
-  // double-counted (those already appear above via the invoices table).
-  const manualIncomes = db
-    .select({ amount: expenseTransactions.amount })
-    .from(expenseTransactions)
-    .where(
-      and(
-        eq(expenseTransactions.type, "income"),
-        eq(expenseTransactions.source, "manual"),
-        eq(expenseTransactions.status, "confirmed"),
-        eq(expenseTransactions.excludeFromTax, false),
-        sql`${expenseTransactions.date} >= ${fyStart}`,
-        sql`${expenseTransactions.date} <= ${fyEnd}`,
-      )
-    )
-    .all();
-  const manualIncomeTotal = manualIncomes.reduce((s, r) => s + (r.amount ?? 0), 0);
-  const grossReceipts = invoiceGross + manualIncomeTotal;
 
   // Section 44ADA: presumptive income = 50% of gross receipts, available only up
   // to ₹75 lakh. Above that, 44ADA does not apply and tax is computed on full
