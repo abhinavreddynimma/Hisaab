@@ -144,7 +144,7 @@ export function TransactionList({ transactions, totalIncome, totalExpenses, bala
             </p>
           </CardContent>
         </Card>
-        <Card title="Total money currently held across your bank, cash, and savings accounts (transfers between in-scope accounts net out).">
+        <Card title="Total money currently held in your bank and cash accounts. Money transferred to savings, investments, or any account outside bank/cash is treated as outflow (it's no longer in your spendable pool).">
           <CardContent className="p-4 text-center">
             <p className="text-xs text-muted-foreground mb-1">Cumulative Balance</p>
             <p className={`text-lg font-bold tabular-nums ${balance >= 0 ? "text-blue-600" : "text-rose-600"}`}>
