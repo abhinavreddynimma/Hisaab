@@ -37,6 +37,16 @@ async function getOrCreateTaxCategory(): Promise<number> {
   return Number(result.lastInsertRowid);
 }
 
+/** Find SBI bank account so tax debits hit the spendable pool by default. */
+function getSBIAccountId(): number | null {
+  const sbi = db
+    .select()
+    .from(expenseAccounts)
+    .where(and(eq(expenseAccounts.type, "bank"), eq(expenseAccounts.name, "SBI")))
+    .get();
+  return sbi?.id ?? null;
+}
+
 function findLinkedTransaction(taxPaymentId: number) {
   return db
     .select()
@@ -61,6 +71,7 @@ export async function syncTaxPaymentToExpense(taxPaymentId: number): Promise<voi
 
   const existing = findLinkedTransaction(taxPaymentId);
   const categoryId = await getOrCreateTaxCategory();
+  const sbiAccountId = getSBIAccountId();
 
   const note = `Tax ${payment.quarter} FY ${payment.financialYear}${payment.challanNo ? ` — Challan ${payment.challanNo}` : ""}`;
 
@@ -71,6 +82,8 @@ export async function syncTaxPaymentToExpense(taxPaymentId: number): Promise<voi
         amount: payment.amount,
         note,
         categoryId,
+        accountId: existing.accountId ?? sbiAccountId,
+        fromAccountId: existing.fromAccountId ?? sbiAccountId,
         status: "confirmed",
       })
       .where(eq(expenseTransactions.id, existing.id))
@@ -82,6 +95,8 @@ export async function syncTaxPaymentToExpense(taxPaymentId: number): Promise<voi
         date: payment.paymentDate,
         amount: payment.amount,
         categoryId,
+        accountId: sbiAccountId,
+        fromAccountId: sbiAccountId,
         note,
         source: "tax_payment",
         sourceId: String(taxPaymentId),
@@ -94,18 +109,19 @@ export async function syncTaxPaymentToExpense(taxPaymentId: number): Promise<voi
 export async function syncAllTaxPaymentsToExpenses(): Promise<{ synced: number }> {
   const allPayments = db.select({ id: taxPayments.id }).from(taxPayments).all();
 
-  const linkedIds = new Set(
-    db
-      .select({ sourceId: expenseTransactions.sourceId })
-      .from(expenseTransactions)
-      .where(eq(expenseTransactions.source, "tax_payment"))
-      .all()
-      .map((r) => r.sourceId),
-  );
+  // Track linked rows with their accountId so we can resync any that are
+  // missing an account — those won't debit any bank balance otherwise.
+  const linkedRows = db
+    .select({ sourceId: expenseTransactions.sourceId, accountId: expenseTransactions.accountId })
+    .from(expenseTransactions)
+    .where(eq(expenseTransactions.source, "tax_payment"))
+    .all();
+  const linkedMap = new Map(linkedRows.map((r) => [r.sourceId, r.accountId]));
 
   let synced = 0;
   for (const payment of allPayments) {
-    if (!linkedIds.has(String(payment.id))) {
+    const existing = linkedMap.get(String(payment.id));
+    if (existing === undefined || existing == null) {
       await syncTaxPaymentToExpense(payment.id);
       synced++;
     }
