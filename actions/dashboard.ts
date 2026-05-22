@@ -224,14 +224,21 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 
       const baseAmount = summary.effectiveWorkingDays * dailyRate;
       // If the project bills in INR, the daily rate IS already INR — don't run
-      // it through the EUR-INR conversion.
-      const grossInr = projectCurrency === "INR" ? baseAmount : baseAmount * avgRate;
+      // it through the FX conversion. Otherwise prefer the live rate (same
+      // source the dashboard's exchange-rate card uses) and only fall back to
+      // the historical paid-invoice weighted average when the live fetch
+      // fails. Next month's payout is settled at next month's spot rate, so
+      // the live spot is a better forecast than averages from months ago.
+      const { getLiveRateToInr } = await import("@/lib/exchange-rates");
+      const liveRate = projectCurrency === "INR" ? null : await getLiveRateToInr(projectCurrency);
+      const projectionRate = liveRate ?? avgRate;
+      const grossInr = projectCurrency === "INR" ? baseAmount : baseAmount * projectionRate;
       const estimatedInr = grossInr * (1 - avgDeductionPct);
 
       nextMonthProjection = {
         estimatedInr: Math.round(estimatedInr),
         workingDays: summary.effectiveWorkingDays,
-        avgRate: Math.round(avgRate * 100) / 100,
+        avgRate: Math.round(projectionRate * 100) / 100,
         currency: projectCurrency,
       };
     }
