@@ -15,7 +15,7 @@ export default async function BudgetPage() {
     <BudgetClient
       initialItems={items}
       monthlyIncome={income.monthlyIncome}
-      monthsCounted={income.monthsCounted}
+      invoiceCount={income.invoiceCount}
     />
   );
 }

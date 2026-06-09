@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/db";
-import { budgetItems, expenseTransactions } from "@/db/schema";
+import { budgetItems, invoices } from "@/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { assertAdminAccess } from "@/lib/auth";
@@ -75,43 +75,31 @@ export async function deleteBudgetItem(id: number): Promise<{ success: boolean }
 }
 
 /**
- * Typical monthly income derived from real receipts — confirmed, non-
- * modification income transactions (invoice payments + any manual income)
- * over the trailing 12 months, averaged across the months that actually had
- * income. This is the planning baseline the budget allocates against, so an
- * occasional zero-income month doesn't drag the figure down.
+ * Monthly income baseline = the average net INR across all paid invoices.
+ * Each monthly invoice is roughly one month's pay, so the mean net payout is
+ * the planning figure the budget allocates against. Uses net_inr_amount
+ * (post platform / bank charges), counting only paid invoices that have it.
  */
 export async function getBudgetMonthlyIncome(): Promise<{
   monthlyIncome: number;
-  monthsCounted: number;
-  windowMonths: number;
+  invoiceCount: number;
 }> {
   await assertAdminAccess();
 
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth() - 11, 1);
-  const startStr = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-01`;
-
   const rows = db
-    .select({
-      month: sql<string>`substr(${expenseTransactions.date}, 1, 7)`,
-      total: sql<number>`sum(${expenseTransactions.amount})`,
-    })
-    .from(expenseTransactions)
+    .select({ net: invoices.netInrAmount })
+    .from(invoices)
     .where(
       and(
-        eq(expenseTransactions.type, "income"),
-        eq(expenseTransactions.status, "confirmed"),
-        eq(expenseTransactions.isModification, false),
-        sql`${expenseTransactions.date} >= ${startStr}`,
+        eq(invoices.status, "paid"),
+        sql`${invoices.netInrAmount} IS NOT NULL`,
       ),
     )
-    .groupBy(sql`substr(${expenseTransactions.date}, 1, 7)`)
     .all();
 
-  const monthsCounted = rows.length;
-  const sum = rows.reduce((s, r) => s + (r.total ?? 0), 0);
-  const monthlyIncome = monthsCounted > 0 ? Math.round(sum / monthsCounted) : 0;
+  const invoiceCount = rows.length;
+  const sum = rows.reduce((s, r) => s + (r.net ?? 0), 0);
+  const monthlyIncome = invoiceCount > 0 ? Math.round(sum / invoiceCount) : 0;
 
-  return { monthlyIncome, monthsCounted, windowMonths: 12 };
+  return { monthlyIncome, invoiceCount };
 }
