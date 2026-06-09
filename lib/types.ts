@@ -569,3 +569,13 @@ export interface ExtraDaysPlannerData {
   buckets: ExtraDayBucketSummary[];
   allocations: ExtraDayAllocationDetail[];
 }
+
+export type BudgetCategory = "expense" | "savings" | "investment";
+
+export interface BudgetItem {
+  id: number;
+  name: string;
+  amount: number;
+  category: BudgetCategory;
+  sortOrder: number;
+}

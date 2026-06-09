@@ -448,3 +448,16 @@ export const reminders = sqliteTable("reminders", {
 }, (table) => [
   uniqueIndex("reminder_type_month_idx").on(table.type, table.monthKey),
 ]);
+
+// Budget planner line items (the /budget page). Forward-looking allocation
+// plan: each item is a planned monthly outflow tagged expense / savings /
+// investment, compared against the 30 / 20 / 50 target split. Income is NOT
+// stored here — it's derived from real receipts (income transactions).
+export const budgetItems = sqliteTable("budget_items", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  amount: real("amount").notNull(),
+  category: text("category", { enum: ["expense", "savings", "investment"] }).notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+});
