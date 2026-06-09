@@ -5,6 +5,7 @@ import { budgetItems, invoices } from "@/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { assertAdminAccess } from "@/lib/auth";
+import { getCurrentFinancialYear, getFYDateRange } from "@/lib/constants";
 import type { BudgetCategory, BudgetItem } from "@/lib/types";
 
 export async function getBudgetItems(): Promise<BudgetItem[]> {
@@ -75,16 +76,20 @@ export async function deleteBudgetItem(id: number): Promise<{ success: boolean }
 }
 
 /**
- * Monthly income baseline = the average net INR across all paid invoices.
- * Each monthly invoice is roughly one month's pay, so the mean net payout is
- * the planning figure the budget allocates against. Uses net_inr_amount
- * (post platform / bank charges), counting only paid invoices that have it.
+ * Monthly income baseline = the average net INR across paid invoices in the
+ * CURRENT financial year, so it tracks current salary rather than being
+ * dragged down by older, lower invoices. Scoped by paid_date (when the money
+ * actually landed). Uses net_inr_amount (post platform / bank charges).
  */
 export async function getBudgetMonthlyIncome(): Promise<{
   monthlyIncome: number;
   invoiceCount: number;
+  financialYear: string;
 }> {
   await assertAdminAccess();
+
+  const financialYear = getCurrentFinancialYear();
+  const { start, end } = getFYDateRange(financialYear);
 
   const rows = db
     .select({ net: invoices.netInrAmount })
@@ -93,6 +98,8 @@ export async function getBudgetMonthlyIncome(): Promise<{
       and(
         eq(invoices.status, "paid"),
         sql`${invoices.netInrAmount} IS NOT NULL`,
+        sql`${invoices.paidDate} >= ${start}`,
+        sql`${invoices.paidDate} <= ${end}`,
       ),
     )
     .all();
@@ -101,5 +108,5 @@ export async function getBudgetMonthlyIncome(): Promise<{
   const sum = rows.reduce((s, r) => s + (r.net ?? 0), 0);
   const monthlyIncome = invoiceCount > 0 ? Math.round(sum / invoiceCount) : 0;
 
-  return { monthlyIncome, invoiceCount };
+  return { monthlyIncome, invoiceCount, financialYear };
 }
