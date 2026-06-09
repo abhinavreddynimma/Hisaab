@@ -13,6 +13,7 @@ import {
   Landmark,
   TentTree,
   FileUp,
+  PieChart,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
@@ -30,6 +31,7 @@ const fullNavItems = [
   { label: "Invoices", href: "/invoices", icon: FileText },
   { label: "Tax", href: "/tax", icon: IndianRupee },
   { label: "Expenses", href: "/expenses", icon: Wallet },
+  { label: "Budget", href: "/budget", icon: PieChart },
   { label: "Bank", href: "/bank", icon: Landmark },
   { label: "Extra Days", href: "/extra-days", icon: TentTree },
   { label: "Imports", href: "/imports", icon: FileUp },
