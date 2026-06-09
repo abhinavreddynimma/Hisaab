@@ -134,13 +134,13 @@ export function ExpensesPageClient({
         <div>
           <h1 className="font-display text-2xl font-bold tracking-tight">Expenses</h1>
           <div className="flex items-center gap-2 mt-0.5">
-            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => navigateMonth(-1)}>
+            <Button variant="ghost" size="icon" className="h-6 w-6" aria-label="Previous month" onClick={() => navigateMonth(-1)}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <p className="text-muted-foreground text-sm">
               {MONTH_NAMES[currentMonth - 1]} {currentYear}
             </p>
-            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => navigateMonth(1)}>
+            <Button variant="ghost" size="icon" className="h-6 w-6" aria-label="Next month" onClick={() => navigateMonth(1)}>
               <ChevronRight className="h-4 w-4" />
             </Button>
             {!isCurrentMonth && (
@@ -149,11 +149,11 @@ export function ExpensesPageClient({
               </Button>
             )}
             <span className="flex items-center gap-1 ml-2">
-              <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => navigateFY(-1)}>
+              <Button variant="ghost" size="icon" className="h-5 w-5" aria-label="Previous financial year" onClick={() => navigateFY(-1)}>
                 <ChevronLeft className="h-3 w-3" />
               </Button>
               <span className="text-xs text-muted-foreground">FY {financialYear}</span>
-              <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => navigateFY(1)}>
+              <Button variant="ghost" size="icon" className="h-5 w-5" aria-label="Next financial year" onClick={() => navigateFY(1)}>
                 <ChevronRight className="h-3 w-3" />
               </Button>
             </span>
@@ -165,7 +165,18 @@ export function ExpensesPageClient({
         </Button>
       </div>
 
-      <Tabs defaultValue={initialTab || "transactions"}>
+      <Tabs
+        defaultValue={initialTab || "transactions"}
+        onValueChange={(tab) => {
+          const params = new URLSearchParams({
+            month: String(currentMonth),
+            year: String(currentYear),
+            fy: financialYear,
+            tab,
+          });
+          router.replace(`/expenses?${params.toString()}`, { scroll: false });
+        }}
+      >
         <TabsList>
           <TabsTrigger value="transactions">Transactions</TabsTrigger>
           <TabsTrigger value="stats">Stats</TabsTrigger>

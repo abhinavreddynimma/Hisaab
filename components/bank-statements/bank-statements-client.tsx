@@ -158,13 +158,13 @@ export function BankStatementsClient({
           <p className="text-sm text-muted-foreground">Import and classify bank transactions</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={() => navigateMonth(-1)}>
+          <Button variant="outline" size="icon" aria-label="Previous month" onClick={() => navigateMonth(-1)}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <span className="text-sm font-medium w-24 text-center">
             {MONTHS[currentMonth - 1]} {currentYear}
           </span>
-          <Button variant="outline" size="icon" onClick={() => navigateMonth(1)}>
+          <Button variant="outline" size="icon" aria-label="Next month" onClick={() => navigateMonth(1)}>
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
@@ -257,6 +257,7 @@ export function BankStatementsClient({
               <p className="text-xs text-muted-foreground">Import a bank statement to get started</p>
             </div>
           ) : (
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -484,7 +485,7 @@ export function BankStatementsClient({
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground/40 hover:text-destructive">
+                          <Button variant="ghost" size="icon" aria-label="Delete entry" className="h-7 w-7 text-muted-foreground/40 hover:text-destructive">
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </AlertDialogTrigger>
@@ -511,6 +512,7 @@ export function BankStatementsClient({
                 ))}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>
