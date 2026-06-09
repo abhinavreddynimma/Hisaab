@@ -110,22 +110,22 @@ export function TargetsView({ financialYear }: TargetsViewProps) {
 
           {scope === "fy" && (
             <div className="inline-flex items-center gap-1">
-              <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => setRef(fyShift(ref, -1))}>
+              <Button variant="outline" size="icon" className="h-7 w-7" aria-label="Previous financial year" disabled={loading} onClick={() => setRef(fyShift(ref, -1))}>
                 <ChevronLeft className="h-3.5 w-3.5" />
               </Button>
               <span className="text-xs font-medium tabular-nums px-1.5 w-20 text-center">FY {ref}</span>
-              <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => setRef(fyShift(ref, 1))}>
+              <Button variant="outline" size="icon" className="h-7 w-7" aria-label="Next financial year" disabled={loading} onClick={() => setRef(fyShift(ref, 1))}>
                 <ChevronRight className="h-3.5 w-3.5" />
               </Button>
             </div>
           )}
           {scope === "month" && (
             <div className="inline-flex items-center gap-1">
-              <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => setRef(monthShift(ref, -1))}>
+              <Button variant="outline" size="icon" className="h-7 w-7" aria-label="Previous month" disabled={loading} onClick={() => setRef(monthShift(ref, -1))}>
                 <ChevronLeft className="h-3.5 w-3.5" />
               </Button>
               <span className="text-xs font-medium tabular-nums px-1.5 w-32 text-center">{monthLabel(ref)}</span>
-              <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => setRef(monthShift(ref, 1))}>
+              <Button variant="outline" size="icon" className="h-7 w-7" aria-label="Next month" disabled={loading} onClick={() => setRef(monthShift(ref, 1))}>
                 <ChevronRight className="h-3.5 w-3.5" />
               </Button>
             </div>
