@@ -16,6 +16,7 @@ export default async function BudgetPage() {
       initialItems={items}
       monthlyIncome={income.monthlyIncome}
       invoiceCount={income.invoiceCount}
+      financialYear={income.financialYear}
     />
   );
 }

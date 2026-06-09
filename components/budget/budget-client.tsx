@@ -20,9 +20,10 @@ interface BudgetClientProps {
   initialItems: BudgetItem[];
   monthlyIncome: number;
   invoiceCount: number;
+  financialYear: string;
 }
 
-export function BudgetClient({ initialItems, monthlyIncome, invoiceCount }: BudgetClientProps) {
+export function BudgetClient({ initialItems, monthlyIncome, invoiceCount, financialYear }: BudgetClientProps) {
   const [items, setItems] = useState<BudgetItem[]>(initialItems);
   const [view, setView] = useState<View>("monthly");
   const [newName, setNewName] = useState("");
@@ -126,7 +127,7 @@ export function BudgetClient({ initialItems, monthlyIncome, invoiceCount }: Budg
               <label>{view === "annual" ? "Annual Income" : "Monthly Income"}</label>
               <span className="income-val">{fmt(monthlyIncome)}</span>
               <span className="unit">
-                {invoiceCount > 0 ? `avg of ${invoiceCount} invoices` : "no invoices yet"}
+                {invoiceCount > 0 ? `avg of ${invoiceCount} invoice${invoiceCount === 1 ? "" : "s"} · FY ${financialYear}` : `no paid invoices in FY ${financialYear}`}
               </span>
             </div>
           </div>
