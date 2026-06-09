@@ -19,10 +19,10 @@ type View = "monthly" | "annual";
 interface BudgetClientProps {
   initialItems: BudgetItem[];
   monthlyIncome: number;
-  monthsCounted: number;
+  invoiceCount: number;
 }
 
-export function BudgetClient({ initialItems, monthlyIncome, monthsCounted }: BudgetClientProps) {
+export function BudgetClient({ initialItems, monthlyIncome, invoiceCount }: BudgetClientProps) {
   const [items, setItems] = useState<BudgetItem[]>(initialItems);
   const [view, setView] = useState<View>("monthly");
   const [newName, setNewName] = useState("");
@@ -126,7 +126,7 @@ export function BudgetClient({ initialItems, monthlyIncome, monthsCounted }: Bud
               <label>{view === "annual" ? "Annual Income" : "Monthly Income"}</label>
               <span className="income-val">{fmt(monthlyIncome)}</span>
               <span className="unit">
-                {monthsCounted > 0 ? `avg · ${monthsCounted}mo of receipts` : "no receipts yet"}
+                {invoiceCount > 0 ? `avg of ${invoiceCount} invoices` : "no invoices yet"}
               </span>
             </div>
           </div>
