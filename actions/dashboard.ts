@@ -7,6 +7,7 @@ import { getLeavePolicy, getDefaultProjectId } from "./settings";
 // Rate lookup uses same logic as projects.ts but kept local to avoid async boundary
 import { calculateLeaveBalance, calculateMonthSummary, withImplicitWorkingDays } from "@/lib/calculations";
 import { getFrenchHolidays, getIndianReferenceHolidays } from "@/lib/constants";
+import { computeInvoiceFxStats } from "@/lib/invoice-rates";
 import type { DashboardStats, DayEntry } from "@/lib/types";
 import { assertAdminAccess, assertAuthenticatedAccess } from "@/lib/auth";
 
@@ -132,10 +133,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     .from(invoices)
     .where(and(eq(invoices.status, "paid"), sql`${invoices.eurToInrRate} IS NOT NULL`))
     .all();
-  const totalPaidEur = paidForRate.reduce((s, i) => s + (i.total ?? 0), 0);
-  const avgEurInrRate = totalPaidEur > 0
-    ? paidForRate.reduce((s, i) => s + (i.eurToInrRate ?? 0) * (i.total ?? 0), 0) / totalPaidEur
-    : 90; // fallback
+  const avgEurInrRate = computeInvoiceFxStats(paidForRate).avgRate || 90; // fallback
   let outstandingInr = 0;
   for (const item of outstandingByCurrency) {
     if (item.currency === "INR") {
@@ -191,14 +189,10 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       .all();
 
     if (paidFull.length > 0) {
-      const totalEur = paidFull.reduce((s, i) => s + (i.total ?? 0), 0);
-      const avgRate = totalEur > 0
-        ? paidFull.reduce((s, i) => s + (i.eurToInrRate ?? 0) * (i.total ?? 0), 0) / totalEur
-        : 0;
-      const avgDeductionPct = totalEur > 0
-        ? paidFull.reduce((s, i) => s + ((i.platformCharges ?? 0) + (i.bankCharges ?? 0)), 0) /
-          (totalEur * avgRate)
-        : 0;
+      const fx = computeInvoiceFxStats(paidFull);
+      const avgRate = fx.avgRate;
+      // Next-month projection intentionally uses the UNCAPPED deduction%.
+      const avgDeductionPct = fx.deductionPctRaw;
 
       // Next month's earnings based on this month's working days
       // (invoice for current month gets paid next month)

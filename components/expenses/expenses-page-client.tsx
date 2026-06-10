@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getCurrentFinancialYear } from "@/lib/constants";
+import { resyncExternalSources } from "@/actions/expenses";
 import { TransactionList } from "./transaction-list";
 import { TransactionDialog } from "./transaction-dialog";
 import { StatsView } from "./stats-view";
@@ -82,6 +84,21 @@ export function ExpensesPageClient({
   const router = useRouter();
   const [txnDialogOpen, setTxnDialogOpen] = useState(false);
   const [editingTxn, setEditingTxn] = useState<ExpenseTransaction | null>(null);
+  const [resyncing, setResyncing] = useState(false);
+
+  async function handleResync() {
+    setResyncing(true);
+    try {
+      const r = await resyncExternalSources();
+      const n = r.invoices + r.taxPayments;
+      toast.success(n > 0 ? `Resynced ${n} item${n === 1 ? "" : "s"}` : "Already up to date");
+      router.refresh();
+    } catch {
+      toast.error("Resync failed");
+    } finally {
+      setResyncing(false);
+    }
+  }
 
   function navigateMonth(direction: -1 | 1) {
     let newMonth = currentMonth + direction;
@@ -159,10 +176,16 @@ export function ExpensesPageClient({
             </span>
           </div>
         </div>
-        <Button onClick={handleAddTxn}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Transaction
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleResync} disabled={resyncing} title="Re-sync invoices and tax payments into expenses">
+            <RefreshCw className={`mr-2 h-4 w-4 ${resyncing ? "animate-spin" : ""}`} />
+            {resyncing ? "Resyncing…" : "Resync"}
+          </Button>
+          <Button onClick={handleAddTxn}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Transaction
+          </Button>
+        </div>
       </div>
 
       <Tabs

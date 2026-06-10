@@ -3,6 +3,7 @@
 import { db } from "@/db";
 import { expenseTransactions, expenseAccounts, invoices, clients } from "@/db/schema";
 import { eq, and, sql } from "drizzle-orm";
+import { computeInvoiceFxStats } from "@/lib/invoice-rates";
 import type { ExpenseAccountType } from "@/lib/types";
 
 /**
@@ -39,37 +40,19 @@ function estimateNetInr(eurAmount: number): number {
     )
     .all();
 
-  const withRate = paidInvs.filter((i) => i.eurToInrRate);
-  if (withRate.length === 0) return eurAmount;
+  const fx = computeInvoiceFxStats(paidInvs);
+  if (fx.rated === 0) return eurAmount;
 
-  // Historical deduction% as a weighted average (capped at 10% so a bad data
-  // point can't blow up estimates).
-  const totalEur = withRate.reduce((s, i) => s + (i.total ?? 0), 0);
-  const avgRate = totalEur > 0
-    ? withRate.reduce((s, i) => s + (i.eurToInrRate ?? 0) * (i.total ?? 0), 0) / totalEur
-    : 0;
-  const totalGrossInr = totalEur * avgRate;
-  const totalDeductions = withRate.reduce(
-    (s, i) => s + (i.platformCharges ?? 0) + (i.bankCharges ?? 0),
-    0,
-  );
-  const rawDeductionPct = totalGrossInr > 0 ? totalDeductions / totalGrossInr : 0;
-  const deductionPct = Math.min(Math.max(0, rawDeductionPct), 0.10);
-  if (rawDeductionPct > 0.10) {
+  if (fx.deductionPctRaw > 0.10) {
     console.warn(
-      `[invoice-expense-sync] Historical deduction% (${(rawDeductionPct * 100).toFixed(1)}%) ` +
+      `[invoice-expense-sync] Historical deduction% (${(fx.deductionPctRaw * 100).toFixed(1)}%) ` +
       `capped at 10% in estimate. Check invoice charges for outliers.`,
     );
   }
 
-  // Spot rate: use the most-recent paid invoice (by paidDate) for the current
-  // FX rate. This is closer to "today's rate" than the historical average.
-  const sortedByDate = [...withRate]
-    .filter((i) => i.paidDate)
-    .sort((a, b) => (b.paidDate ?? "").localeCompare(a.paidDate ?? ""));
-  const latestRate = sortedByDate[0]?.eurToInrRate ?? avgRate;
-
-  return Math.round(eurAmount * latestRate * (1 - deductionPct));
+  // Spot rate: most-recent paid invoice's rate (closer to "today's rate" than
+  // the weighted average); deduction% is the capped historical average.
+  return Math.round(eurAmount * fx.latestRate * (1 - fx.deductionPct));
 }
 
 /** Find or create the "Salary" account used for invoice-linked income. */
