@@ -148,6 +148,22 @@ export async function toggleExpenseAccountActive(id: number): Promise<{ success:
   return { success: true };
 }
 
+/**
+ * One-off backfill: re-sync every invoice and tax payment into their linked
+ * expense_transactions. Normally these stay in sync at write time, so this is
+ * only needed if something drifts (e.g. rows created before the sync existed).
+ * Exposed behind the "Resync" button on /expenses.
+ */
+export async function resyncExternalSources(): Promise<{ invoices: number; taxPayments: number }> {
+  await assertAdminAccess();
+  const { syncAllInvoicesToExpenses } = await import("./invoice-expense-sync");
+  const { syncAllTaxPaymentsToExpenses } = await import("./tax-expense-sync");
+  const inv = await syncAllInvoicesToExpenses();
+  const tax = await syncAllTaxPaymentsToExpenses();
+  revalidatePath("/expenses");
+  return { invoices: inv.synced, taxPayments: tax.synced };
+}
+
 export async function seedDefaultAccounts(): Promise<{ success: boolean }> {
   await assertAdminAccess();
 

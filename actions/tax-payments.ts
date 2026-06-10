@@ -9,6 +9,7 @@ import { getDayEntriesForMonth } from "./day-entries";
 import { getDefaultProjectId } from "./settings";
 import { getProject, getProjectRateTimeline } from "./projects";
 import { calculateMonthSummary, withImplicitWorkingDays } from "@/lib/calculations";
+import { computeInvoiceFxStats } from "@/lib/invoice-rates";
 import { syncTaxPaymentToExpense, removeTaxPaymentExpenseLink } from "./tax-expense-sync";
 import { getFrenchHolidays, TAX_QUARTERS, PRESUMPTIVE_LIMIT_44ADA, is44AdaEligible, getCurrentFinancialYear, nowInIST } from "@/lib/constants";
 import { assertAdminAccess, assertAuthenticatedAccess } from "@/lib/auth";
@@ -204,13 +205,9 @@ export async function getTaxComputation(financialYear: string): Promise<{
     .all();
 
   const paid = fyInvoices.filter((i) => i.status === "paid");
-  const paidEur = paid.reduce((s, i) => s + (i.total ?? 0), 0);
-  const paidWeightedInr = paid.reduce((s, i) => s + (i.total ?? 0) * (i.eurToInrRate ?? 0), 0);
-  const avgRate = paidEur > 0 ? paidWeightedInr / paidEur : 90;
-  const paidGrossInr = paidEur * avgRate;
-  const totalDeductions = paid.reduce((s, i) => s + (i.platformCharges ?? 0) + (i.bankCharges ?? 0), 0);
-  const rawDeductionPct = paidGrossInr > 0 ? totalDeductions / paidGrossInr : 0;
-  const deductionPct = Math.min(Math.max(0, rawDeductionPct), 0.10);
+  const fxStats = computeInvoiceFxStats(paid);
+  const avgRate = fxStats.avgRate || 90;
+  const deductionPct = fxStats.deductionPct;
 
   // Tax base is invoice-derived only — manual /expenses income rows do not
   // contribute to gross receipts. The `excludeFromTax` flag on
@@ -432,17 +429,12 @@ export async function getTaxProjection(
   // single bad data point can't distort projections. This pct is applied ONLY
   // to sent/draft invoices that don't yet have actual payment details — paid
   // invoices use their stored netInrAmount directly.
-  const totalEur = paidInvoices.reduce((s, i) => s + (i.total ?? 0), 0);
-  const avgRate = totalEur > 0
-    ? paidInvoices.reduce((s, i) => s + (i.eurToInrRate ?? 0) * (i.total ?? 0), 0) / totalEur
-    : currentRate;
-  const totalGrossInr = totalEur * avgRate;
-  const totalDeductions = paidInvoices.reduce((s, i) => s + (i.platformCharges ?? 0) + (i.bankCharges ?? 0), 0);
-  const rawDeductionPct = totalGrossInr > 0 ? totalDeductions / totalGrossInr : 0;
-  const deductionPct = Math.min(Math.max(0, rawDeductionPct), 0.10);
-  if (rawDeductionPct > 0.10) {
+  const projFx = computeInvoiceFxStats(paidInvoices);
+  const avgRate = projFx.avgRate || currentRate;
+  const deductionPct = projFx.deductionPct;
+  if (projFx.deductionPctRaw > 0.10) {
     console.warn(
-      `[tax-projection] Historical deduction% (${(rawDeductionPct * 100).toFixed(1)}%) ` +
+      `[tax-projection] Historical deduction% (${(projFx.deductionPctRaw * 100).toFixed(1)}%) ` +
       `capped at 10% to protect projections. Check invoice charges for outliers.`,
     );
   }

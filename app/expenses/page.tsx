@@ -14,9 +14,7 @@ import {
 } from "@/actions/expenses";
 import { getFYDateRange } from "@/lib/constants";
 import { ExpensesPageClient } from "@/components/expenses/expenses-page-client";
-import { syncAllInvoicesToExpenses } from "@/actions/invoice-expense-sync";
 import { syncRecurringForMonth, getRecurringExpenses } from "@/actions/recurring-expenses";
-import { syncAllTaxPaymentsToExpenses } from "@/actions/tax-expense-sync";
 
 interface ExpensesPageProps {
   searchParams: Promise<{ fy?: string; month?: string; year?: string; tab?: string }>;
@@ -30,12 +28,13 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
 
   // Migration v2 is complete — no more auto-reset needed
 
-  // Auto-seed defaults on first visit
+  // Auto-seed defaults on first visit (early-returns once seeded)
   await seedDefaultAccounts();
 
-  // Sync invoices and tax payments to expense transactions (idempotent)
-  await syncAllInvoicesToExpenses();
-  await syncAllTaxPaymentsToExpenses();
+  // Invoice & tax-payment income/expense rows stay in sync at write time —
+  // their create/update/delete mutations call the sync hooks directly — so we
+  // no longer run a full re-sync on every page GET. The "Resync" button does a
+  // one-off backfill if anything ever drifts.
 
   const now = new Date();
   const currentMonth = params.month ? parseInt(params.month) : now.getMonth() + 1;
